@@ -241,8 +241,13 @@ final class CalendarModel {
         let start = date(of: day)
         if let minute {
             let snapped = max(0, min(24 * 60 - Theme.Calendar.snapMinutes, (minute / Theme.Calendar.snapMinutes) * Theme.Calendar.snapMinutes))
-            let when = start.addingTimeInterval(Double(snapped) * 60)
-            core.actions.setDue(id: taskId, due: KotlinLong(value: Int64(when.timeIntervalSince1970 * 1000)), allDay: false)
+            let when = Int64(start.addingTimeInterval(Double(snapped) * 60).timeIntervalSince1970 * 1000)
+            // A timed range keeps its length when moved (as TickTick does); anything else becomes a single time.
+            if let t = core.task(id: taskId), !t.isAllDay, let s = t.startDate?.int64Value, let e = t.dueDate?.int64Value, e > s {
+                core.actions.setSpan(id: taskId, start: when, end: when + (e - s))
+            } else {
+                core.actions.setDue(id: taskId, due: KotlinLong(value: when), allDay: false)
+            }
         } else {
             core.actions.setDue(id: taskId, due: KotlinLong(value: Int64(start.timeIntervalSince1970 * 1000)), allDay: true)
         }

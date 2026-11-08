@@ -99,4 +99,19 @@ final class CalendarModelTests: XCTestCase {
         for _ in 0..<30 where m.days.first?.allDay.isEmpty ?? true { try await _Concurrency.Task.sleep(for: .milliseconds(20)) }
         XCTAssertEqual(m.days.first?.allDay.map(\.title), ["Later"])
     }
+
+    func testMovingATimedRangeKeepsItsLength() async throws {
+        let m = model(at: "2026-11-08T05:00:00Z")
+        m.mode = .day
+        let task = m.core.actions.create(title: "Block", filter: nil, projectId: nil, priority: nil, tags: [], due: nil, allDay: true)
+        let day = m.calendar.startOfDay(for: m.anchor)
+        let start = Int64(day.addingTimeInterval(5 * 3600).timeIntervalSince1970 * 1000)
+        m.core.actions.setSpan(id: task.id, start: start, end: start + 75 * 60_000)
+        await m.reload()
+        m.schedule(taskId: task.id, on: try XCTUnwrap(m.days.first), minute: 8 * 60 + 15)
+        let t = try XCTUnwrap(m.core.task(id: task.id))
+        let newStart = try XCTUnwrap(t.startDate).int64Value
+        XCTAssertEqual(newStart, Int64(day.addingTimeInterval(8 * 3600 + 15 * 60).timeIntervalSince1970 * 1000))
+        XCTAssertEqual(try XCTUnwrap(t.dueDate).int64Value - newStart, 75 * 60_000, "75 minutes long, as before")
+    }
 }
