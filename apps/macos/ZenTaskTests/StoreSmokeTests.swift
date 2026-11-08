@@ -9,11 +9,11 @@ final class StoreSmokeTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: dir) }
         let path = dir.appendingPathComponent("zentask.db").path
 
-        let core = ZenTaskCore(dbPath: path)
+        let core = ZenTaskCore.companion.open(dbPath: path)
         core.putTask(task: core.draftTask(title: "Hello", now: 1))
         core.close()
 
-        let reopened = ZenTaskCore(dbPath: path)
+        let reopened = ZenTaskCore.companion.open(dbPath: path)
         defer { reopened.close() }
         XCTAssertEqual(reopened.tasks().map(\.title), ["Hello"])
         XCTAssertEqual(reopened.tasks().first?.projectId, "inbox")
