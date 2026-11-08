@@ -1,5 +1,12 @@
 package com.vuhpquang.zentask.server.store
 
+import com.vuhpquang.zentask.model.ZenJson
+import com.vuhpquang.zentask.sync.SyncRecord
+import com.vuhpquang.zentask.sync.merge
+import kotlinx.serialization.builtins.MapSerializer
+import kotlinx.serialization.builtins.serializer
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
 import java.nio.file.Files
 import java.nio.file.Path
 import java.sql.Connection
@@ -39,6 +46,67 @@ class ServerDb(file: Path, private val now: () -> Long = System::currentTimeMill
         }
         serverId = meta("serverId") ?: UUID.randomUUID().toString().also { setMeta("serverId", it) }
     }
+
+    /** The version of the last record write (0 for an empty database). */
+    @Synchronized
+    fun currentVersion(): Long = meta("version")?.toLong() ?: 0L
+
+    /**
+     * Merges [changes] into the stored records in one transaction. A record whose merged value differs
+     * from what was stored gets the next version; an unchanged one keeps its version.
+     */
+    @Synchronized
+    fun apply(changes: List<SyncRecord>) {
+        if (changes.isEmpty()) return
+        conn.autoCommit = false
+        try {
+            var version = currentVersion()
+            for (change in changes) {
+                val existing = load(change.entity, change.id)
+                val merged = if (existing == null) merge(change, change) else merge(existing, change)
+                if (merged == existing) continue
+                version += 1
+                conn.prepareStatement("INSERT OR REPLACE INTO records(entity, id, fields, clocks, version) VALUES (?, ?, ?, ?, ?)").use {
+                    it.setString(1, merged.entity)
+                    it.setString(2, merged.id)
+                    it.setString(3, ZenJson.encodeToString(JsonObject.serializer(), JsonObject(merged.fields)))
+                    it.setString(4, ZenJson.encodeToString(CLOCKS, merged.clocks))
+                    it.setLong(5, version)
+                    it.executeUpdate()
+                }
+            }
+            setMeta("version", version.toString())
+            conn.commit()
+        } catch (e: Throwable) {
+            conn.rollback()
+            throw e
+        } finally {
+            conn.autoCommit = true
+        }
+    }
+
+    /** Records written after [checkpoint], oldest first, at most [limit]; second = more remain. */
+    @Synchronized
+    fun changesSince(checkpoint: Long, limit: Int): Pair<List<Pair<Long, SyncRecord>>, Boolean> =
+        conn.prepareStatement("SELECT * FROM records WHERE version > ? ORDER BY version LIMIT ?").use { st ->
+            st.setLong(1, checkpoint)
+            st.setInt(2, limit + 1)
+            val rows = st.executeQuery().use { rs -> buildList { while (rs.next()) add(rs.getLong("version") to rs.toRecord()) } }
+            rows.take(limit) to (rows.size > limit)
+        }
+
+    private fun load(entity: String, id: String): SyncRecord? =
+        conn.prepareStatement("SELECT * FROM records WHERE entity = ? AND id = ?").use { st ->
+            st.setString(1, entity); st.setString(2, id)
+            st.executeQuery().use { rs -> if (rs.next()) rs.toRecord() else null }
+        }
+
+    private fun java.sql.ResultSet.toRecord() = SyncRecord(
+        entity = getString("entity"),
+        id = getString("id"),
+        fields = ZenJson.parseToJsonElement(getString("fields")).jsonObject,
+        clocks = ZenJson.decodeFromString(CLOCKS, getString("clocks")),
+    )
 
     @Synchronized
     fun createDevice(name: String, tokenHash: String): String {
@@ -92,6 +160,10 @@ class ServerDb(file: Path, private val now: () -> Long = System::currentTimeMill
         conn.prepareStatement("INSERT OR REPLACE INTO meta(key, value) VALUES (?, ?)").use {
             it.setString(1, key); it.setString(2, value); it.executeUpdate()
         }
+    }
+
+    private companion object {
+        val CLOCKS = MapSerializer(String.serializer(), String.serializer())
     }
 
     private fun java.sql.ResultSet.toDevice() = DeviceRow(

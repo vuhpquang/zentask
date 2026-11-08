@@ -8,6 +8,7 @@ import com.vuhpquang.zentask.server.auth.PasswordCheck
 import com.vuhpquang.zentask.server.auth.Tokens
 import com.vuhpquang.zentask.server.auth.deviceBearer
 import com.vuhpquang.zentask.server.store.ServerDb
+import com.vuhpquang.zentask.server.sync.syncRoutes
 import com.vuhpquang.zentask.sync.ApiError
 import com.vuhpquang.zentask.sync.DeviceInfo
 import com.vuhpquang.zentask.sync.LoginRequest
@@ -101,6 +102,7 @@ fun Application.module(config: ServerConfig = ServerConfig.fromEnv(), now: () ->
                 get("/devices") {
                     call.respond(db.listDevices().map { DeviceInfo(it.id, it.name, it.createdAt, it.lastSeenAt) })
                 }
+                syncRoutes(db, now)
                 delete("/devices/{id}") {
                     if (db.revoke(call.parameters["id"].orEmpty())) {
                         call.respond(HttpStatusCode.NoContent)
