@@ -27,6 +27,8 @@ final class FocusModel {
     var plan = PomodoroPlan(focusMinutes: 25, shortBreak: 5, longBreak: 15, longEvery: 4)
 
     private var ticker: _Concurrency.Task<Void, Never>?
+    /// True while restore() sets properties one by one (their didSet must not save a half-restored state).
+    @ObservationIgnored private var restoring = false
     private var started = false
     @ObservationIgnored private var visible = false
     @ObservationIgnored private var stale = false
@@ -91,6 +93,10 @@ final class FocusModel {
 
     func begin(task: String? = nil) {
         if let task { taskId = task }
+        // A new day starts a new run of pomos (the long break comes after every fourth of the day).
+        if let last = sessionStart ?? startedAt, !Calendar.current.isDateInToday(last) { pomosInRun = 0 }
+        if !Calendar.current.isDateInToday(Date(timeIntervalSince1970: defaults.double(forKey: "focus.runDay"))) { pomosInRun = 0 }
+        defaults.set(Date.now.timeIntervalSince1970, forKey: "focus.runDay")
         phase = .focus
         startedAt = .now
         sessionStart = .now
@@ -101,7 +107,7 @@ final class FocusModel {
     }
 
     func pause() {
-        guard phase == .focus || phase == .rest, let s = startedAt else { return }
+        guard phase == .focus, let s = startedAt else { return }
         banked += Date.now.timeIntervalSince(s)
         startedAt = nil
         if phase == .focus { phase = .paused }
@@ -156,11 +162,13 @@ final class FocusModel {
 
     private func check(now: Date = .now) {
         guard mode == .pomo, let length = phaseLength, elapsed(at: now) >= length else { return }
+        // When the phase really ended: paused time doesn't count, so it's `now` minus the overshoot.
+        let phaseEnd = now.addingTimeInterval(-(elapsed(at: now) - length))
         if phase == .focus, let s = sessionStart {
-            _ = core.focusActions.record(start: millis(s), end: millis(s.addingTimeInterval(length)), kind: FocusRecord.companion.KIND_POMO, taskId: taskId, note: "")
+            _ = core.focusActions.record(start: millis(s), end: millis(phaseEnd), kind: FocusRecord.companion.KIND_POMO, taskId: taskId, note: "")
             pomosInRun += 1
             phase = .rest
-            startedAt = s.addingTimeInterval(length)
+            startedAt = phaseEnd
             banked = 0
             scheduleAlert()
             save()
@@ -194,6 +202,7 @@ final class FocusModel {
     // MARK: Saved state
 
     private func save() {
+        guard !restoring else { return }
         let state: [String: Any] = [
             "mode": mode.rawValue, "phase": phase.rawValue, "task": taskId ?? "",
             "startedAt": startedAt?.timeIntervalSince1970 ?? 0, "sessionStart": sessionStart?.timeIntervalSince1970 ?? 0,
@@ -204,6 +213,8 @@ final class FocusModel {
 
     private func restore() {
         guard let s = defaults.dictionary(forKey: "focus.state") else { return }
+        restoring = true
+        defer { restoring = false }
         mode = Mode(rawValue: s["mode"] as? String ?? "") ?? .pomo
         phase = Phase(rawValue: s["phase"] as? String ?? "") ?? .idle
         taskId = (s["task"] as? String).flatMap { $0.isEmpty ? nil : $0 }
@@ -211,6 +222,7 @@ final class FocusModel {
         sessionStart = (s["sessionStart"] as? Double).flatMap { $0 > 0 ? Date(timeIntervalSince1970: $0) : nil }
         banked = s["banked"] as? Double ?? 0
         pomosInRun = s["pomos"] as? Int ?? 0
+        restoring = false
         check() // a pomo that ended while the app was closed is recorded now
     }
 }

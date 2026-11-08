@@ -10,6 +10,9 @@ struct TaskQuickEditor: View {
 
     @State private var title = ""
     @State private var notes = ""
+    /// What the card opened with: only fields changed from these are written (newer synced edits stay).
+    @State private var openedTitle = ""
+    @State private var openedNotes = ""
     @State private var editingDate = false
     @State private var priority: Int32?
     @FocusState private var focus: Field?
@@ -94,7 +97,12 @@ struct TaskQuickEditor: View {
         .onAppear {
             title = task.title
             notes = task.content.isEmpty ? task.desc : task.content
+            openedTitle = title
+            openedNotes = notes
         }
+        // Follow edits made elsewhere while a field isn't being edited.
+        .onChange(of: task.title) { _, new in if focus != .title, title == openedTitle { title = new; openedTitle = new } }
+        .onChange(of: task.content) { _, new in if focus != .notes, notes == openedNotes { notes = new; openedNotes = new } }
         .onChange(of: focus) { old, _ in if old != nil { commit(task) } }
         .onChange(of: task.priority) { _, _ in priority = nil }
         .onDisappear { commit(task) }
@@ -102,9 +110,14 @@ struct TaskQuickEditor: View {
 
     private func commit(_ task: ZTask) {
         let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !t.isEmpty, t != task.title { tasks.core.actions.rename(id: task.id, title: t) }
-        let current = task.content.isEmpty ? task.desc : task.content
-        if notes != current { tasks.core.actions.setContent(id: task.id, content: notes) }
+        if !t.isEmpty, t != openedTitle, t != task.title {
+            tasks.core.actions.rename(id: task.id, title: t)
+            openedTitle = t
+        }
+        if notes != openedNotes {
+            tasks.core.actions.setContent(id: task.id, content: notes)
+            openedNotes = notes
+        }
     }
 
     private func dateText(_ task: ZTask) -> String {

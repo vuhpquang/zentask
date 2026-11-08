@@ -29,6 +29,7 @@ struct ZenTaskApp: App {
             model.start()
             IntentBridge.tasks = tasks
             IntentBridge.focus = _focus.wrappedValue
+            _focus.wrappedValue.start() // a running pomo keeps ticking and is recorded even before Focus is opened
             HotKeys.shared.start(handlers: [
                 .quickAdd: { tasks.start(); QuickAddWindow.shared.show(tasks: tasks) },
                 .toggleWindow: { toggleMainWindow() },
@@ -37,7 +38,7 @@ struct ZenTaskApp: App {
     }
 
     var body: some Scene {
-        WindowGroup {
+        WindowGroup(id: "main") {
             MainWindow()
                 .environment(model)
                 .environment(tasks)
@@ -75,6 +76,7 @@ struct TaskCommands: Commands {
 
 /// Rail + the selected area.
 struct MainWindow: View {
+    @Environment(\.openWindow) private var openWindow
     @Environment(TasksModel.self) private var tasks
     @Environment(FocusModel.self) private var focusModel
     @State private var tab: RailTab = .tasks
@@ -97,6 +99,8 @@ struct MainWindow: View {
         .environment(\.searchOpen, searching)
         .onAppear {
             IntentBridge.openArea = { tab = $0 }
+            let open = openWindow
+            MainWindowOpener.open = { open(id: "main") }
             IntentBridge.openSmart = { tasks.sidebar = .smart($0) }
         }
         .environment(\.openTask) { id in open(nil, id) }

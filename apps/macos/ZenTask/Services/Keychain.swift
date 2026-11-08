@@ -39,6 +39,9 @@ struct Keychain: Sendable {
     }
 
     func write(_ value: String, for account: String) throws {
+        if FileManager.default.fileExists(atPath: file.path), loadIfReadable() == nil {
+            throw Failure(message: "The saved sign-in file can't be read, so it wasn't changed")
+        }
         var all = load()
         all[account] = value
         try save(all)
@@ -52,9 +55,12 @@ struct Keychain: Sendable {
 
     // MARK: File
 
-    private func load() -> [String: String] {
-        guard let data = try? Data(contentsOf: file) else { return [:] }
-        return (try? JSONDecoder().decode([String: String].self, from: data)) ?? [:]
+    private func load() -> [String: String] { loadIfReadable() ?? [:] }
+
+    /// nil when the file exists but can't be read or decoded.
+    private func loadIfReadable() -> [String: String]? {
+        guard let data = try? Data(contentsOf: file) else { return FileManager.default.fileExists(atPath: file.path) ? nil : [:] }
+        return try? JSONDecoder().decode([String: String].self, from: data)
     }
 
     private func save(_ all: [String: String]) throws {
@@ -68,6 +74,7 @@ struct Keychain: Sendable {
             guard fm.createFile(atPath: tmp.path, contents: data, attributes: [.posixPermissions: 0o600]) else {
                 throw Failure(message: "Couldn't save the sign-in details")
             }
+            defer { try? fm.removeItem(at: tmp) }
             _ = try fm.replaceItemAt(file, withItemAt: tmp)
             try fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: file.path)
         } catch let error as Failure {

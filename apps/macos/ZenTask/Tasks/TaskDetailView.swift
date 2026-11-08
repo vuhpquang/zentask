@@ -385,9 +385,11 @@ struct DueEditor: View {
             actions.setSpan(id: task.id, start: Int64(rangeStart.timeIntervalSince1970 * 1000), end: Int64(rangeEnd.timeIntervalSince1970 * 1000))
         } else {
             actions.setAllDaySpan(id: task.id, startDay: Int64(cal.startOfDay(for: rangeStart).timeIntervalSince1970 * 1000),
-                                  endDay: Int64(cal.startOfDay(for: rangeEnd).timeIntervalSince1970 * 1000))
+                                  lastDay: Int64(cal.startOfDay(for: rangeEnd).timeIntervalSince1970 * 1000))
         }
         if reminders != task.reminders { actions.setReminders(id: task.id, triggers: reminders) }
+        let finalRule = preset.flatMap { repeatChoices.indices.contains($0) ? repeatChoices[$0].0 : nil } ?? rule
+        if finalRule != task.repeatRule { actions.setRepeat(id: task.id, rule: finalRule, from: task.repeatFrom ?? "due") }
     }
 
     private var dateEditor: some View {
@@ -447,6 +449,8 @@ struct DueEditor: View {
             durationTab = true
             rangeStart = Date(timeIntervalSince1970: Double(start.int64Value) / 1000)
             rangeEnd = Date(timeIntervalSince1970: Double(due.int64Value) / 1000)
+            // All-day ranges are stored up to the midnight after the last day; show the last day.
+            if task.isAllDay { rangeEnd = cal.date(byAdding: .day, value: -1, to: rangeEnd) ?? rangeEnd }
         } else {
             rangeStart = date
             rangeEnd = hasTime ? date.addingTimeInterval(3600) : date

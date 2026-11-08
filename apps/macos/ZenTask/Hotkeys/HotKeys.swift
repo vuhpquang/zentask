@@ -166,7 +166,7 @@ final class QuickAddWindow {
         p.hidesOnDeactivate = false
         p.isReleasedWhenClosed = false
         p.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        let host = NSHostingView(rootView: TaskComposer(start: nil) { [weak p] in p?.close() }.environment(tasks))
+        let host = NSHostingView(rootView: TaskComposer(start: nil) { [weak p] in p?.close() }.environment(tasks).modifier(Themed()))
         p.contentView = host
         p.setContentSize(host.fittingSize)
         p.center()
@@ -180,13 +180,25 @@ final class QuickAddWindow {
     }
 }
 
-/// Shows ZenTask's main window, or hides the app when it's already in front.
+/// Opens a new main window (set by the main window from SwiftUI's openWindow; works after it was closed).
+@MainActor
+enum MainWindowOpener {
+    static var open: (() -> Void)?
+}
+
+/// Shows ZenTask's main window (reopening it if it was closed), or hides the app when it's already in front.
 @MainActor
 func toggleMainWindow() {
-    if NSApp.isActive, NSApp.windows.contains(where: { $0.isVisible && $0.isKeyWindow && !($0 is NSPanel) }) {
+    let mains = NSApp.windows.filter { $0.identifier?.rawValue.hasPrefix("main") == true && !($0 is NSPanel) }
+    if NSApp.isActive, mains.contains(where: { $0.isVisible && $0.isKeyWindow }) {
         NSApp.hide(nil)
+        return
+    }
+    NSApp.activate()
+    if let window = mains.first(where: { $0.isVisible || $0.isMiniaturized }) {
+        window.deminiaturize(nil)
+        window.makeKeyAndOrderFront(nil)
     } else {
-        NSApp.activate()
-        NSApp.windows.first { $0.canBecomeMain && !($0 is NSPanel) }?.makeKeyAndOrderFront(nil)
+        MainWindowOpener.open?()
     }
 }

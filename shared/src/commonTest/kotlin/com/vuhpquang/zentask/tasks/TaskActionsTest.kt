@@ -279,7 +279,7 @@ class TaskActionsTest {
         actions.setAllDaySpan(t.id, ms("2026-11-10T00:00"), ms("2026-11-12T00:00"))
         val got = get(t.id)
         assertEquals(ms("2026-11-10T00:00"), got.startDate)
-        assertEquals(ms("2026-11-12T00:00"), got.dueDate)
+        assertEquals(ms("2026-11-13T00:00"), got.dueDate, "stored like TickTick: midnight after the last day")
         assertTrue(got.isAllDay)
     }
 }

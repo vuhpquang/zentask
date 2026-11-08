@@ -159,4 +159,16 @@ class CalendarQueriesTest {
         assertEquals("a@b@20261109", day(CalendarViewOptions()).allDay.single().id)
         assertTrue(day(CalendarViewOptions(showCompleted = false)).allDay.isEmpty())
     }
+
+    @Test
+    fun longSpansShowOnEveryDayTheyCover() {
+        val timed = Task(id = "t", title = "Sprint", startDate = ms("2026-11-09T09:00"), dueDate = ms("2026-11-13T18:00"))
+        // All-day 10–12 Nov, stored like TickTick: the end is the (exclusive) midnight after the last day.
+        val allDay = Task(id = "a", title = "Trip", isAllDay = true, startDate = ms("2026-11-10T00:00"), dueDate = ms("2026-11-13T00:00"))
+        val thursday = CalendarQueries.days(emptyList(), sources, accounts, listOf(timed, allDay), LocalDate(2026, 11, 12), 1, zone, emptySet()).single()
+        assertEquals(listOf("Sprint"), thursday.timed.map { it.entry.title }, "a span that started days earlier still shows")
+        assertEquals(listOf("Trip"), thursday.allDay.map { it.title })
+        val week = CalendarQueries.days(emptyList(), sources, accounts, listOf(allDay), LocalDate(2026, 11, 9), 7, zone, emptySet())
+        assertEquals(listOf(false, true, true, true, false, false, false), week.map { d -> d.allDay.any { it.title == "Trip" } })
+    }
 }

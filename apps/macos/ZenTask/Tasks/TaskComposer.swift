@@ -120,7 +120,9 @@ struct TaskComposer: View {
                 .fixedSize()
                 .help("List (or type ~)")
                 Spacer()
-                Button("Cancel", role: .cancel, action: done).keyboardShortcut(.cancelAction)
+                Button("Cancel", role: .cancel, action: done)
+                    // Esc closes the suggestions first, so Cancel only owns Esc when none are shown.
+                    .keyboardShortcut(visibleSuggestions == nil ? KeyboardShortcut.cancelAction : KeyboardShortcut(.init("\u{0}"), modifiers: []))
                 Button("Add", action: add)
                     // Return picks a suggestion while the list is open, so Add only owns Return otherwise.
                     .keyboardShortcut(visibleSuggestions == nil ? KeyboardShortcut.defaultAction : KeyboardShortcut(.init("\u{0}"), modifiers: []))
@@ -156,7 +158,7 @@ struct TaskComposer: View {
 
     private var visibleSuggestions: [Suggestion]? {
         guard let t = token, dismissedToken != String(title[t.start...]) else { return nil }
-        return suggestions(for: t)
+        return Array(suggestions(for: t).prefix(Theme.Composer.maxSuggestions))
     }
 
     private func suggestions(for t: Token) -> [Suggestion] {

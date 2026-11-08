@@ -24,7 +24,7 @@ SELECT * FROM record WHERE entity = ? AND deleted = 0;
 liveOverlapping:
 SELECT * FROM record WHERE entity = ? AND deleted = 0
   AND CAST(json_extract(fields, '$.start') AS INTEGER) <= :until
-  AND MAX(CAST(json_extract(fields, '$.end') AS INTEGER), CAST(json_extract(fields, '$.start') AS INTEGER)) >= :from;
+  AND MAX(COALESCE(CAST(json_extract(fields, '$.end') AS INTEGER), 0), CAST(json_extract(fields, '$.start') AS INTEGER)) >= :from;
 
 -- Live ids of an entity whose JSON field (path like '$.parentId') equals a value.
 idsByField:

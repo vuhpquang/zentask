@@ -124,7 +124,8 @@ object CalendarQueries {
             }
         } + tasks.filter { t ->
             val at = t.startDate ?: t.dueDate
-            at != null && at >= windowFrom && at <= windowTo && !t.deleted && t.trashedAt == null && t.status != -1 && wanted(t) && (options.showCompleted || !t.isDone)
+            // Overlap, not start-in-window: a span that began days earlier still covers the shown days.
+            at != null && at <= windowTo && maxOf(t.dueDate ?: at, at) >= windowFrom && !t.deleted && t.trashedAt == null && t.status != -1 && wanted(t) && (options.showCompleted || !t.isDone)
         }
             .mapNotNull { t -> taskEntry(t, zone, zoneOf(t.timeZone))?.let { e -> if (options.colorBy == "list") e.copy(color = listColor[t.projectId]) else e } } +
             (if (options.showCountdowns) countdownEntries(countdowns, first, count, zone) else emptyList()) +
@@ -183,7 +184,10 @@ object CalendarQueries {
             // All-day tasks are stored as local midnight in their own zone: keep that calendar day.
             val day = Instant.fromEpochMilliseconds(start).toLocalDateTime(own).date
             val s = day.atStartOfDayIn(zone).toEpochMilliseconds()
-            return CalendarEntry(t.id, "task", t.title, s, day.plus(1, DateTimeUnit.DAY).atStartOfDayIn(zone).toEpochMilliseconds(), true, null, t.isDone, priority = t.priority)
+            // A multi-day all-day task ends at the midnight after its last day (TickTick's convention).
+            val endDay = t.dueDate?.takeIf { t.startDate != null && it > start }?.let { Instant.fromEpochMilliseconds(it).toLocalDateTime(own).date }
+                ?.takeIf { it > day } ?: day.plus(1, DateTimeUnit.DAY)
+            return CalendarEntry(t.id, "task", t.title, s, endDay.atStartOfDayIn(zone).toEpochMilliseconds(), true, null, t.isDone, priority = t.priority)
         }
         val end = t.dueDate?.takeIf { t.startDate != null && it > start } ?: (start + TASK_MINUTES * 60_000L)
         return CalendarEntry(t.id, "task", t.title, start, end, false, null, t.isDone, priority = t.priority)

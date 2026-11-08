@@ -109,7 +109,7 @@ private struct KanbanCard: View {
     }
 }
 
-/// Timeline: dated tasks as bars on a day scale (a week back, three weeks ahead), grouped like the list.
+/// Timeline: dated tasks as bars on a day scale (a week back, four weeks ahead), grouped like the list.
 /// Click a bar to open the task.
 struct TimelineBoard: View {
     @Environment(TasksModel.self) private var tasks
@@ -183,7 +183,9 @@ struct TimelineBoard: View {
         let cal = Calendar.current
         guard let startMs = t.startDate ?? t.dueDate else { return nil }
         let s = cal.startOfDay(for: Date(timeIntervalSince1970: Double(startMs.int64Value) / 1000))
-        let e = cal.startOfDay(for: Date(timeIntervalSince1970: Double((t.dueDate ?? startMs).int64Value) / 1000))
+        var e = cal.startOfDay(for: Date(timeIntervalSince1970: Double((t.dueDate ?? startMs).int64Value) / 1000))
+        // An all-day range ends at the midnight after its last day.
+        if t.isAllDay, t.startDate != nil, e > s { e = cal.date(byAdding: .day, value: -1, to: e) ?? e }
         let a = cal.dateComponents([.day], from: first, to: s).day ?? 0
         let b = max(a, cal.dateComponents([.day], from: first, to: e).day ?? a)
         guard b >= 0, a < count else { return nil }
@@ -268,7 +270,7 @@ struct SummaryView: View {
 
     private func load() {
         guard let index = tasks.index else { return }
-        let cal = Calendar.current
+        let cal = CalendarModel.mondayFirst()
         let today = cal.startOfDay(for: .now)
         let (from, to): (Date, Date) = switch period {
         case "today": (today, today)
