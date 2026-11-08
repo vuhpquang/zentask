@@ -42,6 +42,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
@@ -177,7 +179,12 @@ fun HabitsScreen(app: ZenApp) {
     val rows = loaded(revision) { app.core.habitRows().filter { !it.archived } } ?: emptyList()
     val week = loaded(revision) { app.core.habitWeek() } ?: emptyList()
     val today = app.core.todayStamp()
-    Scaffold(topBar = { TopAppBar(title = { Text("Habits") }) }) { padding ->
+    var creating by remember { mutableStateOf(false) }
+    if (creating) NewHabitDialog(app) { creating = false }
+    Scaffold(
+        topBar = { TopAppBar(title = { Text("Habits") }) },
+        floatingActionButton = { FloatingActionButton(onClick = { creating = true }) { Icon(Icons.Filled.Add, "New habit") } },
+    ) { padding ->
         LazyColumn(Modifier.padding(padding).padding(horizontal = 16.dp)) {
             item {
                 Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -246,7 +253,12 @@ private fun Ring(progress: Float, modifier: Modifier, color: Color = MaterialThe
 fun CountdownScreen(app: ZenApp) {
     val revision by app.revision.collectAsState()
     val cards = loaded(revision) { app.core.countdownCards().filter { it.countdown.archivedAt == null } } ?: return
-    Scaffold(topBar = { TopAppBar(title = { Text("Countdown") }) }) { padding ->
+    var creating by remember { mutableStateOf(false) }
+    if (creating) NewCountdownDialog(app) { creating = false }
+    Scaffold(
+        topBar = { TopAppBar(title = { Text("Countdown") }) },
+        floatingActionButton = { FloatingActionButton(onClick = { creating = true }) { Icon(Icons.Filled.Add, "New countdown") } },
+    ) { padding ->
         if (cards.isEmpty()) {
             Box(Modifier.padding(padding).fillMaxSize(), contentAlignment = Alignment.Center) { Text("No countdowns yet", color = MaterialTheme.colorScheme.onSurfaceVariant) }
             return@Scaffold
@@ -437,3 +449,109 @@ private fun <T> loaded(vararg keys: Any?, load: () -> T): T? =
     androidx.compose.runtime.produceState<T?>(null, *keys) {
         value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { load() }
     }.value
+
+// MARK: New habit / countdown
+
+/** A habit: yes/no or an amount a day (goal + unit), every day or on weekdays. Details are edited on the Mac. */
+@Composable
+private fun NewHabitDialog(app: ZenApp, close: () -> Unit) {
+    var name by remember { mutableStateOf("") }
+    var amount by remember { mutableStateOf(false) }
+    var goal by remember { mutableStateOf("8") }
+    var unit by remember { mutableStateOf("") }
+    var weekdays by remember { mutableStateOf(false) }
+    val goalValue = goal.replace(',', '.').toDoubleOrNull()
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = close,
+        title = { Text("New habit") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                androidx.compose.material3.OutlinedTextField(name, { name = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                    SegmentedButton(selected = !amount, onClick = { amount = false }, shape = SegmentedButtonDefaults.itemShape(0, 2)) { Text("Yes / no") }
+                    SegmentedButton(selected = amount, onClick = { amount = true }, shape = SegmentedButtonDefaults.itemShape(1, 2)) { Text("Amount") }
+                }
+                if (amount) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        androidx.compose.material3.OutlinedTextField(goal, { goal = it }, label = { Text("Goal a day") }, singleLine = true, modifier = Modifier.weight(1f),
+                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal))
+                        androidx.compose.material3.OutlinedTextField(unit, { unit = it }, label = { Text("Unit") }, singleLine = true, modifier = Modifier.weight(1f))
+                    }
+                }
+                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                    SegmentedButton(selected = !weekdays, onClick = { weekdays = false }, shape = SegmentedButtonDefaults.itemShape(0, 2)) { Text("Every day") }
+                    SegmentedButton(selected = weekdays, onClick = { weekdays = true }, shape = SegmentedButtonDefaults.itemShape(1, 2)) { Text("Weekdays") }
+                }
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(
+                enabled = name.isNotBlank() && (!amount || (goalValue != null && goalValue > 0)),
+                onClick = {
+                    app.core.habitActions.create(
+                        name = name, icon = null, color = "#5B5FE9",
+                        type = if (amount) com.vuhpquang.zentask.model.Habit.TYPE_REAL else com.vuhpquang.zentask.model.Habit.TYPE_BOOLEAN,
+                        goal = if (amount) goalValue ?: 1.0 else 1.0, step = 1.0, unit = if (amount) unit.trim() else "",
+                        repeatRule = if (weekdays) "RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR" else "RRULE:FREQ=DAILY;INTERVAL=1",
+                    )
+                    close()
+                },
+            ) { Text("Create") }
+        },
+        dismissButton = { androidx.compose.material3.TextButton(onClick = close) { Text("Cancel") } },
+    )
+}
+
+/** A countdown to a date; birthdays and anniversaries repeat every year. Shown in the calendar. */
+@Composable
+private fun NewCountdownDialog(app: ZenApp, close: () -> Unit) {
+    var name by remember { mutableStateOf("") }
+    var type by remember { mutableStateOf("COUNTDOWN") }
+    var date by remember { mutableStateOf(LocalDate.now(zone).plusDays(7)) }
+    var pickingDate by remember { mutableStateOf(false) }
+    val types = listOf("COUNTDOWN" to "Countdown", "BIRTHDAY" to "Birthday", "ANNIVERSARY" to "Anniversary")
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = close,
+        title = { Text("New countdown") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                androidx.compose.material3.OutlinedTextField(name, { name = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+                androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for ((t, label) in types) {
+                        androidx.compose.material3.FilterChip(selected = type == t, onClick = { type = t }, label = { Text(label) })
+                    }
+                }
+                androidx.compose.material3.OutlinedButton(onClick = { pickingDate = true }, modifier = Modifier.fillMaxWidth()) {
+                    Text(date.format(java.time.format.DateTimeFormatter.ofPattern("EEE, d MMM yyyy")))
+                }
+            }
+        },
+        confirmButton = {
+            androidx.compose.material3.TextButton(enabled = name.isNotBlank(), onClick = {
+                val stamp = date.year * 10_000 + date.monthValue * 100 + date.dayOfMonth
+                app.core.countdownActions.create(
+                    name = name, date = stamp, type = type, repeat = if (type == "COUNTDOWN") "none" else "yearly",
+                    color = if (type == "BIRTHDAY") "#EC4899" else "#5B5FE9", icon = null, note = "", showInCalendar = true,
+                )
+                close()
+            }) { Text("Create") }
+        },
+        dismissButton = { androidx.compose.material3.TextButton(onClick = close) { Text("Cancel") } },
+    )
+    if (pickingDate) {
+        val state = androidx.compose.material3.rememberDatePickerState(
+            initialSelectedDateMillis = date.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli(),
+        )
+        androidx.compose.material3.DatePickerDialog(
+            onDismissRequest = { pickingDate = false },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    state.selectedDateMillis?.let { date = Instant.ofEpochMilli(it).atZone(java.time.ZoneOffset.UTC).toLocalDate() }
+                    pickingDate = false
+                }) { Text("OK") }
+            },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { pickingDate = false }) { Text("Cancel") } },
+        ) { androidx.compose.material3.DatePicker(state) }
+    }
+}
