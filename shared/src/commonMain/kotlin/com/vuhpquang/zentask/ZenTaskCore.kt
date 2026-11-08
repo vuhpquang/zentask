@@ -20,7 +20,22 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import com.vuhpquang.zentask.model.Project
+import com.vuhpquang.zentask.tasks.QuickAdd
+import com.vuhpquang.zentask.tasks.QuickAddParser
+import com.vuhpquang.zentask.tasks.Recurrence
+import com.vuhpquang.zentask.tasks.TagActions
+import com.vuhpquang.zentask.tasks.TaskActions
+import com.vuhpquang.zentask.tasks.TaskFilter
+import com.vuhpquang.zentask.tasks.TaskIndex
+import com.vuhpquang.zentask.tasks.TaskSection
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.StateFlow
+import com.vuhpquang.zentask.model.ProjectGroup
+import kotlinx.datetime.atStartOfDayIn
+import kotlinx.datetime.TimeZone
+import kotlin.time.Clock
+import kotlin.time.Instant
 import kotlinx.coroutines.withContext
 
 /** What the main window shows until the task UI (P3) exists. */
@@ -49,6 +64,50 @@ class ZenTaskCore(
     private val ticktick = TickTickSync(store)
 
     val syncStatus: StateFlow<SyncStatus> = engine.status
+
+    /** Task operations (complete, trash, edit, checklist…); every edit is offline-first and synced. */
+    val actions: TaskActions = TaskActions(store)
+    val tagActions: TagActions = TagActions(store)
+
+    /** Any record changed (locally or from sync): reload the index. */
+    val recordChanges: Flow<Unit> = store.recordChanges()
+
+    // ---- Tasks ----
+
+    /** Reads the task data into a [TaskIndex] off the calling thread. */
+    @Throws(Exception::class)
+    suspend fun loadIndex(): TaskIndex = io { TaskIndex.load(store) }
+
+    fun sections(index: TaskIndex, filter: TaskFilter): List<TaskSection> = index.sections(filter, now(), zone())
+
+    /** Sidebar badges keyed `smart:TODAY`, `project:<id>`, `tag:<name>` (Swift can't key a dictionary by the sealed interface). */
+    fun sidebarCounts(index: TaskIndex): Map<String, Int> = index.counts(now(), zone()).mapKeys { (f, _) -> filterKey(f) }
+
+    fun filterKey(filter: TaskFilter): String = when (filter) {
+        is TaskFilter.Smart -> "smart:${filter.list.name}"
+        is TaskFilter.InProject -> "project:${filter.id}"
+        is TaskFilter.WithTag -> "tag:${filter.name.lowercase()}"
+    }
+
+    fun parseQuickAdd(text: String, projects: List<Project>): QuickAdd = QuickAddParser.parse(text, now(), zone(), projects)
+
+    /** Creates a task from quick-add text in the list being viewed. */
+    fun quickAdd(text: String, filter: TaskFilter, projects: List<Project>): Task? {
+        val q = parseQuickAdd(text, projects)
+        if (q.title.isBlank()) return null
+        return actions.create(q.title, filter, q.projectId, q.priority, q.tags, q.due, q.allDay)
+    }
+
+    /** Start of the task's day in the current zone, as epoch millis (all-day dates read in the task's own zone). */
+    fun taskDayMillis(index: TaskIndex, task: Task): Long? =
+        index.day(task, zone())?.atStartOfDayIn(zone())?.toEpochMilliseconds()
+
+    fun projectGroups(): List<ProjectGroup> = store.list(EntityTypes.projectGroup).sortedBy { it.sortOrder }
+
+    fun describeRepeat(rule: String): String = Recurrence.describe(rule)
+
+    private fun now(): Instant = Clock.System.now()
+    private fun zone(): TimeZone = TimeZone.currentSystemDefault()
 
     // ---- ZenTask server ----
 

@@ -10,28 +10,49 @@ enum Snapshots {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let model = AppModel(core: ZenTaskCore.companion.open(dbPath: nil),
                              keychain: Keychain(service: "com.vuhpquang.zentask.snapshot"))
-        let screens: [(String, AnyView, CGSize)] = [
-            ("main-empty", AnyView(RootView()), CGSize(width: 900, height: 560)),
+        let tasks = TasksModel(core: model.core)
+        let settings: [(String, AnyView, CGSize)] = [
             ("settings-account", AnyView(AccountSettings().frame(width: Theme.Size.settingsWidth)), CGSize(width: 540, height: 300)),
             ("settings-ticktick", AnyView(TickTickSettings().frame(width: Theme.Size.settingsWidth)), CGSize(width: 540, height: 520)),
         ]
-        for (name, view, size) in screens {
-            for (suffix, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
-                write(view.environment(model), size: size, appearance: appearance, to: dir.appendingPathComponent("\(name)-\(suffix).png"))
-            }
-        }
+        for (name, view, size) in settings { both(view.environment(model), size: size, name: name, dir: dir) }
+        wait { await tasks.reload() }
+        both(AnyView(TasksView()).environment(model).environment(tasks), size: windowSize, name: "tasks-empty", dir: dir)
+
         if let csv = sampleCsv() {
-            let semaphore = DispatchSemaphore(value: 0)
             let core = model.core
-            _Concurrency.Task.detached { _ = try? await core.importCsv(text: csv); semaphore.signal() }
-            while semaphore.wait(timeout: .now()) == .timedOut { RunLoop.current.run(until: Date().addingTimeInterval(0.05)) }
-            model.refresh()
-            model.ticktickMessage = "Imported: 824 new"
-            for (suffix, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
-                write(AnyView(RootView()).environment(model), size: CGSize(width: 900, height: 560), appearance: appearance,
-                      to: dir.appendingPathComponent("main-imported-\(suffix).png"))
+            wait { _ = try? await core.importCsv(text: csv) }
+            wait { await tasks.reload() }
+            let shots: [(String, SidebarItem)] = [("tasks-inbox", .smart(.inbox)), ("tasks-all", .smart(.all)), ("tasks-completed", .smart(.completed))]
+            for (name, item) in shots {
+                tasks.sidebar = item
+                both(AnyView(TasksView()).environment(model).environment(tasks), size: windowSize, name: name, dir: dir)
+            }
+            if let project = tasks.listProjects.first(where: { $0.viewMode == "kanban" }) ?? tasks.listProjects.first {
+                tasks.sidebar = .project(project.id)
+                both(AnyView(TasksView()).environment(model).environment(tasks), size: windowSize, name: "tasks-list", dir: dir)
+            }
+            tasks.sidebar = .smart(.all)
+            if let checklist = tasks.sections.flatMap(\.rows).first(where: { $0.checklistTotal > 0 }) ?? tasks.sections.first?.rows.first {
+                tasks.selection = checklist.task.id
+                both(AnyView(TasksView()).environment(model).environment(tasks), size: windowSize, name: "tasks-detail", dir: dir)
             }
         }
+    }
+
+    private static let windowSize = CGSize(width: 1100, height: 720)
+
+    private static func both(_ view: some View, size: CGSize, name: String, dir: URL) {
+        for (suffix, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
+            write(view, size: size, appearance: appearance, to: dir.appendingPathComponent("\(name)-\(suffix).png"))
+        }
+    }
+
+    /// Runs async work to completion while keeping the main run loop turning.
+    private static func wait(_ work: @escaping @MainActor () async -> Void) {
+        var done = false
+        _Concurrency.Task { @MainActor in await work(); done = true }
+        while !done { RunLoop.current.run(until: Date().addingTimeInterval(0.02)) }
     }
 
     private static func sampleCsv() -> String? {

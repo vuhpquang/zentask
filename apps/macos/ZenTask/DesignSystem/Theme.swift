@@ -17,9 +17,30 @@ enum Theme {
         static let tile: CGFloat = 10
     }
 
+    /** Priority colours (ZenTask's own): system colours, so they resolve per appearance. */
+    enum PriorityColor {
+        static func color(_ priority: Int32) -> Color {
+            switch priority {
+            case 5: .red
+            case 3: .orange
+            case 1: .blue
+            default: .secondary
+            }
+        }
+    }
+
+    enum Row {
+        static let checkbox: CGFloat = 16
+        static let indent: CGFloat = 24
+        static let pillRadius: CGFloat = 6
+    }
+
     enum Size {
         static let heroIcon: CGFloat = 44
         static let summaryWidth: CGFloat = 420
         static let settingsWidth: CGFloat = 540
+        static let sidebarMin: CGFloat = 200
+        static let listMin: CGFloat = 340
+        static let detailMin: CGFloat = 320
     }
 }

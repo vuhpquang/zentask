@@ -133,6 +133,9 @@ class ZenStore(
         db.recordQueries.live(type.name).asFlow().mapToList(Dispatchers.Default)
             .map { rows -> rows.mapNotNull { decode(type, parseFields(it.fields)) } }
 
+    /** Emits after any change to any record, local or from sync (drives UI reloads). */
+    fun recordChanges(): Flow<Unit> = db.recordQueries.live("").asFlow().map { }
+
     // ---- Sync-facing API ----
 
     var checkpoint: Long
