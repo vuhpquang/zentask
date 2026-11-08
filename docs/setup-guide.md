@@ -154,7 +154,7 @@ curl -s https://zentask-api.vuhpquang.com/v1/auth/login \
 
 Dòng cuối luôn in mã HTTP:
 
-- `HTTP 404` và không có nội dung: server trên vps1 vẫn là bản cũ (P0), chưa có đăng nhập. Chạy `scripts/deploy.sh` của P1 trước. Kiểm tra bằng `curl -s https://zentask-api.vuhpquang.com/health`: phiên bản phải lớn hơn `0.1.1`.
+- `HTTP 404` và không có nội dung: server trên vps1 vẫn là bản cũ (P0), chưa có đăng nhập. Cần chạy `scripts/deploy.sh` với code từ P1 trở đi (Claude sẽ hỏi anh trước khi deploy), rồi chạy lại lệnh trên.
 - Đúng mật khẩu (`HTTP 200`): trả về `{"token":"…","deviceId":"…"}`. Ghi lại `token` và `deviceId` để dùng ở bước sau.
 - `{"error":"unauthorized"}`: sai mật khẩu, so lại với `.env` trên vps1.
 - `{"error":"too_many_attempts"}`: đã sai 5 lần trong 15 phút. Đợi 15 phút rồi thử lại.
