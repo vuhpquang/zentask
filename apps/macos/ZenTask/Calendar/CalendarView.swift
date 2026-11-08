@@ -263,11 +263,15 @@ private struct DayColumn: View {
                         let a = minute(at: v.startLocation.y), b = minute(at: v.location.y)
                         let lo = min(a, b), hi = min(max(max(a, b), lo + snap), 24 * 60)
                         let next = CalendarModel.NewRange(dayStart: day.dayStart, start: lo, end: hi)
-                        if cal.newRange != next { withMotion { cal.newRange = next } }
+                        if cal.newRange != next { cal.newRange = next }
                     }
-                    .onEnded { _ in
+                    .onEnded { v in
                         if cal.rangeCancelled { cal.rangeCancelled = false; return }
-                        if cal.newRange?.dayStart == day.dayStart { cal.composingRange = true }
+                        // Make sure the final range is in place (a fast drag can end before the last onChanged).
+                        let a = minute(at: v.startLocation.y), b = minute(at: v.location.y)
+                        let lo = min(a, b), hi = min(max(max(a, b), lo + snap), 24 * 60)
+                        cal.newRange = CalendarModel.NewRange(dayStart: day.dayStart, start: lo, end: hi)
+                        cal.composingRange = true
                     },
             )
             GeometryReader { geo in
@@ -281,13 +285,16 @@ private struct DayColumn: View {
             if cal.calendar.isDateInToday(cal.date(of: day)) { NowLine(hourHeight: cal.hourHeight) }
             if let hover = cal.dropHover, hover.dayStart == day.dayStart {
                 GhostBlock(start: hover.minute, end: hover.minute + Theme.Calendar.taskMinutes, dayStart: cal.date(of: day), hourHeight: cal.hourHeight)
+                    .padding(.top, GhostBlock.top(hover.minute, cal.hourHeight))
                     .allowsHitTesting(false)
             }
             if let r = range {
+                // The popover hangs on the block itself (placed with padding, not offset, so its frame is where it's drawn).
                 GhostBlock(start: r.start, end: r.end, dayStart: cal.date(of: day), hourHeight: cal.hourHeight)
                     .popover(isPresented: Binding(get: { cal.composingRange && cal.newRange == r }, set: { if !$0 { cal.composingRange = false } }), arrowEdge: .trailing) {
                         TaskComposer(start: .span(time(r.start), time(r.end))) { cal.composingRange = false }
                     }
+                    .padding(.top, GhostBlock.top(r.start, cal.hourHeight))
             }
         }
         .frame(height: 24 * cal.hourHeight)
@@ -326,8 +333,10 @@ private struct GhostBlock: View {
             .overlay(RoundedRectangle(cornerRadius: Theme.Calendar.eventRadius, style: .continuous)
                 .strokeBorder(.tint, style: StrokeStyle(lineWidth: Theme.Habits.ringStrong, dash: [Theme.Space.xs, Theme.Space.xxs])))
             .padding(.horizontal, 1)
-            .offset(y: CGFloat(start) / 60 * hourHeight + 1)
     }
+
+    /// Distance from the top of the day column.
+    static func top(_ minute: Int, _ hourHeight: CGFloat) -> CGFloat { CGFloat(minute) / 60 * hourHeight + 1 }
 }
 
 /// Drop target for a day column: tracks the snapped minute under the pointer (for the placeholder) and

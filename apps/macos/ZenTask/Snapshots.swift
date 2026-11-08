@@ -99,6 +99,10 @@ enum Snapshots {
         both(AnyView(CalendarView()).environment(model).environment(tasks).environment(cal).environment(PanelCalendar(core: core)), size: CGSize(width: 1400, height: 760), name: "calendar-sidebar", dir: dir)
         UserDefaults.standard.removeObject(forKey: "calendar.showSideBar")
         both(AnyView(CalendarViewOptionsSheet()).environment(cal), size: CGSize(width: 460, height: 420), name: "sheet-calendar-options", dir: dir)
+        // A range being dragged out at 10:00–11:30 on the third day.
+        if cal.days.count > 2 { cal.newRange = .init(dayStart: cal.days[2].dayStart, start: 600, end: 690) }
+        both(AnyView(CalendarView()).environment(model).environment(tasks).environment(cal).environment(PanelCalendar(core: core)), size: windowSize, name: "calendar-new-range", dir: dir)
+        cal.newRange = nil
     }
 
     /// Habits and countdowns with sample data (in-memory core only).
