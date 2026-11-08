@@ -8,7 +8,7 @@ Các bước dưới đây cần tài khoản hoặc quyền mà chỉ anh có. 
 | 2 | Mật khẩu server + file `.env` trên vps1 | P1 (auth + sync) |
 | 3 | Google Cloud OAuth client cho Google Calendar, publish app (bước 3.6) | P5 (calendar) |
 | 4 | (Tuỳ chọn) Link iCal bí mật của lịch công ty | P5, chỉ khi bước 3 bị công ty chặn |
-| 5 | Cookie TickTick | P2 (hướng dẫn chi tiết sẽ thêm khi tới P2) |
+| 5 | Đăng nhập ZenTask trên Mac + cookie TickTick | P2 |
 | 6 | Kết nối MCP cho AI (Claude Code) | P3b (hướng dẫn chi tiết sẽ thêm khi tới P3b) |
 
 ---
@@ -285,6 +285,63 @@ Chỉ dùng khi bước 3 bị chặn với tài khoản nào đó.
 
 ---
 
-## 5. Cookie TickTick
+## 5. Cookie TickTick và lần sync đầu tiên
 
-Dùng cho nút **Sync TickTick** (kéo task, list, tag, habit, countdown về ZenTask). Hướng dẫn từng bước trong Chrome sẽ được thêm vào đây khi làm P2.
+Nút **Sync from TickTick** chỉ kéo dữ liệu một chiều, từ TickTick về ZenTask: task, list, thư mục, tag, cột, habit, countdown. ZenTask không bao giờ ghi gì lên TickTick.
+
+Vì anh đăng nhập TickTick bằng Google, ZenTask không dùng mật khẩu được mà dùng **cookie phiên** của trình duyệt (cookie tên `t`).
+
+> Cookie `t` có toàn quyền với tài khoản TickTick của anh, nên đừng gửi nó cho ai. ZenTask chỉ lưu nó trong **Keychain** của Mac: không gửi lên server ZenTask, không ghi log, không nằm trong git.
+
+### 5.1 Đăng nhập ZenTask (làm một lần trên mỗi máy)
+
+1. Mở ZenTask, nhấn `⌘,` (Settings) rồi chọn tab **Account**.
+2. Nhập mật khẩu (`ZENTASK_PASSWORD` trong `.env` ở bước 2) và bấm **Sign in**.
+3. Dòng **Status** chuyển thành "Synced …". Token đăng nhập được lưu trong Keychain, nên lần sau không phải nhập lại.
+
+### 5.2 Lấy cookie `t`
+
+**Chrome:**
+1. Mở <https://ticktick.com/webapp> và đăng nhập nếu chưa.
+2. Nhấn `⌥⌘I` để mở DevTools, chọn tab **Application**.
+3. Ở cột trái, mở **Storage → Cookies → https://ticktick.com**.
+4. Tìm dòng có **Name** là `t`, bấm đúp vào ô **Value** rồi nhấn `⌘C`. Giá trị là một chuỗi dài chữ và số.
+
+**Safari:**
+1. Vào **Safari → Settings → Advanced** và bật **Show features for web developers**.
+2. Mở <https://ticktick.com/webapp>, rồi chọn **Develop → Show Web Inspector** (`⌥⌘I`).
+3. Chọn tab **Storage → Cookies → ticktick.com**, tìm dòng `t` và copy cột **Value**.
+
+> Nếu không thấy dòng `t`, kiểm tra mình đang ở `ticktick.com` (không phải `dida365.com`) và đã đăng nhập.
+
+### 5.3 Sync lần đầu
+
+1. Trong ZenTask, nhấn `⌘,`, chọn tab **TickTick**, dán cookie vào ô **Value of the t cookie** rồi bấm **Save cookie**.
+2. Bấm **Check for changes**. ZenTask tải dữ liệu từ TickTick và báo trước sẽ thay đổi gì, ví dụ "830 new". Lúc này **chưa có gì được ghi**.
+3. Bấm **Sync from TickTick** để áp dụng. Màn hình chính hiện số list, số task đang mở và đã xong.
+4. Những lần sau làm lại bước 2 và 3 bất cứ khi nào muốn kéo thay đổi mới. Bấm nhiều lần không bị nhân đôi.
+
+Cách ZenTask gộp dữ liệu:
+- Trường nào anh sửa trong TickTick sẽ ghi đè bản trong ZenTask.
+- Trường anh chỉ sửa trong ZenTask được giữ nguyên.
+- Task anh tạo trong ZenTask không bao giờ bị động tới.
+- Task bị xoá bên TickTick được chuyển vào **Trash** của ZenTask, khôi phục được, không bị xoá hẳn.
+- Nếu một lần sync định chuyển hơn 10 mục, và hơn 20% số mục đã nhập, vào Trash, ZenTask hỏi lại trước khi làm. Trường hợp này thường do cookie lỗi hoặc TickTick đổi API, nên nếu thấy con số lạ thì bấm **Cancel**.
+
+### 5.4 Khi cookie hết hạn
+
+Khi ZenTask báo "The TickTick cookie has expired", làm như sau:
+1. Mở tab TickTick và bấm **Remove** để xoá cookie cũ.
+2. Lấy cookie mới (bước 5.2), dán vào rồi bấm **Save cookie**.
+
+Cookie thường dùng được nhiều tháng. Nó mất hiệu lực ngay nếu anh bấm **Sign out** TickTick trên trình duyệt đó, nên đừng đăng xuất TickTick ở trình duyệt đã lấy cookie.
+
+### 5.5 (Dự phòng) Nhập file CSV backup
+
+Chỉ dùng khi chưa lấy được cookie. Trong TickTick, vào **Settings → Account → Backup → Generate Backup** để tải file `.csv`. Sau đó trong ZenTask, mở tab TickTick, bấm **Import CSV backup…** và chọn file.
+
+> File CSV không chứa ID thật của TickTick. Vì vậy:
+> - Sau khi đã sync bằng cookie, nút nhập CSV sẽ ẩn đi.
+> - Nếu nhập CSV trước rồi mới sync bằng cookie, các task nhập từ CSV được chuyển vào Trash (ZenTask sẽ hỏi lại) và thay bằng bản có ID thật từ TickTick. Những gì anh đã sửa trên bản CSV sẽ nằm trong Trash.
+>
+> Nếu đã có cookie thì bỏ qua CSV.
