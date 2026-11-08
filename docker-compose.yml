@@ -1,0 +1,19 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - PORT=3100
+      - DATA_DIR=/app/data
+    volumes:
+      - zentask_data:/app/data
+    ports:
+      - "127.0.0.1:3100:3100"
+
+volumes:
+  zentask_data:
