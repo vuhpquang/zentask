@@ -8,6 +8,7 @@ struct ZenTaskApp: App {
     @State private var habits: HabitsModel
     @State private var countdowns: CountdownsModel
     @State private var panelCalendar: PanelCalendar
+    @State private var focus: FocusModel
 
     init() {
         if let dir = ProcessInfo.processInfo.environment["ZENTASK_SNAPSHOT"] {
@@ -22,6 +23,7 @@ struct ZenTaskApp: App {
         _habits = State(initialValue: HabitsModel(core: model.core))
         _countdowns = State(initialValue: CountdownsModel(core: model.core))
         _panelCalendar = State(initialValue: PanelCalendar(core: model.core))
+        _focus = State(initialValue: FocusModel(core: model.core))
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
             tasks.reminders = Reminders(core: model.core)
             model.start()
@@ -41,6 +43,7 @@ struct ZenTaskApp: App {
                 .environment(habits)
                 .environment(countdowns)
                 .environment(panelCalendar)
+                .environment(focus)
         }
         .defaultSize(width: 1100, height: 720)
         .commands { TaskCommands() }
@@ -69,6 +72,7 @@ struct TaskCommands: Commands {
 /// Rail + the selected area.
 struct MainWindow: View {
     @Environment(TasksModel.self) private var tasks
+    @Environment(FocusModel.self) private var focusModel
     @State private var tab: RailTab = .tasks
     @State private var searching = false
 
@@ -82,11 +86,16 @@ struct MainWindow: View {
             case .habits: HabitsView()
             case .countdown: CountdownsView()
             case .matrix: MatrixView(openTask: { id in open(nil, id) })
+            case .focus: FocusView()
             default: TasksView()
             }
         }
         .environment(\.searchOpen, searching)
         .environment(\.openTask) { id in open(nil, id) }
+        .environment(\.startFocus) { id in
+            tab = .focus
+            if focusModel.phase == .idle { focusModel.mode = .pomo; focusModel.begin(task: id) } else { focusModel.taskId = id }
+        }
         .onOpenURL { url in
             // zentask://task/<id> (Copy link): show it in Tasks whatever area is open.
             guard url.scheme == "zentask", url.host() == "task", let id = url.pathComponents.dropFirst().first else { return }

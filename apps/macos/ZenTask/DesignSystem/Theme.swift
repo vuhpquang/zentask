@@ -128,6 +128,16 @@ enum Theme {
         static let bodyHeight: CGFloat = 150
     }
 
+    /** Focus timer. */
+    enum Focus {
+        static let dial: CGFloat = 300
+        static let ring: CGFloat = 10
+        static let clock: CGFloat = 64
+        static let button: CGFloat = 120
+        static let historyWidth: CGFloat = 400
+        static let headerBalance: CGFloat = 60
+    }
+
     /** Search overlay. */
     enum Search {
         static let width: CGFloat = 560

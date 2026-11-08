@@ -93,6 +93,9 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
   View options sheet, "+" new task. `Tasks/TaskComposer` = the new-task card (calendar "+", a range dragged on
   empty calendar space, global Quick Add): `~` list, `!` priority, `#` tag pickers, quick-add dates. Calendar day
   columns use a `DropDelegate` (`ColumnDrop`) that shows a 15-minute-snapped placeholder while dragging.
+  `Focus/` (rail ⌘6): `FocusModel` (Pomodoro/stopwatch timer, state saved in UserDefaults `focus.state` so a
+  relaunch resumes, finished sessions saved as synced `FocusRecord`s, end-of-phase notifications) + `FocusView`
+  (dial, task picker, overview, record timeline); "Start focus" in the task "…" menu.
   `Hotkeys/HotKeys.swift`: global hotkeys via Carbon `RegisterEventHotKey` (Quick Add ⌃⌥N by default, show/hide
   window), stored in UserDefaults `hotkey.*`; Settings → Hotkeys records them and lists the app shortcuts.
   Task list chrome (`Tasks/ListChrome.swift`): `ListHeader` (☰ sidebar, list picker popover, `SortMenu` group/sort/

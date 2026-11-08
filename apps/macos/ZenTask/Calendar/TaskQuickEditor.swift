@@ -122,4 +122,6 @@ struct TaskQuickEditor: View {
 extension EnvironmentValues {
     /// Shows a task in the Tasks area (set by the main window).
     @Entry var openTask: (String) -> Void = { _ in }
+    /// Starts a pomo on a task in the Focus area (set by the main window).
+    @Entry var startFocus: (String) -> Void = { _ in }
 }

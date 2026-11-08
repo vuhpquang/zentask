@@ -12,6 +12,9 @@ enum Snapshots {
                              keychain: Keychain(service: "com.vuhpquang.zentask.snapshot", directory: FileManager.default.temporaryDirectory.appendingPathComponent("zt-snapshot-secrets")))
         let tasks = TasksModel(core: model.core)
         let panel = PanelCalendar(core: model.core)
+        let focusDefaults = UserDefaults(suiteName: "zt.snapshot.focus")!
+        focusDefaults.removePersistentDomain(forName: "zt.snapshot.focus")
+        let focus = FocusModel(core: model.core, defaults: focusDefaults)
         let settings: [(String, AnyView, CGSize)] = [
             ("settings-account", AnyView(AccountSettings().frame(width: Theme.Size.settingsWidth)), CGSize(width: 540, height: 300)),
             ("settings-ticktick", AnyView(TickTickSettings().frame(width: Theme.Size.settingsWidth)), CGSize(width: 540, height: 520)),
@@ -19,7 +22,7 @@ enum Snapshots {
         ]
         for (name, view, size) in settings { both(view.environment(model), size: size, name: name, dir: dir) }
         wait { await tasks.reload() }
-        both(AnyView(MainWindow()).environment(model).environment(tasks).environment(panel), size: windowSize, name: "tasks-empty", dir: dir)
+        both(AnyView(MainWindow()).environment(model).environment(tasks).environment(panel).environment(focus), size: windowSize, name: "tasks-empty", dir: dir)
 
         calendarShots(model, tasks, dir: dir)
         habitShots(model, tasks, dir: dir)
@@ -31,18 +34,26 @@ enum Snapshots {
             for (name, item) in shots {
                 tasks.sidebar = item
                 wait { await tasks.settle() }
-                both(AnyView(MainWindow()).environment(model).environment(tasks).environment(panel), size: windowSize, name: name, dir: dir)
+                both(AnyView(MainWindow()).environment(model).environment(tasks).environment(panel).environment(focus), size: windowSize, name: name, dir: dir)
             }
             if let project = tasks.listProjects.first(where: { $0.viewMode == "kanban" }) ?? tasks.listProjects.first {
                 tasks.sidebar = .project(project.id)
                 wait { await tasks.settle() }
-                both(AnyView(MainWindow()).environment(model).environment(tasks).environment(panel), size: windowSize, name: "tasks-list", dir: dir)
+                both(AnyView(MainWindow()).environment(model).environment(tasks).environment(panel).environment(focus), size: windowSize, name: "tasks-list", dir: dir)
             }
             tasks.sheet = nil
             for (name, view) in [("sheet-list", AnyView(ListEditor(project: nil))), ("sheet-filter", AnyView(FilterEditor(filter: nil)))] {
                 both(view.environment(model).environment(tasks), size: CGSize(width: 480, height: 620), name: name, dir: dir)
             }
             both(AnyView(MatrixView(openTask: { _ in })).environment(model).environment(tasks), size: windowSize, name: "matrix", dir: dir)
+            let now = Int64(Date.now.timeIntervalSince1970 * 1000)
+            let sampleTask = tasks.index?.allTasks.first { $0.isOpen }?.id
+            for (ago, length, kind) in [(200, 25, "pomo"), (150, 25, "pomo"), (60, 40, "stopwatch"), (1500, 25, "pomo")] {
+                let start = now - Int64(ago) * 60_000
+                _ = model.core.focusActions.record(start: start, end: start + Int64(length) * 60_000, kind: kind, taskId: sampleTask, note: "")
+            }
+            wait { await focus.reload() }
+            both(AnyView(FocusView()).environment(model).environment(tasks).environment(focus), size: windowSize, name: "focus", dir: dir)
             both(AnyView(TaskComposer(start: .allDay(.now)) {}).environment(tasks), size: CGSize(width: 440, height: 300), name: "composer", dir: dir)
             if let sample = tasks.index?.allTasks.first(where: { !$0.content.isEmpty && $0.isOpen }) {
                 both(AnyView(TaskQuickEditor(taskId: sample.id)).environment(tasks), size: CGSize(width: 440, height: 320), name: "calendar-task-card", dir: dir)
@@ -53,7 +64,7 @@ enum Snapshots {
             wait { await tasks.settle() }
             if let checklist = tasks.sections.flatMap(\.rows).first(where: { $0.checklistTotal > 0 }) ?? tasks.sections.first?.rows.first {
                 tasks.selection = checklist.task.id
-                both(AnyView(MainWindow()).environment(model).environment(tasks).environment(panel), size: windowSize, name: "tasks-detail", dir: dir)
+                both(AnyView(MainWindow()).environment(model).environment(tasks).environment(panel).environment(focus), size: windowSize, name: "tasks-detail", dir: dir)
                 // List grouped by list with one group folded, and the calendar panel open.
                 let cal = CalendarModel(core: model.core)
                 tasks.setOptions(tasks.options.with(sort: "priority", group: "list"))
@@ -61,7 +72,7 @@ enum Snapshots {
                 if let second = tasks.sections.dropFirst().first { tasks.toggleCollapsed(second, in: tasks.sidebar.storageKey) }
                 tasks.showCalendarPanel = true
                 wait { await panel.cal.reload() }
-                both(AnyView(MainWindow()).environment(model).environment(tasks).environment(panel).environment(cal), size: CGSize(width: 1500, height: 820), name: "tasks-panel", dir: dir)
+                both(AnyView(MainWindow()).environment(model).environment(tasks).environment(panel).environment(focus).environment(cal), size: CGSize(width: 1500, height: 820), name: "tasks-panel", dir: dir)
                 tasks.showCalendarPanel = false
                 if let second = tasks.sections.dropFirst().first { tasks.toggleCollapsed(second, in: tasks.sidebar.storageKey) }
                 tasks.setOptions(tasks.options.with(sort: "", group: ""))

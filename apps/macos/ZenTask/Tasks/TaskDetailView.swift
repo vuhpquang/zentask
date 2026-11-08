@@ -466,6 +466,7 @@ struct DueEditor: View {
 /// "…" in the task detail: the actions TickTick keeps there.
 struct TaskMoreMenu: View {
     @Environment(TasksModel.self) private var tasks
+    @Environment(\.startFocus) private var startFocus
     let task: ZTask
     let addSubtask: () -> Void
 
@@ -478,6 +479,7 @@ struct TaskMoreMenu: View {
                 Button("Unpin", systemImage: "pin.slash") { tasks.core.actions.unpin(id: task.id) }
             }
             if task.status == 0 { Button("Won't do", systemImage: "xmark.circle") { tasks.core.actions.wontDo(id: task.id) } }
+            if task.status == 0 { Button("Start focus", systemImage: "timer") { startFocus(task.id) } }
             Divider()
             Button("Duplicate", systemImage: "plus.square.on.square") { tasks.selection = tasks.core.actions.duplicate(id: task.id).id }
             Button("Copy link", systemImage: "link") {

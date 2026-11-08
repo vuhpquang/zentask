@@ -7,7 +7,8 @@ struct HotkeySettings: View {
 
     private let appShortcuts: [(String, String)] = [
         ("New task", "⌘N"), ("Search", "⌘K"), ("Settings", "⌘,"),
-        ("Tasks · Calendar · Habits · Countdown · Matrix", "⌘1 – ⌘5"),
+        ("Tasks · Calendar · Habits · Countdown · Matrix · Focus", "⌘1 – ⌘6"),
+        ("Focus: start or pause · stop", "Space · Esc"),
         ("Complete the selected task", "Space"), ("Move the selected task to Trash", "⌫"),
         ("Calendar: today", "⌘T"), ("Calendar: previous / next", "⌘← / ⌘→"),
         ("Calendar: Day · Week · Month · Year · Agenda", "D W M Y A  or  1 – 5"),

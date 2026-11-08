@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Main areas of the app, switched from the rail.
 enum RailTab: Hashable, CaseIterable {
-    case tasks, calendar, habits, countdown, matrix, search
+    case tasks, calendar, habits, countdown, matrix, focus, search
 
     var title: String {
         switch self {
@@ -11,6 +11,7 @@ enum RailTab: Hashable, CaseIterable {
         case .habits: "Habits"
         case .countdown: "Countdown"
         case .matrix: "Eisenhower Matrix"
+        case .focus: "Focus"
         case .search: "Search"
         }
     }
@@ -22,6 +23,7 @@ enum RailTab: Hashable, CaseIterable {
         case .habits: "target"
         case .countdown: "hourglass"
         case .matrix: "square.grid.2x2"
+        case .focus: "timer"
         case .search: "magnifyingglass"
         }
     }
@@ -36,6 +38,7 @@ enum RailTab: Hashable, CaseIterable {
         case .habits: "3"
         case .countdown: "4"
         case .matrix: "5"
+        case .focus: "6"
         case .search: "k"
         }
     }
