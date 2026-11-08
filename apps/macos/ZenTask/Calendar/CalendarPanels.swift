@@ -205,7 +205,7 @@ final class TaskPanelState {
         let d = UserDefaults.standard
         item = d.string(forKey: "calendar.panel.item").flatMap(SidebarItem.init(storageKey:)) ?? .smart(.all)
         options = d.string(forKey: "calendar.panel.options").map { ViewOptions.companion.parse(json: $0) }
-            ?? ViewOptions(sort: "", group: "list", showCompleted: false, order: "", hideCompleted: true, hideDetails: false)
+            ?? ViewOptions(sort: "", group: "list", showCompleted: false, order: "", hideCompleted: true, hideDetails: false, view: "")
         onlyUndated = d.object(forKey: "calendar.panel.undated") as? Bool ?? false
     }
 

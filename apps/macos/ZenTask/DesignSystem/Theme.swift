@@ -132,6 +132,16 @@ enum Theme {
         static let maxSuggestions = 8
     }
 
+    /** Kanban and Timeline views. */
+    enum Board {
+        static let columnWidth: CGFloat = 280
+        static let dayWidth: CGFloat = 40
+        static let rowHeight: CGFloat = 30
+        static let barHeight: CGFloat = 24
+        /// Bars at least this many days long show their title inside.
+        static let titleInsideDays = 4
+    }
+
     /** Focus timer. */
     enum Focus {
         static let dial: CGFloat = 300

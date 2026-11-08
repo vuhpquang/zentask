@@ -69,7 +69,7 @@ enum ListSheet: Identifiable {
 final class TasksModel {
     let core: ZenTaskCore
 
-    var sidebar: SidebarItem = .smart(.today) { didSet { recompute(); if oldValue != sidebar { selection = nil } } }
+    var sidebar: SidebarItem = .smart(.today) { didSet { showingSummary = false; recompute(); if oldValue != sidebar { selection = nil } } }
     var selection: String?
     var showCompleted = false
     /// The task a "Delete permanently" confirmation is open for.
@@ -117,7 +117,38 @@ final class TasksModel {
         pendingReveal = nil
         if section.isCompleted { showCompleted = true } else if isCollapsed(section, in: sidebar.storageKey) { toggleCollapsed(section, in: sidebar.storageKey) }
     }
-    private(set) var options = ViewOptions(sort: "", group: "", showCompleted: false, order: "", hideCompleted: false, hideDetails: false)
+    private(set) var options = ViewOptions(sort: "", group: "", showCompleted: false, order: "", hideCompleted: false, hideDetails: false, view: "")
+
+    /// The Summary page is shown in the list column instead of a list.
+    var showingSummary = false
+
+    /// "list", "kanban" or "timeline" for the list being viewed (a project keeps its own, synced with TickTick).
+    var viewMode: String {
+        if case .project(let id) = sidebar { return projects.first { $0.id == id }?.viewMode ?? "list" }
+        return options.view.isEmpty ? "list" : options.view
+    }
+
+    func setViewMode(_ mode: String) {
+        if case .project(let id) = sidebar { core.listActions.setViewMode(id: id, mode: mode) } else { setOptions(options.with(view: mode == "list" ? "" : mode)) }
+    }
+
+    /// Kanban drops: a section (column) moves the task there, a priority group sets the priority, a list group moves it.
+    @discardableResult
+    func drop(_ ids: [String], into section: TaskSection) -> Bool {
+        if section.columnId != nil || section.key == "col:none" { return drop(ids, intoColumn: section.columnId) }
+        let live = ids.compactMap { index?.task(id: $0) }.filter { $0.trashedAt == nil && !$0.deleted }
+        guard !live.isEmpty else { return false }
+        if section.key.hasPrefix("prio:"), let p = Int32(section.key.dropFirst(5)) {
+            live.forEach { core.actions.setPriority(id: $0.id, priority: p) }
+            return true
+        }
+        if section.key.hasPrefix("list:") {
+            let list = String(section.key.dropFirst(5))
+            live.forEach { core.actions.move(id: $0.id, projectId: list) }
+            return true
+        }
+        return false
+    }
 
     /// Collapsed groups ("<list key>|<section key>"), remembered on this Mac.
     private(set) var collapsed: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "tasks.collapsed") ?? [])
@@ -389,8 +420,8 @@ extension ZTask {
 
 extension ViewOptions {
     /// A copy with some fields changed (Kotlin data classes have no default arguments in Swift).
-    func with(sort: String? = nil, group: String? = nil, order: String? = nil, hideCompleted: Bool? = nil, hideDetails: Bool? = nil) -> ViewOptions {
+    func with(sort: String? = nil, group: String? = nil, order: String? = nil, hideCompleted: Bool? = nil, hideDetails: Bool? = nil, view: String? = nil) -> ViewOptions {
         ViewOptions(sort: sort ?? self.sort, group: group ?? self.group, showCompleted: showCompleted, order: order ?? self.order,
-                    hideCompleted: hideCompleted ?? self.hideCompleted, hideDetails: hideDetails ?? self.hideDetails)
+                    hideCompleted: hideCompleted ?? self.hideCompleted, hideDetails: hideDetails ?? self.hideDetails, view: view ?? self.view)
     }
 }

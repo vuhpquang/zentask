@@ -10,7 +10,9 @@ struct TasksView: View {
             SidebarView()
                 .navigationSplitViewColumnWidth(min: Theme.Size.sidebarMin, ideal: 230)
         } content: {
-            TaskListView()
+            Group {
+                if tasks.showingSummary { SummaryView() } else { TaskListView() }
+            }
                 .navigationSplitViewColumnWidth(min: Theme.Size.listMin, ideal: 440)
         } detail: {
             HStack(spacing: 0) {

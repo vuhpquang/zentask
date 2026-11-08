@@ -18,6 +18,12 @@ struct TaskListView: View {
                     withMotion { tasks.columnVisibility = tasks.columnVisibility == .detailOnly ? .all : .detailOnly }
                 }
             ) {
+                Picker("View", selection: Binding(get: { tasks.viewMode }, set: { tasks.setViewMode($0) })) {
+                    Label("List", systemImage: "list.bullet").tag("list")
+                    Label("Kanban", systemImage: "rectangle.split.3x1").tag("kanban")
+                    Label("Timeline", systemImage: "chart.bar.xaxis").tag("timeline")
+                }
+                .pickerStyle(.inline)
                 if let project = tasks.currentProject {
                     Divider()
                     Button("Add section…", systemImage: "rectangle.split.1x2") { tasks.sheet = .newSection(project.id) }
@@ -35,6 +41,11 @@ struct TaskListView: View {
                 .padding(.top, Theme.Space.m)
                 .padding(.bottom, Theme.Space.s)
             }
+            if tasks.viewMode == "kanban" && !isReadOnlyList {
+                KanbanBoard()
+            } else if tasks.viewMode == "timeline" && !isReadOnlyList {
+                TimelineBoard()
+            } else {
             List(selection: $tasks.selection) {
                 if case .smart(.trash) = tasks.sidebar, !tasks.trashedProjects.isEmpty {
                     Section("Lists") {
@@ -83,6 +94,7 @@ struct TaskListView: View {
                 return .handled
             }
             .onDeleteCommand { tasks.trashSelected() }
+            }
         }
         .navigationTitle(tasks.title)
         .toolbar(removing: .title)

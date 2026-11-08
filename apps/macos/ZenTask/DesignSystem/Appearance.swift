@@ -32,8 +32,10 @@ struct AppTheme: Identifiable, Equatable {
         AppTheme(id: "catppuccin", name: "Catppuccin",
                  light: ThemeColors(accent: hex("#8839EF"), background: hex("#EFF1F5"), surface: hex("#E6E9EF")),
                  dark: ThemeColors(accent: hex("#CBA6F7"), background: hex("#1E1E2E"), surface: hex("#181825"))),
+        // Light = Dracula's Alucard (frame #F5F5F5 / #E6E6E6, accent #644AC9), dark = Dracula.
         AppTheme(id: "dracula", name: "Dracula",
-                 light: nil, dark: ThemeColors(accent: hex("#BD93F9"), background: hex("#282A36"), surface: hex("#21222C"))),
+                 light: ThemeColors(accent: hex("#644AC9"), background: hex("#F5F5F5"), surface: hex("#E6E6E6")),
+                 dark: ThemeColors(accent: hex("#BD93F9"), background: hex("#282A36"), surface: hex("#21222C"))),
         AppTheme(id: "nord", name: "Nord",
                  light: ThemeColors(accent: hex("#5E81AC"), background: hex("#ECEFF4"), surface: hex("#E5E9F0")),
                  dark: ThemeColors(accent: hex("#88C0D0"), background: hex("#2E3440"), surface: hex("#272C36"))),

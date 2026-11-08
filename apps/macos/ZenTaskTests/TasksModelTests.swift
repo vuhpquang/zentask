@@ -210,4 +210,33 @@ final class TasksModelTests: XCTestCase {
         XCTAssertFalse(m.isCollapsed(group, in: "project:inbox"), "unfolded to show the task")
         m.setOptions(m.options.with(group: ""))
     }
+
+    func testViewModesKanbanDropsAndSummary() async throws {
+        let m = TasksModel(core: ZenTaskCore.companion.open(dbPath: nil))
+        let list = m.core.listActions.createList(name: "Board", color: nil, groupId: nil)
+        let t = m.core.actions.create(title: "Card", filter: nil, projectId: list.id, priority: nil, tags: [], due: nil, allDay: true)
+        await m.reload()
+        m.sidebar = .project(list.id)
+        await m.settle()
+        XCTAssertEqual(m.viewMode, "list")
+        m.setViewMode("kanban")
+        await m.reload()
+        XCTAssertEqual(m.viewMode, "kanban", "a project keeps its own view mode")
+        m.sidebar = .smart(.all)
+        await m.settle()
+        m.setViewMode("timeline")
+        XCTAssertEqual(m.viewMode, "timeline", "smart lists keep it in their view options")
+        m.setOptions(m.options.with(group: "priority"))
+        await m.settle()
+        let high = TaskSection(title: "High", rows: [], isCompleted: false, columnId: nil, key: "prio:5", color: nil)
+        XCTAssertTrue(m.drop([t.id], into: high))
+        XCTAssertEqual(m.core.task(id: t.id)?.priority, 5)
+        m.core.actions.complete(id: t.id)
+        await m.reload()
+        let day = Int64(Calendar.current.startOfDay(for: .now).timeIntervalSince1970 * 1000)
+        let summary = m.core.summary(index: try XCTUnwrap(m.index), fromDay: day, toDay: day)
+        XCTAssertEqual(summary.done.flatMap(\.rows).map(\.task.title), ["Card"])
+        XCTAssertTrue(summary.text().contains("✓ Card"))
+        m.setOptions(m.options.with(group: "", view: ""))
+    }
 }

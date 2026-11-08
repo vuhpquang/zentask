@@ -321,10 +321,76 @@ struct DueEditor: View {
     /// A repeat chosen from the menu: rebuilt from the date on save, so moving the date moves the weekday too.
     @State private var preset: Int?
     @State private var original: (date: Date, hasTime: Bool)?
+    /// Date (one moment or day) or Duration (start and end), like TickTick's two tabs.
+    @State private var durationTab = false
+    @State private var rangeStart = Date()
+    @State private var rangeEnd = Date().addingTimeInterval(3600)
 
     private var cal: Calendar { Calendar.current }
 
     var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
+            Picker("Kind", selection: $durationTab) {
+                Text("Date").tag(false)
+                Text("Duration").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            if durationTab { durationEditor } else { dateEditor }
+            HStack {
+                Button("Clear") {
+                    tasks.core.actions.setDue(id: task.id, due: nil, allDay: false)
+                    tasks.core.actions.setReminders(id: task.id, triggers: [])
+                    tasks.core.actions.setRepeat(id: task.id, rule: nil, from: nil)
+                    dismiss()
+                }
+                .frame(maxWidth: .infinity)
+                Button("OK") { durationTab ? saveRange() : save(); dismiss() }
+                    .keyboardShortcut(.defaultAction)
+                    .buttonStyle(.borderedProminent)
+                    .frame(maxWidth: .infinity)
+            }
+            .controlSize(.large)
+        }
+        .padding(Theme.Space.l)
+        .frame(width: Theme.Detail.datePopoverWidth)
+        .onAppear(perform: load)
+    }
+
+    /// Start and end, all day or with times.
+    private var durationEditor: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
+            Toggle("All day", isOn: Binding(get: { !hasTime }, set: { hasTime = !$0 }))
+            DatePicker("Start", selection: $rangeStart, displayedComponents: hasTime ? [.date, .hourAndMinute] : [.date])
+                .onChange(of: rangeStart) { old, new in
+                    // Keep the length when the start moves.
+                    rangeEnd = rangeEnd.addingTimeInterval(new.timeIntervalSince(old))
+                }
+            DatePicker("End", selection: $rangeEnd, in: rangeStart..., displayedComponents: hasTime ? [.date, .hourAndMinute] : [.date])
+            Text(lengthText).font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private var lengthText: String {
+        let f = DateComponentsFormatter()
+        f.allowedUnits = hasTime ? [.day, .hour, .minute] : [.day]
+        f.unitsStyle = .full
+        let seconds = hasTime ? rangeEnd.timeIntervalSince(rangeStart) : rangeEnd.timeIntervalSince(rangeStart) + 86_400
+        return f.string(from: max(0, seconds)) ?? ""
+    }
+
+    private func saveRange() {
+        let actions = tasks.core.actions
+        if hasTime {
+            actions.setSpan(id: task.id, start: Int64(rangeStart.timeIntervalSince1970 * 1000), end: Int64(rangeEnd.timeIntervalSince1970 * 1000))
+        } else {
+            actions.setAllDaySpan(id: task.id, startDay: Int64(cal.startOfDay(for: rangeStart).timeIntervalSince1970 * 1000),
+                                  endDay: Int64(cal.startOfDay(for: rangeEnd).timeIntervalSince1970 * 1000))
+        }
+        if reminders != task.reminders { actions.setReminders(id: task.id, triggers: reminders) }
+    }
+
+    private var dateEditor: some View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
             HStack(spacing: Theme.Space.s) {
                 quick("sun.max", "Today") { set(day: 0) }
@@ -367,30 +433,23 @@ struct DueEditor: View {
                     Button { preset = i; rule = choice.0 } label: { if preset == i { Label(choice.1, systemImage: "checkmark") } else { Text(choice.1) } }
                 }
             }
-            HStack {
-                Button("Clear") {
-                    tasks.core.actions.setDue(id: task.id, due: nil, allDay: false)
-                    tasks.core.actions.setReminders(id: task.id, triggers: [])
-                    tasks.core.actions.setRepeat(id: task.id, rule: nil, from: nil)
-                    dismiss()
-                }
-                .frame(maxWidth: .infinity)
-                Button("OK") { save(); dismiss() }
-                    .keyboardShortcut(.defaultAction)
-                    .buttonStyle(.borderedProminent)
-                    .frame(maxWidth: .infinity)
-            }
-            .controlSize(.large)
         }
-        .padding(Theme.Space.l)
-        .frame(width: Theme.Detail.datePopoverWidth)
-        .onAppear {
+    }
+
+    private func load() {
             if let ms = task.startDate ?? task.dueDate { date = Date(timeIntervalSince1970: Double(ms.int64Value) / 1000) }
             hasTime = !task.isAllDay && (task.dueDate != nil || task.startDate != nil)
             reminders = task.reminders
             rule = task.repeatRule
             preset = repeatChoices.firstIndex { $0.0 == task.repeatRule }
             original = (date, hasTime)
+        if let start = task.startDate, let due = task.dueDate, due.int64Value > start.int64Value {
+            durationTab = true
+            rangeStart = Date(timeIntervalSince1970: Double(start.int64Value) / 1000)
+            rangeEnd = Date(timeIntervalSince1970: Double(due.int64Value) / 1000)
+        } else {
+            rangeStart = date
+            rangeEnd = hasTime ? date.addingTimeInterval(3600) : date
         }
     }
 

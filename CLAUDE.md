@@ -96,6 +96,10 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
   `Focus/` (rail ⌘6): `FocusModel` (Pomodoro/stopwatch timer, state saved in UserDefaults `focus.state` so a
   relaunch resumes, finished sessions saved as synced `FocusRecord`s, end-of-phase notifications) + `FocusView`
   (dial, task picker, overview, record timeline); "Start focus" in the task "…" menu.
+  List views (`Tasks/BoardViews.swift`): `KanbanBoard` (groups as columns; drops set section/priority/list via
+  `TasksModel.drop(_:into:)`), `TimelineBoard` (dated tasks as bars, a week back to four weeks ahead),
+  `SummaryView` (sidebar "Summary": done/open by list for a period, Copy as text). The view is picked in the list
+  "…" menu (`TasksModel.viewMode`). The date popover has Date | Duration tabs (start–end, all day or timed).
   Appearance (`DesignSystem/Appearance.swift`, Settings → Appearance): System/Light/Dark plus themes (Default,
   Catppuccin, Dracula, Nord, Solarized, Rosé Pine) stored in UserDefaults `appearance.mode`/`appearance.theme`;
   `Themed()` on each window sets the scheme, accent (`.tint`), background and `themeColors` (rail/sidebar surface);

@@ -16,6 +16,11 @@ struct SidebarView: View {
                 ForEach(smart.filter { tasks.shows($0) }, id: \.self) { list in
                     row(TasksModel.title(list), symbol: TasksModel.symbol(list), item: .smart(list))
                 }
+                Button { tasks.showingSummary = true } label: {
+                    Label("Summary", systemImage: "doc.text.magnifyingglass")
+                        .foregroundStyle(tasks.showingSummary ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
+                }
+                .buttonStyle(.plain)
             }
             Section {
                 ForEach(ungroupedProjects, id: \.id) { project in

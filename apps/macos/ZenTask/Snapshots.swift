@@ -81,6 +81,15 @@ enum Snapshots {
                 wait { await panel.cal.reload() }
                 both(AnyView(MainWindow()).environment(model).environment(tasks).environment(panel).environment(focus).environment(cal), size: CGSize(width: 1500, height: 820), name: "tasks-panel", dir: dir)
                 tasks.showCalendarPanel = false
+                for mode in ["kanban", "timeline"] {
+                    tasks.setOptions(tasks.options.with(view: mode))
+                    wait { await tasks.settle() }
+                    both(AnyView(MainWindow()).environment(model).environment(tasks).environment(panel).environment(focus), size: CGSize(width: 1400, height: 760), name: "view-\(mode)", dir: dir)
+                }
+                tasks.setOptions(tasks.options.with(view: ""))
+                tasks.showingSummary = true
+                both(AnyView(MainWindow()).environment(model).environment(tasks).environment(panel).environment(focus), size: windowSize, name: "summary", dir: dir)
+                tasks.showingSummary = false
                 if let second = tasks.sections.dropFirst().first { tasks.toggleCollapsed(second, in: tasks.sidebar.storageKey) }
                 tasks.setOptions(tasks.options.with(sort: "", group: ""))
             }

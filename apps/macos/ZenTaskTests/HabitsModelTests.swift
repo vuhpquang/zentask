@@ -215,7 +215,8 @@ final class HabitsModelTests: XCTestCase {
 
     func testThemesResolveTheirScheme() {
         let dracula = AppTheme.named("dracula")
-        XCTAssertEqual(dracula.forcedScheme(.light), .dark, "dark-only theme")
+        XCTAssertEqual(dracula.forcedScheme(.light), .light, "Alucard is Dracula's light look")
+        XCTAssertNil(dracula.forcedScheme(.system))
         let cat = AppTheme.named("catppuccin")
         XCTAssertNil(cat.forcedScheme(.system))
         XCTAssertEqual(cat.forcedScheme(.light), .light)
