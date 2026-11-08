@@ -5,6 +5,15 @@ plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.skie)
+    alias(libs.plugins.sqldelight)
+}
+
+sqldelight {
+    databases {
+        create("ZenTaskDatabase") {
+            packageName.set("com.vuhpquang.zentask.db")
+        }
+    }
 }
 
 // Generates ZenTaskBuild.VERSION from the root VERSION file (single source of the app version).
@@ -47,15 +56,30 @@ kotlin {
     }
 
     sourceSets {
+        all { languageSettings.optIn("kotlin.uuid.ExperimentalUuidApi") }
         commonMain {
             kotlin.srcDir(generateBuildInfo)
             dependencies {
-                implementation(libs.kotlinx.serialization.json)
-                implementation(libs.kotlinx.coroutines.core)
+                api(libs.kotlinx.serialization.json)
+                api(libs.kotlinx.coroutines.core)
+                api(libs.sqldelight.coroutines)
+                api(libs.ktor.client.core)
             }
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
+            implementation(libs.kotlinx.coroutines.test)
+            implementation(libs.ktor.client.mock)
+        }
+        jvmMain.dependencies {
+            implementation(libs.sqldelight.jvm)
+            implementation(libs.ktor.client.cio)
+        }
+        if (HostManager.hostIsMac) {
+            macosMain.dependencies {
+                implementation(libs.sqldelight.native)
+                implementation(libs.ktor.client.darwin)
+            }
         }
     }
 }
