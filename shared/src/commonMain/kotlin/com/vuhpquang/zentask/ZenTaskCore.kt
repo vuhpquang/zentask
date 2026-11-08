@@ -115,14 +115,14 @@ class ZenTaskCore(
     }
 
     /** Creates (id null) or updates a custom smart list. */
-    fun saveFilter(id: String?, name: String, rule: FilterRule): Filter {
+    fun saveFilter(id: String?, name: String, rule: FilterRule, icon: String?): Filter {
         val clean = name.trim().ifEmpty { "Smart list" }
         return if (id == null) {
             val last = store.list(EntityTypes.filter).maxOfOrNull { it.sortOrder }
-            Filter(id = kotlin.uuid.Uuid.random().toString(), name = clean, rule = rule.encode(), sortOrder = SortOrder.between(last, null)!!)
+            Filter(id = kotlin.uuid.Uuid.random().toString(), name = clean, rule = rule.encode(), sortOrder = SortOrder.between(last, null)!!, icon = icon)
                 .also { store.put(EntityTypes.filter, it) }
         } else {
-            store.update(EntityTypes.filter, id) { it.copy(name = clean, rule = rule.encode()) }!!
+            store.update(EntityTypes.filter, id) { it.copy(name = clean, rule = rule.encode(), icon = icon) }!!
         }
     }
 

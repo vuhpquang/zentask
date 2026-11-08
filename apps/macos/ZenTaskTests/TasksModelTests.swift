@@ -73,7 +73,7 @@ final class TasksModelTests: XCTestCase {
         m.sidebar = .smart(.inbox)
         m.quickAdd("Urgent thing !high")
         m.quickAdd("Calm thing")
-        let f = m.core.saveFilter(id: nil, name: "Hot", rule: FilterRule(lists: [], tags: [], priorities: [KotlinInt(int: 5)], due: nil, keyword: nil, match: "all"))
+        let f = m.core.saveFilter(id: nil, name: "Hot", rule: FilterRule(lists: [], tags: [], priorities: [KotlinInt(int: 5)], due: nil, keyword: nil, match: "all", excludeLists: [], excludeTags: [], tagsAll: false), icon: nil)
         await m.reload()
         m.sidebar = .custom(f.id)
         await m.settle()

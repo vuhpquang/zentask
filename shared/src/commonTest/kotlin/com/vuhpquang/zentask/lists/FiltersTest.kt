@@ -120,4 +120,14 @@ class FiltersTest {
         assertEquals(1, counts[TaskFilter.Smart(com.vuhpquang.zentask.tasks.SmartList.COMPLETED)])
         assertEquals(0, counts[TaskFilter.Smart(com.vuhpquang.zentask.tasks.SmartList.TRASH)])
     }
+
+    @Test
+    fun excludeListsAndTagLogic() {
+        assertEquals(setOf("b"), ids("""{"excludeLists":["work"]}"""), "NOT work")
+        assertEquals(setOf("a", "c", "d"), ids("""{"excludeLists":["home"],"priorities":[5,3]}"""))
+        assertEquals(setOf("b", "c", "d"), ids("""{"excludeTags":["q4"]}"""))
+        val tagged = listOf(Task(id = "x", tags = listOf("a", "b")), Task(id = "y", tags = listOf("a")))
+        val index = TaskIndex(tagged, projects, emptyList(), emptyList(), emptyList(), listOf(Filter(id = "f", name = "F", rule = """{"tags":["a","b"],"tagsAll":true}""")))
+        assertEquals(listOf("x"), index.rows(TaskFilter.Custom("f"), now, zone).map { it.task.id }, "all listed tags")
+    }
 }

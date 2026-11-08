@@ -186,6 +186,8 @@ data class Filter(
     /** Rule as raw JSON (lists, tags, priority, date range, keyword). */
     val rule: String = "{}",
     val sortOrder: Long = 0,
+    /** An emoji shown in the sidebar (optional). */
+    val icon: String? = null,
 ) : Entity
 
 @Serializable

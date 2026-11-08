@@ -100,6 +100,7 @@ enum Theme {
         static let sheetWidth: CGFloat = 380
         static let minRow: CGFloat = 40
         static let tagField: CGFloat = 90
+        static let iconField: CGFloat = 44
         static let pickerWidth: CGFloat = 240
         static let pickerMaxHeight: CGFloat = 360
         static let filterWidth: CGFloat = 460

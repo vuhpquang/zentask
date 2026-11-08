@@ -39,7 +39,11 @@ struct SidebarView: View {
             }
             Section {
                 ForEach(tasks.filters, id: \.id) { filter in
-                    Label(filter.name, systemImage: "line.3.horizontal.decrease.circle")
+                    Label {
+                        Text(filter.name)
+                    } icon: {
+                        if let icon = filter.icon, !icon.isEmpty { Text(icon) } else { Image(systemName: "line.3.horizontal.decrease.circle") }
+                    }
                         .badge(tasks.count(.custom(filter.id)))
                         .tag(SidebarItem.custom(filter.id))
                         .contextMenu {

@@ -203,7 +203,10 @@ class TaskIndex(
         // Each field the rule sets gives one check; unset fields don't take part.
         val checks = buildList {
             if (r.lists.isNotEmpty()) add(t.projectId in r.lists)
-            if (r.tags.isNotEmpty()) add(r.tags.any { want -> t.tags.any { it.equals(want, ignoreCase = true) } })
+            if (r.tags.isNotEmpty()) {
+                val has = { want: String -> t.tags.any { it.equals(want, ignoreCase = true) } }
+                add(if (r.tagsAll) r.tags.all(has) else r.tags.any(has))
+            }
             if (r.priorities.isNotEmpty()) add(t.priority in r.priorities)
             r.keyword?.takeIf { it.isNotBlank() }?.let { k ->
                 add(QuickAddParser.fold((t.title + "\n" + t.content).lowercase()).contains(QuickAddParser.fold(k.lowercase())))
@@ -221,6 +224,8 @@ class TaskIndex(
                 else -> add(false)
             }
         }
+        if (t.projectId in r.excludeLists) return false
+        if (r.excludeTags.any { ex -> t.tags.any { it.equals(ex, ignoreCase = true) } }) return false
         if (checks.isEmpty()) return true
         return if (r.match == "any") checks.any { it } else checks.all { it }
     }

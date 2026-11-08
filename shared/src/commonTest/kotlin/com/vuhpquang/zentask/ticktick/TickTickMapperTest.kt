@@ -156,4 +156,25 @@ class TickTickMapperTest {
             assertEquals(expected, m.type)
         }
     }
+
+    @Test
+    fun filtersAreImportedWithTheirRules() {
+        val rule = """{"type":1,"and":[{"not":["p1","p2"],"conditionType":1,"conditionName":"list"},{"or":["work","core"],"conditionName":"tag"},{"or":[5,3],"conditionName":"priority"},{"or":["thisweek"],"conditionName":"dueDate"}],"version":1}"""
+        val s = snapshot.copy(filters = listOf(TtFilter(id = "f1", name = "_All", rule = rule, sortOrder = 3)))
+        val f = TickTickMapper.map(s).map { it.entity }.filterIsInstance<com.vuhpquang.zentask.model.Filter>().single()
+        assertEquals("tt_f1", f.id)
+        assertEquals("_All", f.name)
+        val r = com.vuhpquang.zentask.lists.FilterRule.parse(f.rule)!!
+        assertEquals(listOf("tt_p1", "tt_p2"), r.excludeLists)
+        assertEquals(listOf("work", "core"), r.tags)
+        assertEquals(listOf(5, 3), r.priorities)
+        assertEquals("thisweek", r.due)
+    }
+
+    @Test
+    fun unreadableFilterRuleImportsAsEmpty() {
+        val s = snapshot.copy(filters = listOf(TtFilter(id = "f2", name = "Odd", rule = "not json")))
+        val f = TickTickMapper.map(s).map { it.entity }.filterIsInstance<com.vuhpquang.zentask.model.Filter>().single()
+        assertEquals(com.vuhpquang.zentask.lists.FilterRule(), com.vuhpquang.zentask.lists.FilterRule.parse(f.rule))
+    }
 }

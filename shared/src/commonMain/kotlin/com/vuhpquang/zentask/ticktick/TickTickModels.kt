@@ -21,7 +21,12 @@ data class TtBatch(
     val projectProfiles: List<TtProject>? = null,
     val syncTaskBean: TtTaskBean? = null,
     val tags: List<TtTag>? = null,
+    val filters: List<TtFilter>? = null,
 )
+
+/** A TickTick custom smart list; `rule` is TickTick's own JSON (translated by TickTickMapper). */
+@Serializable
+data class TtFilter(val id: String, val name: String? = null, val rule: String? = null, val sortOrder: Long? = null)
 
 @Serializable
 data class TtTaskBean(val update: List<TtTask>? = null)
@@ -163,6 +168,7 @@ data class TickTickSnapshot(
     val habits: List<TtHabit> = emptyList(),
     val checkins: List<TtCheckin> = emptyList(),
     val countdowns: List<TtCountdown> = emptyList(),
+    val filters: List<TtFilter> = emptyList(),
     val wontDoAvailable: Boolean = false,
     val trashAvailable: Boolean = false,
     val columnsAvailable: Boolean = false,
@@ -186,6 +192,7 @@ data class TickTickSnapshot(
             projects = b.projectProfiles.orEmpty(),
             tasks = b.syncTaskBean?.update.orEmpty(),
             tags = b.tags.orEmpty(),
+            filters = b.filters.orEmpty(),
         )
     }
 }

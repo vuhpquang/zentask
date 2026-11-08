@@ -9,6 +9,8 @@ import kotlinx.serialization.SerializationException
  * a field with OR. Unknown keys are ignored; a rule that can't be read matches nothing.
  * `due`: today (incl. overdue) | tomorrow | next7 (incl. overdue) | thisweek | nextweek | thismonth |
  * overdue | nodate | any (weeks start on Monday). `match`: all (fields AND, the default) | any (fields OR).
+ * Exclusions (`excludeLists`, `excludeTags`) always apply, whatever `match` says. `tagsAll`: the task
+ * must carry every tag in `tags` (otherwise any of them).
  */
 @Serializable
 data class FilterRule(
@@ -18,6 +20,9 @@ data class FilterRule(
     val due: String? = null,
     val keyword: String? = null,
     val match: String = "all",
+    val excludeLists: List<String> = emptyList(),
+    val excludeTags: List<String> = emptyList(),
+    val tagsAll: Boolean = false,
 ) {
     fun encode(): String = ZenJson.encodeToString(serializer(), this)
 

@@ -134,6 +134,10 @@ struct FilterEditor: View {
     @State private var keyword = ""
 
     @State private var matchAny = false
+    @State private var excludeLists = false
+    /// "any", "all" or "exclude".
+    @State private var tagLogic = "any"
+    @State private var icon = ""
     private let dues = [
         ("any", "Any date"), ("today", "Today"), ("tomorrow", "Tomorrow"), ("thisweek", "This week"), ("nextweek", "Next week"),
         ("next7", "Next 7 days"), ("thismonth", "This month"), ("overdue", "Overdue"), ("nodate", "No date"),
@@ -143,20 +147,48 @@ struct FilterEditor: View {
         VStack(alignment: .leading, spacing: Theme.Space.l) {
             Text(filter == nil ? "New smart list" : "Edit smart list").font(.title3.weight(.semibold))
             Form {
-                TextField("Name", text: $name)
+                HStack {
+                    TextField("Icon", text: $icon)
+                        .frame(width: Theme.Size.iconField)
+                        .help("An emoji shown in the sidebar")
+                    TextField("Name", text: $name)
+                }
                 Picker("Show tasks matching", selection: $matchAny) {
                     Text("All conditions").tag(false)
                     Text("Any condition").tag(true)
                 }
                 .pickerStyle(.segmented)
-                Section("Lists") {
+                Section {
                     ForEach(tasks.projects.filter { !$0.closed }, id: \.id) { p in
                         Toggle(p.name, isOn: binding($lists, p.id))
                     }
+                } header: {
+                    HStack {
+                        Text("Lists")
+                        Spacer()
+                        Picker("", selection: $excludeLists) {
+                            Text("Include").tag(false)
+                            Text("Exclude").tag(true)
+                        }
+                        .pickerStyle(.segmented)
+                        .fixedSize()
+                    }
                 }
                 if !tasks.tags.isEmpty {
-                    Section("Tags") {
+                    Section {
                         ForEach(tasks.tags, id: \.id) { t in Toggle("#" + t.name, isOn: binding($tags, t.name)) }
+                    } header: {
+                        HStack {
+                            Text("Tags")
+                            Spacer()
+                            Picker("", selection: $tagLogic) {
+                                Text("Any").tag("any")
+                                Text("All").tag("all")
+                                Text("Exclude").tag("exclude")
+                            }
+                            .pickerStyle(.segmented)
+                            .fixedSize()
+                        }
                     }
                 }
                 Section("Priority") {
@@ -199,8 +231,11 @@ struct FilterEditor: View {
         guard let filter else { return }
         let rule = tasks.core.filterRule(filter: filter)
         name = filter.name
-        lists = Set(rule.lists)
-        tags = Set(rule.tags)
+        icon = filter.icon ?? ""
+        excludeLists = rule.lists.isEmpty && !rule.excludeLists.isEmpty
+        lists = Set(excludeLists ? rule.excludeLists : rule.lists)
+        tagLogic = !rule.excludeTags.isEmpty && rule.tags.isEmpty ? "exclude" : (rule.tagsAll ? "all" : "any")
+        tags = Set(tagLogic == "exclude" ? rule.excludeTags : rule.tags)
         priorities = Set(rule.priorities.map { $0.int32Value })
         due = rule.due ?? "any"
         keyword = rule.keyword ?? ""
@@ -209,10 +244,13 @@ struct FilterEditor: View {
 
     private func save() {
         let rule = FilterRule(
-            lists: Array(lists), tags: Array(tags), priorities: priorities.map { KotlinInt(int: $0) },
-            due: due == "any" ? nil : due, keyword: keyword.isEmpty ? nil : keyword, match: matchAny ? "any" : "all"
+            lists: excludeLists ? [] : Array(lists), tags: tagLogic == "exclude" ? [] : Array(tags),
+            priorities: priorities.map { KotlinInt(int: $0) },
+            due: due == "any" ? nil : due, keyword: keyword.isEmpty ? nil : keyword, match: matchAny ? "any" : "all",
+            excludeLists: excludeLists ? Array(lists) : [], excludeTags: tagLogic == "exclude" ? Array(tags) : [],
+            tagsAll: tagLogic == "all"
         )
-        let saved = tasks.core.saveFilter(id: filter?.id, name: name, rule: rule)
+        let saved = tasks.core.saveFilter(id: filter?.id, name: name, rule: rule, icon: icon.isEmpty ? nil : String(icon.prefix(2)))
         tasks.sidebar = .custom(saved.id)
     }
 }

@@ -5,7 +5,13 @@ import com.vuhpquang.zentask.model.Column
 import com.vuhpquang.zentask.model.Countdown
 import com.vuhpquang.zentask.model.Entity
 import com.vuhpquang.zentask.model.EntityType
+import com.vuhpquang.zentask.lists.FilterRule
 import com.vuhpquang.zentask.model.EntityTypes
+import com.vuhpquang.zentask.model.Filter
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import com.vuhpquang.zentask.model.Habit
 import com.vuhpquang.zentask.model.HabitCheckin
 import com.vuhpquang.zentask.model.Project
@@ -138,6 +144,12 @@ object TickTickMapper {
                 ),
             )
         }
+        s.filters.forEach { f ->
+            out += Mapped(
+                EntityTypes.filter,
+                Filter(id = id(f.id), ticktickId = f.id, name = f.name.orEmpty(), rule = translateRule(f.rule) { pid -> project(pid) }.encode(), sortOrder = f.sortOrder ?: 0),
+            )
+        }
         s.countdowns.forEach { c ->
             out += Mapped(
                 EntityTypes.countdown,
@@ -148,6 +160,53 @@ object TickTickMapper {
             )
         }
         return out
+    }
+
+    /**
+     * TickTick filter rule JSON → [FilterRule]. TickTick stores conditions like
+     * `{"and":[{"or":[…],"conditionName":"list"},{"not":[…],"conditionName":"tag"}, …]}`.
+     * Conditions it can't read are skipped (the smart list then shows more, never crashes).
+     */
+    fun translateRule(json: String?, project: (String) -> String?): FilterRule {
+        val root = runCatching { TickTickJson.parseToJsonElement(json.orEmpty()) as? JsonObject }.getOrNull() ?: return FilterRule()
+        val any = root["or"] is JsonArray && root["and"] !is JsonArray
+        val conditions = ((root["and"] ?: root["or"]) as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
+        var rule = FilterRule(match = if (any) "any" else "all")
+        fun values(c: JsonObject, key: String) = (c[key] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
+        for (c in conditions) {
+            when ((c["conditionName"] as? JsonPrimitive)?.contentOrNull) {
+                "list" -> rule = rule.copy(
+                    lists = values(c, "or").mapNotNull(project),
+                    excludeLists = values(c, "not").mapNotNull(project),
+                )
+                "tag" -> {
+                    val all = values(c, "and")
+                    rule = rule.copy(
+                        tags = (values(c, "or") + all).map { it.lowercase() }.distinct(),
+                        tagsAll = all.isNotEmpty(),
+                        excludeTags = values(c, "not").map { it.lowercase() },
+                    )
+                }
+                "priority" -> rule = rule.copy(priorities = values(c, "or").mapNotNull { it.toIntOrNull() })
+                "dueDate" -> rule = rule.copy(
+                    due = values(c, "or").firstNotNullOfOrNull { v ->
+                        when (v.lowercase()) {
+                            "today" -> "today"
+                            "tomorrow" -> "tomorrow"
+                            "thisweek" -> "thisweek"
+                            "nextweek" -> "nextweek"
+                            "thismonth" -> "thismonth"
+                            "overdue" -> "overdue"
+                            "nodue", "nodate" -> "nodate"
+                            "7days", "next7days", "next7day", "week" -> "next7"
+                            else -> null
+                        }
+                    },
+                )
+                "keywords", "keyword" -> rule = rule.copy(keyword = values(c, "or").firstOrNull() ?: (c["value"] as? JsonPrimitive)?.contentOrNull)
+            }
+        }
+        return rule
     }
 
     /** ZenTask fields of a thin task object whose TickTick source key was missing. */
