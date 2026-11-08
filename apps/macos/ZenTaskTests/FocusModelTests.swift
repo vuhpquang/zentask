@@ -24,9 +24,10 @@ final class FocusModelTests: XCTestCase {
         XCTAssertEqual(m.phase, .rest)
         XCTAssertEqual(m.pomosInRun, 1)
         await m.reload()
-        XCTAssertEqual(m.stats?.todayPomos, 1)
+        // Totals, not "today": shortly after midnight the pomo started yesterday.
+        XCTAssertEqual(m.stats?.totalPomos, 1)
         XCTAssertEqual(m.stats?.days.first?.records.first?.taskId, "t1")
-        XCTAssertEqual(m.stats?.todayMinutes, 25)
+        XCTAssertEqual(m.stats?.totalMinutes, 25)
     }
 
     func testStoppingAStopwatchSavesItAndAnUnfinishedPomoIsDropped() async throws {
@@ -41,8 +42,8 @@ final class FocusModelTests: XCTestCase {
         XCTAssertEqual(pomo.phase, .focus)
         pomo.stop()
         await pomo.reload()
-        XCTAssertEqual(pomo.stats?.todayPomos, 0, "an unfinished pomo isn't counted")
-        XCTAssertEqual(pomo.stats?.todayMinutes, 5, "the stopwatch's 5 minutes are")
+        XCTAssertEqual(pomo.stats?.totalPomos, 0, "an unfinished pomo isn't counted")
+        XCTAssertEqual(pomo.stats?.totalMinutes, 5, "the stopwatch's 5 minutes are")
     }
 
     func testPauseBanksTimeAndResumeContinues() {
