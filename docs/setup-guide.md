@@ -420,3 +420,36 @@ claude mcp remove zentask --scope user
 
 Lệnh `DELETE` phải chạy bằng token của **app** (một token phạm vi đầy đủ, ví dụ token tạo ở bước 2.3), vì token MCP không gọi được `/v1`. Lệnh in ra `204`. Từ lúc đó token của Claude trả `401`.
 
+
+## 7. Cài ZenTask lên điện thoại Android
+
+App Android (P7) dùng chung lõi với bản Mac và sync qua cùng server. Cần Android 14 trở lên.
+
+### 7.1 Build file APK (chạy trên Mac)
+
+```bash
+cd projects/zentask
+source scripts/lib/env.sh
+./gradlew :android:assembleRelease
+# → apps/android/build/outputs/apk/release/android-release.apk
+```
+
+Bản build được ký bằng khoá debug của Mac này (`~/.android/debug.keystore`). Các bản sau phải build trên
+cùng Mac thì mới cài đè được. Đổi sang Mac khác thì gỡ app cũ trước, hoặc chép file keystore đó sang Mac mới.
+
+### 7.2 Cài lên máy
+
+Cách 1, qua cáp USB:
+1. Trên điện thoại: Cài đặt → Thông tin điện thoại → bấm 7 lần vào "Số hiệu bản tạo" để bật chế độ nhà phát triển,
+   rồi bật "Gỡ lỗi USB" trong Tuỳ chọn nhà phát triển.
+2. Cắm cáp, chấp nhận hộp thoại "Cho phép gỡ lỗi USB" trên điện thoại.
+3. Trên Mac: `~/Library/Android/sdk/platform-tools/adb install -r apps/android/build/outputs/apk/release/android-release.apk`
+
+Cách 2, không cần cáp: gửi file APK sang điện thoại (Google Drive, Telegram…), mở file và cho phép
+"Cài ứng dụng không rõ nguồn gốc" khi được hỏi.
+
+### 7.3 Đăng nhập và sync
+
+1. Mở ZenTask → ☰ → Settings.
+2. Nhập mật khẩu server ZenTask (cái ở bước 2.1) → Sign in.
+3. Dữ liệu từ Mac tải về sau vài giây. Mỗi điện thoại là một thiết bị riêng (xem/thu hồi như bước 6.4).

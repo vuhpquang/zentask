@@ -6,6 +6,7 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.skie)
     alias(libs.plugins.sqldelight)
+    alias(libs.plugins.android.kmp.library)
 }
 
 sqldelight {
@@ -45,6 +46,13 @@ kotlin {
     compilerOptions { freeCompilerArgs.add("-Xexpect-actual-classes") }
     jvm()
 
+    // P7: the Android app uses this core. minSdk 34 = Android 14, whose SQLite has json_extract built in.
+    androidLibrary {
+        namespace = "com.vuhpquang.zentask.shared"
+        compileSdk = 37
+        minSdk = 34
+    }
+
     // Kotlin/Native targets only configure on macOS so Linux (Docker) builds stay JVM-only.
     if (HostManager.hostIsMac) {
         val xcf = XCFramework("ZenTaskShared")
@@ -74,6 +82,10 @@ kotlin {
             implementation(kotlin("test"))
             implementation(libs.kotlinx.coroutines.test)
             implementation(libs.ktor.client.mock)
+        }
+        androidMain.dependencies {
+            implementation(libs.sqldelight.android)
+            implementation(libs.ktor.client.okhttp)
         }
         jvmMain.dependencies {
             implementation(libs.sqldelight.jvm)
