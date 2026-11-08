@@ -48,6 +48,7 @@ enum RailTab: Hashable, CaseIterable {
 /// large targets (44 pt) so every area is one click away.
 struct AppRail: View {
     @Environment(AppModel.self) private var app
+    @Environment(\.themeColors) private var themeColors
     @Binding var tab: RailTab
     /// Search opens over the current area instead of replacing it.
     var search: () -> Void = {}
@@ -81,7 +82,7 @@ struct AppRail: View {
         .padding(.bottom, Theme.Space.l)
         .frame(width: Theme.Rail.width)
         .frame(maxHeight: .infinity)
-        .background(Color(nsColor: .underPageBackgroundColor))
+        .background(themeColors.surface ?? Color(nsColor: .underPageBackgroundColor))
     }
 }
 

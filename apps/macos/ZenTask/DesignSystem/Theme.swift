@@ -216,6 +216,8 @@ enum Theme {
         static let tagField: CGFloat = 90
         static let iconField: CGFloat = 44
         static let emojiCell: CGFloat = 32
+        static let themeCard: CGFloat = 140
+        static let themeSwatch: CGFloat = 44
         static let pickerWidth: CGFloat = 240
         static let pickerMaxHeight: CGFloat = 360
         static let filterWidth: CGFloat = 460

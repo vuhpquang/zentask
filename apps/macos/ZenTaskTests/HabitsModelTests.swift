@@ -212,4 +212,15 @@ final class HabitsModelTests: XCTestCase {
         XCTAssertNil(TaskComposer.token(in: "Call ~Personal now"), "a space ends the token")
         XCTAssertEqual(TaskComposer.token(in: "Read #bo")?.kind, .tag)
     }
+
+    func testThemesResolveTheirScheme() {
+        let dracula = AppTheme.named("dracula")
+        XCTAssertEqual(dracula.forcedScheme(.light), .dark, "dark-only theme")
+        let cat = AppTheme.named("catppuccin")
+        XCTAssertNil(cat.forcedScheme(.system))
+        XCTAssertEqual(cat.forcedScheme(.light), .light)
+        XCTAssertNotEqual(cat.colors(.light), cat.colors(.dark))
+        XCTAssertEqual(AppTheme.named("nope").id, "default")
+        XCTAssertEqual(Set(AppTheme.all.map(\.id)).count, AppTheme.all.count)
+    }
 }

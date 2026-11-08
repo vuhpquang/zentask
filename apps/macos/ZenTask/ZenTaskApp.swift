@@ -44,6 +44,7 @@ struct ZenTaskApp: App {
                 .environment(countdowns)
                 .environment(panelCalendar)
                 .environment(focus)
+                .modifier(Themed())
         }
         .defaultSize(width: 1100, height: 720)
         .commands { TaskCommands() }
@@ -52,6 +53,7 @@ struct ZenTaskApp: App {
             SettingsView()
                 .environment(model)
                 .environment(calendar)
+                .modifier(Themed())
         }
     }
 }

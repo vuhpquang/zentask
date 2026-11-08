@@ -2,6 +2,7 @@ import SwiftUI
 @preconcurrency import ZenTaskShared
 
 struct SidebarView: View {
+    @Environment(\.themeColors) private var themeColors
     @Environment(TasksModel.self) private var tasks
     @Environment(AppModel.self) private var app
 
@@ -88,6 +89,7 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
+        .themedListBackground(themeColors, surface: true)
         .environment(\.sidebarRowSize, .medium)
         .safeAreaInset(edge: .bottom) { SyncFooter() }
     }

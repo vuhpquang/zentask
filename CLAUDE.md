@@ -96,6 +96,10 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
   `Focus/` (rail ⌘6): `FocusModel` (Pomodoro/stopwatch timer, state saved in UserDefaults `focus.state` so a
   relaunch resumes, finished sessions saved as synced `FocusRecord`s, end-of-phase notifications) + `FocusView`
   (dial, task picker, overview, record timeline); "Start focus" in the task "…" menu.
+  Appearance (`DesignSystem/Appearance.swift`, Settings → Appearance): System/Light/Dark plus themes (Default,
+  Catppuccin, Dracula, Nord, Solarized, Rosé Pine) stored in UserDefaults `appearance.mode`/`appearance.theme`;
+  `Themed()` on each window sets the scheme, accent (`.tint`), background and `themeColors` (rail/sidebar surface);
+  lists use `themedListBackground`.
   `Hotkeys/HotKeys.swift`: global hotkeys via Carbon `RegisterEventHotKey` (Quick Add ⌃⌥N by default, show/hide
   window), stored in UserDefaults `hotkey.*`; Settings → Hotkeys records them and lists the app shortcuts.
   Task list chrome (`Tasks/ListChrome.swift`): `ListHeader` (☰ sidebar, list picker popover, `SortMenu` group/sort/

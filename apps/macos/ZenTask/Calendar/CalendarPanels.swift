@@ -239,6 +239,7 @@ struct TaskPanel: View {
 }
 
 private struct TaskPanelContent: View {
+    @Environment(\.themeColors) private var themeColors
     @Environment(TasksModel.self) private var tasks
     @Bindable var state: TaskPanelState
     let close: () -> Void
@@ -276,6 +277,7 @@ private struct TaskPanelContent: View {
                 }
             }
             .listStyle(.inset)
+            .themedListBackground(themeColors)
             .overlay {
                 if state.sections.isEmpty { ContentUnavailableView("No tasks here", systemImage: "checkmark.circle") }
             }

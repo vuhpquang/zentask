@@ -3,6 +3,7 @@ import SwiftUI
 @preconcurrency import ZenTaskShared
 
 struct TaskListView: View {
+    @Environment(\.themeColors) private var themeColors
     @Environment(TasksModel.self) private var tasks
     @FocusState private var quickAddFocused: Bool
 
@@ -71,6 +72,7 @@ struct TaskListView: View {
                 }
             }
             .listStyle(.inset)
+            .themedListBackground(themeColors)
             .environment(\.defaultMinListRowHeight, Theme.Size.minRow)
             .overlay {
                 if tasks.sections.isEmpty { emptyState }
