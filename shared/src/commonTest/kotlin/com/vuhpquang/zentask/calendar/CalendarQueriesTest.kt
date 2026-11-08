@@ -88,4 +88,16 @@ class CalendarQueriesTest {
         val d = days(listOf(e))
         assertEquals(listOf(emptyList(), listOf("LA holiday"), emptyList()), d.take(3).map { day -> day.allDay.map { it.title } })
     }
+
+    @Test
+    fun countdownsShowOnTheirDay() {
+        val cds = listOf(
+            com.vuhpquang.zentask.model.Countdown(id = "b", name = "Mom's birthday", date = 19601110, repeat = "yearly", showInCalendar = true),
+            com.vuhpquang.zentask.model.Countdown(id = "h", name = "Hidden", date = 20261111, showInCalendar = false),
+        )
+        val d = CalendarQueries.days(emptyList(), sources, accounts, emptyList(), LocalDate(2026, 11, 9), 7, zone, emptySet(), cds)
+        assertEquals(listOf("Mom's birthday"), d[1].allDay.map { it.title })
+        assertEquals("countdown", d[1].allDay.single().kind)
+        assertTrue(d.flatMap { it.allDay }.none { it.title == "Hidden" })
+    }
 }

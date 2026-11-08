@@ -3,6 +3,9 @@ package com.vuhpquang.zentask.calendar
 import com.vuhpquang.zentask.model.CalendarAccount
 import com.vuhpquang.zentask.model.CalendarEvent
 import com.vuhpquang.zentask.model.CalendarSource
+import com.vuhpquang.zentask.habits.CountdownQueries
+import com.vuhpquang.zentask.habits.Stamp
+import com.vuhpquang.zentask.model.Countdown
 import com.vuhpquang.zentask.model.Task
 import com.vuhpquang.zentask.tasks.isDone
 import kotlinx.datetime.DateTimeUnit
@@ -51,6 +54,7 @@ object CalendarQueries {
         count: Int,
         zone: TimeZone,
         hidden: Set<String>,
+        countdowns: List<Countdown> = emptyList(),
     ): List<CalendarDay> {
         val liveAccounts = accounts.filter { !it.deleted }.mapTo(HashSet()) { it.id }
         val visible = sources.filter { !it.deleted && it.accountId in liveAccounts && it.id !in hidden }.associateBy { it.id }
@@ -68,7 +72,8 @@ object CalendarQueries {
             } else {
                 CalendarEntry(e.id, "event", e.title, e.start, maxOf(e.end, e.start), false, visible[e.sourceId]?.color, location = e.location)
             }
-        } + tasks.filter { !it.deleted && it.trashedAt == null && it.status != -1 }.mapNotNull { t -> taskEntry(t, zone) }
+        } + tasks.filter { !it.deleted && it.trashedAt == null && it.status != -1 }.mapNotNull { t -> taskEntry(t, zone) } +
+            countdownEntries(countdowns, first, count, zone)
 
         return (0 until count).map { i ->
             val date = first.plus(i, DateTimeUnit.DAY)
@@ -83,6 +88,21 @@ object CalendarQueries {
                     Triple(e, s, maxOf(end, minOf(s + 15, DAY_MINUTES)))
                 }
             CalendarDay(from, allDay, layout(timed))
+        }
+    }
+
+    /** Countdowns marked "show in calendar": all-day on their date (every year for yearly ones). */
+    private fun countdownEntries(countdowns: List<Countdown>, first: LocalDate, count: Int, zone: TimeZone): List<CalendarEntry> {
+        val last = first.plus(count, DateTimeUnit.DAY)
+        return countdowns.filter { !it.deleted && it.archivedAt == null && it.showInCalendar }.flatMap { c ->
+            val original = Stamp.date(c.date) ?: return@flatMap emptyList()
+            val dates = if (c.repeat == "yearly") (first.year..last.year).map { CountdownQueries.onYear(original, it) } else listOf(original)
+            dates.filter { it >= first && it < last }.map { d ->
+                CalendarEntry(
+                    "${c.id}@${Stamp.of(d)}", "countdown", c.name, d.atStartOfDayIn(zone).toEpochMilliseconds(),
+                    d.plus(1, DateTimeUnit.DAY).atStartOfDayIn(zone).toEpochMilliseconds(), true, c.color,
+                )
+            }
         }
     }
 

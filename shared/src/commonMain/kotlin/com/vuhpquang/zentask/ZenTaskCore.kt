@@ -22,7 +22,18 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import com.vuhpquang.zentask.calendar.CalendarDay
 import com.vuhpquang.zentask.calendar.CalendarQueries
+import com.vuhpquang.zentask.habits.CountdownActions
+import com.vuhpquang.zentask.habits.CountdownInfo
+import com.vuhpquang.zentask.habits.CountdownQueries
+import com.vuhpquang.zentask.habits.HabitActions
+import com.vuhpquang.zentask.habits.HabitSchedule
+import com.vuhpquang.zentask.habits.HabitStats
+import com.vuhpquang.zentask.habits.Stamp
 import com.vuhpquang.zentask.lists.FilterRule
+import com.vuhpquang.zentask.model.Countdown
+import com.vuhpquang.zentask.model.Habit
+import com.vuhpquang.zentask.model.HabitCheckin
+import kotlinx.datetime.LocalDate
 import com.vuhpquang.zentask.model.CalendarAccount
 import com.vuhpquang.zentask.model.CalendarSource
 import com.vuhpquang.zentask.model.ZenJson
@@ -87,6 +98,38 @@ class ZenTaskCore(
     val actions: TaskActions = TaskActions(store)
     val tagActions: TagActions = TagActions(store)
     val listActions: ListActions = ListActions(store)
+    val habitActions: HabitActions = HabitActions(store)
+    val countdownActions: CountdownActions = CountdownActions(store)
+
+    // ---- Habits & countdowns (Swift-friendly) ----
+
+    fun habits(): List<Habit> = store.list(EntityTypes.habit).sortedBy { it.sortOrder }
+
+    fun countdowns(): List<Countdown> = store.list(EntityTypes.countdown).sortedBy { it.sortOrder }
+
+    private fun today(): LocalDate = now().toLocalDateTime(zone()).date
+
+    private fun dayFromMillis(ms: Long): LocalDate = Instant.fromEpochMilliseconds(ms).toLocalDateTime(zone()).date
+
+    fun habitStats(habit: Habit): HabitStats = HabitStats.of(habit, habitActions.doneDays(habit.id), today())
+
+    /** yyyyMMdd stamps the habit is done on (for strips and the month heatmap). */
+    fun habitDoneStamps(habitId: String): Set<Int> = habitActions.doneDays(habitId).mapTo(HashSet()) { Stamp.of(it) }
+
+    fun habitCheckin(habitId: String, dayMillis: Long): HabitCheckin? = habitActions.checkin(habitId, dayFromMillis(dayMillis))
+
+    fun habitCheckIn(habitId: String, dayMillis: Long) = habitActions.checkIn(habitId, dayFromMillis(dayMillis), null)
+
+    fun habitIsDue(habit: Habit, dayMillis: Long): Boolean = HabitSchedule.isDue(habit, dayFromMillis(dayMillis))
+
+    fun habitSchedule(habit: Habit): String = HabitSchedule.describe(habit)
+
+    fun countdownInfo(c: Countdown): CountdownInfo = CountdownQueries.next(c, today())
+
+    fun stampOf(dayMillis: Long): Int = Stamp.of(dayFromMillis(dayMillis))
+
+    /** Local midnight (epoch millis) of a yyyyMMdd stamp. */
+    fun millisOf(stamp: Int): Long = (Stamp.date(stamp) ?: today()).atStartOfDayIn(zone()).toEpochMilliseconds()
 
     /** Any record changed (locally or from sync): reload the index. */
     val recordChanges: Flow<Unit> = store.recordChanges()
@@ -185,7 +228,7 @@ class ZenTaskCore(
         val first = Instant.fromEpochMilliseconds(firstDayMillis).toLocalDateTime(z).date
         return CalendarQueries.days(
             store.list(EntityTypes.calendarEvent), store.list(EntityTypes.calendarSource), store.list(EntityTypes.calendarAccount),
-            store.list(EntityTypes.task), first, count, z, hiddenCalendars(),
+            store.list(EntityTypes.task), first, count, z, hiddenCalendars(), store.list(EntityTypes.countdown),
         )
     }
 
