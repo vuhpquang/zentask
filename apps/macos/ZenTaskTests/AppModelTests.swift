@@ -5,7 +5,7 @@ import XCTest
 @MainActor
 final class AppModelTests: XCTestCase {
     private func model() -> AppModel {
-        AppModel(core: ZenTaskCore.companion.open(dbPath: nil), keychain: Keychain(service: "com.vuhpquang.zentask.tests.model"))
+        AppModel(core: ZenTaskCore.companion.open(dbPath: nil), keychain: Keychain(service: "com.vuhpquang.zentask.tests.model", directory: FileManager.default.temporaryDirectory.appendingPathComponent("zt-model-secrets")))
     }
 
     private func plan(needsConfirmation: Bool) -> SyncPlan {

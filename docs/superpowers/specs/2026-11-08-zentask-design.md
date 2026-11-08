@@ -125,7 +125,7 @@ Smart list mặc định (tính, không lưu): All, Today, Tomorrow, Next 7 Days
 
 ## 8. Auth & bảo mật
 
-- Một người dùng. Server có mật khẩu (hash argon2/bcrypt trong env/DB). `POST /v1/auth/login {password, deviceName}` → device token dài, ngẫu nhiên (lưu hash phía server). Client lưu token trong **Keychain**.
+- Một người dùng. Server có mật khẩu (hash argon2/bcrypt trong env/DB). `POST /v1/auth/login {password, deviceName}` → device token dài, ngẫu nhiên (lưu hash phía server). Client lưu token trên máy (macOS: file 0600 trong Application Support — app tự ký không có Team ID nên Keychain hỏi lại sau mỗi bản cập nhật; chủ dự án chọn bỏ hỏi, 2026-11-08).
 - Mọi endpoint (trừ login, OAuth callback, health) cần `Authorization: Bearer`. Có endpoint thu hồi device.
 - HTTPS do Cloudflare Tunnel lo (không cần certbot/nginx). CORS tắt (không có web client).
 - Google refresh token mã hoá AES-GCM trên server, khoá trong `.env` (không commit).
@@ -145,7 +145,7 @@ Chạy ở client (shared module), ghi vào DB cục bộ rồi sync lên server
 
 **Phát hiện từ file backup thật** (`~/Downloads/TickTick-backup-2026-11-08.csv`, version 7.2): 824 task, 8 list, 1 folder, 16 checklist, tag gần như không dùng, **không có habit, countdown, cũng không có task lặp lại**. Cột `taskId`/`parentId` chỉ là số thứ tự 1, 2, 3… của lần xuất đó, không phải ID thật → **CSV không dùng làm khoá idempotent được**. Có status `1` (67 task) không có trong chú thích file — cần tìm hiểu ý nghĩa (khả năng là "đã hoàn thành" kiểu cũ). Checklist được mã hoá trong cột Content: `▫` = mục chưa xong, `▪` = đã xong.
 
-1. **Nguồn chính: API web nội bộ của TickTick** (`api.ticktick.com/api/v2/...`), xác thực bằng **cookie phiên** chủ dự án copy từ trình duyệt (chủ dự án đăng nhập TickTick bằng Google nên không đăng nhập bằng mật khẩu được). API này trả về ID thật, lấy được task, list, folder, tag (kèm màu), column, habit, habit check-in, countdown. Endpoint cụ thể xác định bằng cách quan sát network của web app với tài khoản của chính mình (HAR). Cookie lưu trong Keychain; khi hết hạn thì báo người dùng dán cookie mới. Hướng dẫn lấy cookie viết ở P2.
+1. **Nguồn chính: API web nội bộ của TickTick** (`api.ticktick.com/api/v2/...`), xác thực bằng **cookie phiên** chủ dự án copy từ trình duyệt (chủ dự án đăng nhập TickTick bằng Google nên không đăng nhập bằng mật khẩu được). API này trả về ID thật, lấy được task, list, folder, tag (kèm màu), column, habit, habit check-in, countdown. Endpoint cụ thể xác định bằng cách quan sát network của web app với tài khoản của chính mình (HAR). Cookie lưu cùng chỗ với token; khi hết hạn thì báo người dùng dán cookie mới. Hướng dẫn lấy cookie viết ở P2.
 2. **Dự phòng: import CSV một lần** (khi chưa có cookie, hoặc API đổi). Chỉ dùng cho lần import đầu; khoá khớp tạm = (list, title, createdTime).
 3. **Quy tắc merge khi Sync TickTick** (đã chốt): lưu một *baseline* — bản giá trị TickTick ở lần sync trước — cho từng bản ghi đã import.
    - Trường nào TickTick đổi so với baseline → lấy theo TickTick (ghi đè ZenTask).

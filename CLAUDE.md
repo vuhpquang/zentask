@@ -76,7 +76,7 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
   follow the app's rules; `McpTools` = the tool set; every write is audited.
 - `apps/macos/` — xcodegen project (`project.yml`); never hand-edit or commit the `.xcodeproj`.
   Links the **release** XCFramework in both configs. `AppModel` (@Observable) owns `ZenTaskCore`; DB in
-  `~/Library/Application Support/ZenTask[-dev]/zentask.db`; server token + TickTick cookie in the Keychain
+  `~/Library/Application Support/ZenTask[-dev]/zentask.db`; server token + TickTick cookie in `~/Library/Application Support/ZenTaskSecrets/<bundle id>.json` (0600; not the Keychain: a self-signed app gets a per-build keychain partition, so every update prompted twice; older Keychain items are moved on first read)
   (service = bundle id). Settings (⌘,) = Account + TickTick tabs. Tokens in `DesignSystem/Theme.swift`.
   Main window = `Tasks/TasksView` (sidebar | list | detail) driven by `TasksModel`, which reloads the
   `TaskIndex` off the main thread on `core.recordChanges` (80 ms debounce). `Services/Reminders` schedules

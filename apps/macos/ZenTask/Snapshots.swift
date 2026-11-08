@@ -9,7 +9,7 @@ enum Snapshots {
     static func render(to dir: URL) {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let model = AppModel(core: ZenTaskCore.companion.open(dbPath: nil),
-                             keychain: Keychain(service: "com.vuhpquang.zentask.snapshot"))
+                             keychain: Keychain(service: "com.vuhpquang.zentask.snapshot", directory: FileManager.default.temporaryDirectory.appendingPathComponent("zt-snapshot-secrets")))
         let tasks = TasksModel(core: model.core)
         let panel = PanelCalendar(core: model.core)
         let settings: [(String, AnyView, CGSize)] = [

@@ -311,13 +311,13 @@ Nút **Sync from TickTick** chỉ kéo dữ liệu một chiều, từ TickTick 
 
 Vì anh đăng nhập TickTick bằng Google, ZenTask không dùng mật khẩu được mà dùng **cookie phiên** của trình duyệt (cookie tên `t`).
 
-> Cookie `t` có toàn quyền với tài khoản TickTick của anh, nên đừng gửi nó cho ai. ZenTask chỉ lưu nó trong **Keychain** của Mac: không gửi lên server ZenTask, không ghi log, không nằm trong git.
+> Cookie `t` có toàn quyền với tài khoản TickTick của anh, nên đừng gửi nó cho ai. ZenTask chỉ lưu nó trên Mac của anh, trong một file chỉ tài khoản của anh đọc được (`~/Library/Application Support/ZenTaskSecrets/`, quyền 0600; cùng mức bảo vệ với file dữ liệu ZenTask): không gửi lên server ZenTask, không ghi log, không nằm trong git.
 
 ### 5.1 Đăng nhập ZenTask (làm một lần trên mỗi máy)
 
 1. Mở ZenTask, nhấn `⌘,` (Settings) rồi chọn tab **Account**.
 2. Nhập mật khẩu (`ZENTASK_PASSWORD` trong `.env` ở bước 2) và bấm **Sign in**.
-3. Dòng **Status** chuyển thành "Synced …". Token đăng nhập được lưu trong Keychain, nên lần sau không phải nhập lại.
+3. Dòng **Status** chuyển thành "Synced …". Token đăng nhập được lưu trên Mac (cùng chỗ với cookie ở trên), nên lần sau không phải nhập lại và không có hộp thoại Keychain nào hỏi.
 
 ### 5.2 Lấy cookie `t`
 
