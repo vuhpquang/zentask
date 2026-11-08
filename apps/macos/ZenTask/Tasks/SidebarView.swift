@@ -16,18 +16,40 @@ struct SidebarView: View {
                     row(TasksModel.title(list), symbol: TasksModel.symbol(list), item: .smart(list))
                 }
             }
-            if !tasks.listProjects.isEmpty {
-                Section("Lists") {
-                    ForEach(ungroupedProjects, id: \.id) { project in
-                        projectRow(project)
+            Section {
+                ForEach(ungroupedProjects, id: \.id) { project in
+                    projectRow(project)
+                }
+                ForEach(tasks.groups, id: \.id) { group in
+                    DisclosureGroup {
+                        ForEach(tasks.listProjects.filter { $0.groupId == group.id }, id: \.id) { projectRow($0) }
+                    } label: {
+                        Label(group.name, systemImage: "folder")
+                            .contextMenu {
+                                Button("Rename…") { tasks.sheet = .renameFolder(group.id) }
+                                Button("Delete folder") { tasks.core.listActions.deleteFolder(id: group.id) }
+                            }
                     }
-                    ForEach(tasks.groups.filter { g in tasks.listProjects.contains { $0.groupId == g.id } }, id: \.id) { group in
-                        DisclosureGroup {
-                            ForEach(tasks.listProjects.filter { $0.groupId == group.id }, id: \.id) { projectRow($0) }
-                        } label: {
-                            Label(group.name, systemImage: "folder")
+                }
+            } header: {
+                SectionHeader(title: "Lists") {
+                    Button("New list…") { tasks.sheet = .newList }
+                    Button("New folder…") { tasks.sheet = .newFolder }
+                }
+            }
+            Section {
+                ForEach(tasks.filters, id: \.id) { filter in
+                    Label(filter.name, systemImage: "line.3.horizontal.decrease.circle")
+                        .badge(tasks.count(.custom(filter.id)))
+                        .tag(SidebarItem.custom(filter.id))
+                        .contextMenu {
+                            Button("Edit…") { tasks.sheet = .editFilter(filter.id) }
+                            Button("Delete", role: .destructive) { tasks.core.deleteFilter(id: filter.id) }
                         }
-                    }
+                }
+            } header: {
+                SectionHeader(title: "Smart lists") {
+                    Button("New smart list…") { tasks.sheet = .newFilter }
                 }
             }
             if !tasks.tags.isEmpty {
@@ -40,6 +62,15 @@ struct SidebarView: View {
                         }
                         .badge(tasks.count(.tag(tag.name)))
                         .tag(SidebarItem.tag(tag.name))
+                    }
+                }
+            }
+            if !tasks.archivedProjects.isEmpty {
+                Section {
+                    DisclosureGroup {
+                        ForEach(tasks.archivedProjects, id: \.id) { projectRow($0) }
+                    } label: {
+                        Label("Archived", systemImage: "archivebox")
                     }
                 }
             }
@@ -74,6 +105,53 @@ struct SidebarView: View {
         }
         .badge(tasks.count(.project(project.id)))
         .tag(SidebarItem.project(project.id))
+        .contextMenu { ListMenu(project: project) }
+    }
+}
+
+/// A sidebar section title with a "+" menu.
+private struct SectionHeader<Items: View>: View {
+    let title: String
+    @ViewBuilder let items: () -> Items
+
+    var body: some View {
+        HStack {
+            Text(title)
+            Spacer()
+            Menu { items() } label: { Image(systemName: "plus") }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help("Add")
+        }
+    }
+}
+
+/// Right-click menu of a list.
+struct ListMenu: View {
+    @Environment(TasksModel.self) private var tasks
+    let project: Project
+
+    var body: some View {
+        let actions = tasks.core.listActions
+        Button("Edit…") { tasks.sheet = .editList(project.id) }
+        Button("Add section…") { tasks.sheet = .newSection(project.id) }
+        if !tasks.groups.isEmpty {
+            Menu("Move to folder") {
+                Button("None") { actions.move(id: project.id, groupId: nil) }
+                ForEach(tasks.groups, id: \.id) { g in Button(g.name) { actions.move(id: project.id, groupId: g.id) } }
+            }
+        }
+        Divider()
+        if project.closed {
+            Button("Unarchive") { actions.unarchive(id: project.id) }
+        } else {
+            Button("Archive") { try? actions.archive(id: project.id) }
+        }
+        Button("Move to Trash", role: .destructive) {
+            try? actions.trash(id: project.id)
+            if tasks.sidebar == .project(project.id) { tasks.sidebar = .smart(.today) }
+        }
     }
 }
 

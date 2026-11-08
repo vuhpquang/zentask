@@ -42,7 +42,8 @@ data class TaskRow(
     val overdue: Boolean,
 )
 
-data class TaskSection(val title: String, val rows: List<TaskRow>, val isCompleted: Boolean = false)
+/** [columnId]: the list section (column) this group shows, when it is one. */
+data class TaskSection(val title: String, val rows: List<TaskRow>, val isCompleted: Boolean = false, val columnId: String? = null)
 
 val Task.isDone: Boolean get() = status == TaskStatus.COMPLETED || status == 1
 val Task.isOpen: Boolean get() = status == TaskStatus.OPEN
@@ -76,6 +77,8 @@ class TaskIndex(
     val allTasks: List<Task> get() = tasks
 
     fun task(id: String): Task? = taskById[id]
+
+    fun columns(projectId: String): List<Column> = columnsByProject[projectId].orEmpty().sortedBy { it.sortOrder }
 
     fun items(taskId: String): List<ChecklistItem> = itemsByTask[taskId].orEmpty().sortedBy { it.sortOrder }
 
@@ -249,10 +252,11 @@ class TaskIndex(
             listOf(TaskSection("", open))
         } else {
             val ids = columns.mapTo(HashSet()) { it.id }
-            columns.map { c -> TaskSection(c.name, open.filter { it.task.columnId == c.id }) } +
+            columns.map { c -> TaskSection(c.name, open.filter { it.task.columnId == c.id }, columnId = c.id) } +
                 TaskSection("No section", open.filter { it.task.columnId == null || it.task.columnId !in ids })
         }
-        return sections.filter { it.rows.isNotEmpty() } + completed(rows)
+        // Empty sections stay visible in a list with sections, so tasks can be added or dropped there.
+        return sections.filter { it.rows.isNotEmpty() || it.columnId != null } + completed(rows)
     }
 
     private fun completed(rows: List<TaskRow>): List<TaskSection> =

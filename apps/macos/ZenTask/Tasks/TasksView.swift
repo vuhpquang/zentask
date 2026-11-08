@@ -20,5 +20,18 @@ struct TasksView: View {
             }
         }
         .onAppear { tasks.start() }
+        .sheet(item: Binding(get: { tasks.sheet }, set: { tasks.sheet = $0 })) { ListSheetView(sheet: $0).environment(tasks) }
+        .confirmationDialog(
+            "Delete the list \"\(tasks.confirmDeleteList?.name ?? "")\" permanently?",
+            isPresented: Binding(get: { tasks.confirmDeleteList != nil }, set: { if !$0 { tasks.confirmDeleteList = nil } })
+        ) {
+            Button("Delete permanently", role: .destructive) {
+                if let p = tasks.confirmDeleteList { try? tasks.core.listActions.deleteForever(id: p.id) }
+                tasks.confirmDeleteList = nil
+            }
+            Button("Cancel", role: .cancel) { tasks.confirmDeleteList = nil }
+        } message: {
+            Text("The list, its sections and the tasks trashed with it are deleted on every device. This can't be undone.")
+        }
     }
 }

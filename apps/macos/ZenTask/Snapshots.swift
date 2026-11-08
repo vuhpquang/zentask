@@ -34,6 +34,10 @@ enum Snapshots {
                 wait { await tasks.settle() }
                 both(AnyView(MainWindow()).environment(model).environment(tasks), size: windowSize, name: "tasks-list", dir: dir)
             }
+            tasks.sheet = nil
+            for (name, view) in [("sheet-list", AnyView(ListEditor(project: nil))), ("sheet-filter", AnyView(FilterEditor(filter: nil)))] {
+                both(view.environment(model).environment(tasks), size: CGSize(width: 480, height: 620), name: name, dir: dir)
+            }
             tasks.sidebar = .smart(.all)
             wait { await tasks.settle() }
             if let checklist = tasks.sections.flatMap(\.rows).first(where: { $0.checklistTotal > 0 }) ?? tasks.sections.first?.rows.first {

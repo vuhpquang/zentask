@@ -20,6 +20,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import com.vuhpquang.zentask.lists.FilterRule
+import com.vuhpquang.zentask.lists.ListActions
+import com.vuhpquang.zentask.lists.SortOrder
+import com.vuhpquang.zentask.lists.ViewOptions
+import com.vuhpquang.zentask.model.Filter
+import com.vuhpquang.zentask.model.Preference
 import com.vuhpquang.zentask.model.Project
 import com.vuhpquang.zentask.tasks.PlannedReminder
 import com.vuhpquang.zentask.tasks.QuickAdd
@@ -70,6 +76,7 @@ class ZenTaskCore(
     /** Task operations (complete, trash, edit, checklist…); every edit is offline-first and synced. */
     val actions: TaskActions = TaskActions(store)
     val tagActions: TagActions = TagActions(store)
+    val listActions: ListActions = ListActions(store)
 
     /** Any record changed (locally or from sync): reload the index. */
     val recordChanges: Flow<Unit> = store.recordChanges()
@@ -80,7 +87,38 @@ class ZenTaskCore(
     @Throws(Exception::class)
     suspend fun loadIndex(): TaskIndex = io { TaskIndex.load(store) }
 
-    fun sections(index: TaskIndex, filter: TaskFilter): List<TaskSection> = index.sections(filter, now(), zone())
+    fun sections(index: TaskIndex, filter: TaskFilter, options: ViewOptions): List<TaskSection> = index.sections(filter, now(), zone(), options)
+
+    /** The saved sort/group choice for a list (empty fields = the list's default). */
+    fun viewOptions(filter: TaskFilter): ViewOptions =
+        store.get(EntityTypes.preference, ViewOptions.key(filterKey(filter)))?.takeIf { !it.deleted }?.let { ViewOptions.parse(it.value) } ?: ViewOptions()
+
+    fun setViewOptions(filter: TaskFilter, options: ViewOptions) {
+        val id = ViewOptions.key(filterKey(filter))
+        val existing = store.get(EntityTypes.preference, id)
+        val value = options.encode()
+        if (existing == null) {
+            store.put(EntityTypes.preference, Preference(id = id, key = id, value = value))
+        } else {
+            store.update(EntityTypes.preference, id) { it.copy(value = value, deleted = false) }
+        }
+    }
+
+    /** Creates (id null) or updates a custom smart list. */
+    fun saveFilter(id: String?, name: String, rule: FilterRule): Filter {
+        val clean = name.trim().ifEmpty { "Smart list" }
+        return if (id == null) {
+            val last = store.list(EntityTypes.filter).maxOfOrNull { it.sortOrder }
+            Filter(id = kotlin.uuid.Uuid.random().toString(), name = clean, rule = rule.encode(), sortOrder = SortOrder.between(last, null)!!)
+                .also { store.put(EntityTypes.filter, it) }
+        } else {
+            store.update(EntityTypes.filter, id) { it.copy(name = clean, rule = rule.encode()) }!!
+        }
+    }
+
+    fun deleteFilter(id: String) = store.delete(EntityTypes.filter, id)
+
+    fun filterRule(filter: Filter): FilterRule = FilterRule.parse(filter.rule) ?: FilterRule()
 
     /** Sidebar badges keyed `smart:TODAY`, `project:<id>`, `tag:<name>` (Swift can't key a dictionary by the sealed interface). */
     fun sidebarCounts(index: TaskIndex): Map<String, Int> = index.counts(now(), zone()).mapKeys { (f, _) -> filterKey(f) }

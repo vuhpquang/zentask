@@ -9,12 +9,32 @@ enum SidebarItem: Hashable {
     case smart(SmartList)
     case project(String)
     case tag(String)
+    case custom(String)
 
     var filter: TaskFilter {
         switch self {
         case .smart(let list): TaskFilterSmart(list: list)
         case .project(let id): TaskFilterInProject(id: id)
         case .tag(let name): TaskFilterWithTag(name: name)
+        case .custom(let id): TaskFilterCustom(id: id)
+        }
+    }
+}
+
+/// Sheets the Tasks screen can show (create/edit lists, folders, sections, smart lists).
+enum ListSheet: Identifiable {
+    case newList, editList(String), newFolder, renameFolder(String), newSection(String), renameSection(String, String), newFilter, editFilter(String)
+
+    var id: String {
+        switch self {
+        case .newList: "newList"
+        case .editList(let id): "editList." + id
+        case .newFolder: "newFolder"
+        case .renameFolder(let id): "renameFolder." + id
+        case .newSection(let id): "newSection." + id
+        case .renameSection(let id, _): "renameSection." + id
+        case .newFilter: "newFilter"
+        case .editFilter(let id): "editFilter." + id
         }
     }
 }
@@ -31,6 +51,10 @@ final class TasksModel {
     var showCompleted = false
     /// The task a "Delete permanently" confirmation is open for.
     var confirmDelete: ZTask?
+    /// The list a "Delete permanently" confirmation is open for.
+    var confirmDeleteList: Project?
+    var sheet: ListSheet?
+    private(set) var options = ViewOptions(sort: "", group: "", showCompleted: false)
 
     private(set) var index: TaskIndex?
     private(set) var sections: [TaskSection] = []
@@ -83,15 +107,31 @@ final class TasksModel {
     /// Waits for the pending recompute (tests, snapshots).
     func settle() async { await recomputeTask?.value }
 
+    var filters: [Filter] { index?.filters ?? [] }
+    var archivedProjects: [Project] { projects.filter { $0.closed && !$0.isInbox }.sorted { $0.name < $1.name } }
+    var trashedProjects: [Project] { (index?.projects ?? []).filter { $0.trashedAt != nil && !$0.deleted } }
+    var currentProject: Project? { if case .project(let id) = sidebar { return projects.first { $0.id == id } }; return nil }
+
+    func setSort(_ sort: String) { saveOptions(ViewOptions(sort: sort, group: options.group, showCompleted: options.showCompleted)) }
+    func setGroup(_ group: String) { saveOptions(ViewOptions(sort: options.sort, group: group, showCompleted: options.showCompleted)) }
+
+    private func saveOptions(_ o: ViewOptions) {
+        core.setViewOptions(filter: sidebar.filter, options: o)
+        options = o
+        recompute()
+    }
+
     /// Sections for the selected list, computed off the main thread (the index is immutable).
     func recompute() {
         guard let index else { return }
         let core = self.core
         let filter = sidebar.filter
         let item = sidebar
+        options = core.viewOptions(filter: filter)
+        let opts = options
         recomputeTask?.cancel()
         recomputeTask = _Concurrency.Task {
-            let result = await _Concurrency.Task.detached(priority: .userInitiated) { core.sections(index: index, filter: filter) }.value
+            let result = await _Concurrency.Task.detached(priority: .userInitiated) { core.sections(index: index, filter: filter, options: opts) }.value
             guard !_Concurrency.Task.isCancelled, item == self.sidebar, index === self.index else { return }
             self.sections = result
         }
@@ -104,6 +144,7 @@ final class TasksModel {
         case .smart(let list): Self.title(list)
         case .project(let id): projects.first { $0.id == id }?.name ?? "List"
         case .tag(let name): "#" + name
+        case .custom(let id): filters.first { $0.id == id }?.name ?? "Smart list"
         }
     }
 

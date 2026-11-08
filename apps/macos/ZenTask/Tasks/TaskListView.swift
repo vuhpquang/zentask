@@ -14,6 +14,19 @@ struct TaskListView: View {
                 .padding(.vertical, Theme.Space.s)
             }
             List(selection: $tasks.selection) {
+                if case .smart(.trash) = tasks.sidebar, !tasks.trashedProjects.isEmpty {
+                    Section("Lists") {
+                        ForEach(tasks.trashedProjects, id: \.id) { p in
+                            HStack {
+                                Label(p.name, systemImage: "list.bullet")
+                                Spacer()
+                                Button("Restore") { tasks.core.listActions.restore(id: p.id) }
+                                Button("Delete…", role: .destructive) { tasks.confirmDeleteList = p }
+                            }
+                            .buttonStyle(.borderless)
+                        }
+                    }
+                }
                 ForEach(Array(tasks.sections.enumerated()), id: \.offset) { _, section in
                     if section.isCompleted {
                         Section(isExpanded: $tasks.showCompleted) {
@@ -25,7 +38,15 @@ struct TaskListView: View {
                         Section {
                             rows(section)
                         } header: {
-                            if !section.title.isEmpty { Text(section.title) }
+                            if !section.title.isEmpty {
+                                Text(section.title)
+                                    .contextMenu {
+                                        if let columnId = section.columnId {
+                                            Button("Rename section…") { tasks.sheet = .renameSection(columnId, section.title) }
+                                            Button("Delete section") { tasks.core.listActions.deleteColumn(id: columnId) }
+                                        }
+                                    }
+                            }
                         }
                     }
                 }
@@ -42,6 +63,35 @@ struct TaskListView: View {
             .onDeleteCommand { tasks.trashSelected() }
         }
         .navigationTitle(tasks.title)
+        .toolbar {
+            ToolbarItem {
+                Menu {
+                    Picker("Sort by", selection: Binding(get: { tasks.options.sort }, set: { tasks.setSort($0) })) {
+                        Text("Default").tag("")
+                        Text("Date").tag("date")
+                        Text("Priority").tag("priority")
+                        Text("Title").tag("title")
+                        Text("Manual").tag("manual")
+                    }
+                    Picker("Group by", selection: Binding(get: { tasks.options.group }, set: { tasks.setGroup($0) })) {
+                        Text("Default").tag("")
+                        Text("Date").tag("date")
+                        Text("Priority").tag("priority")
+                        Text("List").tag("list")
+                        Text("Tag").tag("tag")
+                        if case .project = tasks.sidebar { Text("Section").tag("column") }
+                        Text("None").tag("none")
+                    }
+                    if let project = tasks.currentProject {
+                        Divider()
+                        Button("Add section…") { tasks.sheet = .newSection(project.id) }
+                    }
+                } label: {
+                    Label("View options", systemImage: "arrow.up.arrow.down")
+                }
+                .help("Sort and group")
+            }
+        }
         .confirmationDialog(
             "Delete \"\(tasks.confirmDelete?.title ?? "")\" permanently?",
             isPresented: Binding(get: { tasks.confirmDelete != nil }, set: { if !$0 { tasks.confirmDelete = nil } })

@@ -56,6 +56,10 @@ enum Theme {
         static let summaryWidth: CGFloat = 420
         static let settingsWidth: CGFloat = 540
         static let sidebarMin: CGFloat = 200
+        static let sheetWidth: CGFloat = 380
+        static let filterWidth: CGFloat = 460
+        static let filterFormHeight: CGFloat = 420
+        static let swatch: CGFloat = 24
         static let listMin: CGFloat = 340
         static let detailMin: CGFloat = 320
     }

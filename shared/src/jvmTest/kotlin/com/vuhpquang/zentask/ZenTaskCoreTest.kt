@@ -30,4 +30,21 @@ class ZenTaskCoreTest {
         assertTrue(core.store.list(EntityTypes.preference).isEmpty())
         core.close()
     }
+
+    @Test
+    fun viewOptionsAndFiltersPersist() {
+        val core = ZenTaskCore(dbPath = null)
+        val f = com.vuhpquang.zentask.tasks.TaskFilter.InProject("work")
+        assertEquals(com.vuhpquang.zentask.lists.ViewOptions(), core.viewOptions(f))
+        core.setViewOptions(f, com.vuhpquang.zentask.lists.ViewOptions(sort = "priority", group = "none"))
+        core.setViewOptions(f, com.vuhpquang.zentask.lists.ViewOptions(sort = "title", group = "none"))
+        assertEquals("title", core.viewOptions(f).sort)
+        val saved = core.saveFilter(null, " Hot ", com.vuhpquang.zentask.lists.FilterRule(priorities = listOf(5)))
+        assertEquals("Hot", saved.name)
+        core.saveFilter(saved.id, "Hotter", com.vuhpquang.zentask.lists.FilterRule(priorities = listOf(5, 3)))
+        assertEquals(listOf(5, 3), core.filterRule(core.store.get(com.vuhpquang.zentask.model.EntityTypes.filter, saved.id)!!).priorities)
+        core.deleteFilter(saved.id)
+        assertTrue(core.store.list(com.vuhpquang.zentask.model.EntityTypes.filter).isEmpty())
+        core.close()
+    }
 }
