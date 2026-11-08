@@ -1,6 +1,6 @@
 # ZenTask — Thiết kế tổng thể
 
-Ngày: 2026-11-08 · Trạng thái: đã duyệt hướng đi trong chat, chờ plan chi tiết
+Ngày: 2026-11-08 · Trạng thái: P0, P1 xong (plan trong `docs/superpowers/plans/`)
 
 ## 1. Ý định
 
@@ -113,6 +113,11 @@ Smart list mặc định (tính, không lưu): All, Today, Tomorrow, Next 7 Days
 
 - **Task lặp lại** làm giống TickTick: khi hoàn thành, task gốc chuyển sang ngày tiếp theo theo RRULE, đồng thời sinh một bản sao đã hoàn thành (`Task` mới, `status=2`, `repeatTaskId` trỏ về task gốc) làm lịch sử. Bản sao này hiện trong Completed và trên các ngày đã qua của lịch. Import CSV đưa các bản completed vào đúng dạng bản sao này.
 - **Trash tách khỏi tombstone**: thêm trường `trashedAt` cho Task/Project (đưa vào thùng rác, khôi phục được, smart list Trash). `deleted=true` chỉ có nghĩa là đã xoá vĩnh viễn (xoá khỏi Trash hoặc dọn Trash). Server chỉ dọn bản ghi `deleted=true` sau 90 ngày, không bao giờ đụng tới `trashedAt`.
+- **Lưu trữ dạng bản ghi chung** (P1): cả client lẫn server lưu mọi entity trong một bảng `record` (các trường + clock dạng JSON), model có kiểu nằm ở Kotlin. Nhờ vậy dữ liệu do client mới hơn ghi (entity hoặc trường lạ) không bị mất trên client cũ, và thêm trường không cần migration.
+- **Dọn tombstone > 90 ngày: hoãn.** Muốn dọn an toàn cần thêm giao thức "đồng bộ lại toàn bộ", nếu không thì client offline lâu sẽ làm sống lại bản ghi đã xoá. Tombstone rất nhỏ nên chưa cần dọn.
+- **`serverId`**: DB server có một id ngẫu nhiên. Client thấy id đổi (server khôi phục từ backup hoặc tạo lại DB) thì đặt checkpoint về 0 và đẩy lại toàn bộ dữ liệu cục bộ, để không có bản ghi nào chỉ còn nằm ở một máy.
+- **Chặn lệch đồng hồ**: server từ chối thay đổi có clock vượt giờ server hơn 24 giờ (`400 clock_skew`), để một máy chỉnh sai giờ không khoá cứng trường đó.
+- **Mật khẩu server**: lấy từ `.env`, server chỉ giữ bản băm PBKDF2 trong bộ nhớ. Đăng nhập sai 5 lần trong 15 phút thì khoá đăng nhập (toàn cục, vì mọi request đi qua cloudflared).
 - **Trường dạng danh sách** (`tags`, `reminders`): v1 merge theo LWW của cả trường. Chấp nhận được khi mới chỉ có một client. Nếu sau này thấy mất tag giữa các thiết bị thì nâng lên set-merge (add/remove theo từng phần tử) ở P7.
 
 ## 8. Auth & bảo mật

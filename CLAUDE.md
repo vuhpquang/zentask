@@ -30,8 +30,21 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
 - `VERSION` — single source of the version. Gradle generates `ZenTaskBuild.VERSION` from it;
   `release.sh` writes it into `apps/macos/project.yml` (`MARKETING_VERSION`).
 - `shared/` — KMP (`jvm`, `macosArm64`), package `com.vuhpquang.zentask`, exported to Swift as
-  `ZenTaskShared` via SKIE. Platform-free; `expect/actual` only where a platform really differs.
-- `server/` — Ktor/JVM, depends on `shared` (same models + sync protocol). `Application.module()`.
+  `ZenTaskShared` via SKIE. Platform-free; `expect/actual` only where a platform really differs
+  (SQLite driver, lock).
+  - `model/` — one `@Serializable` data class per entity (spec §6) + `EntityTypes` registry. Property and
+    entity names are a file/wire format: add, never rename. Enum-like values are Int/String constants.
+  - `sync/` — `Hlc`, `SyncRecord` + per-field LWW `merge`, protocol DTOs, `SyncApi` (Ktor client),
+    `SyncEngine` (push outbox / pull pages), `SyncScheduler` (debounce 2 s, every 5 min, on request).
+  - `store/` — `ZenStore`: SQLDelight DB (`src/commonMain/sqldelight/`) with ONE generic `record` table
+    (fields + clocks as JSON), the `pending_change` outbox and `sync_meta`. Every local write = record +
+    outbox in one transaction. Typed models ↔ field maps via kotlinx.serialization (`toFields`/`fromFields`).
+  - `ZenTaskCore` — the Swift-facing entry point (typed helpers; Kotlin `Task` is `ZenTaskShared.Task` in Swift).
+- `server/` — Ktor/JVM, depends on `shared` (same models, merge and protocol).
+  `Application.module(config, now)`; `ServerConfig.fromEnv()` (`ZENTASK_PASSWORD` required, `HOST`
+  defaults to 127.0.0.1). `ServerDb` = SQLite over JDBC (`records` with a global version, `devices`, `meta`
+  with `serverId`). Routes: `POST /v1/auth/login`, `GET/DELETE /v1/devices`, `POST /v1/sync`; everything
+  under `/v1` except login needs a device bearer token.
 - `apps/macos/` — xcodegen project (`project.yml`); never hand-edit or commit the `.xcodeproj`.
   Links the **release** XCFramework in both configs.
 - `scripts/` — `lib/env.sh` (sourced by all), build, release, deploy, signing, icon.
@@ -52,6 +65,10 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
 - The ECC Bash hook blocks commands that contain both `git commit` and some `-n`-style flags
   (false "--no-verify" match): write files first, commit in a separate command.
 - Don't run `npx gitnexus analyze` inside this repo.
+- The macOS app links `-lsqlite3` (SQLDelight's native driver); keep it in `project.yml` `OTHER_LDFLAGS`.
+- Sync safety tests live in `shared/src/commonTest/.../sync` and `server/src/test/.../SyncEndToEndTest.kt`
+  (two client stores through an in-process server). Any change to merge/outbox/sync must keep them green
+  and add a case for the new path.
 
 ## Releasing
 
