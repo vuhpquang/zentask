@@ -118,6 +118,9 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
 - The ECC Bash hook blocks commands that contain both `git commit` and some `-n`-style flags
   (false "--no-verify" match): write files first, commit in a separate command.
 - Don't run `npx gitnexus analyze` inside this repo.
+- Dock / ⌘-Tab showing an old icon after an icon change: the Dock has its own icon cache
+  (`$(getconf DARWIN_USER_CACHE_DIR)com.apple.dock.iconcache`). Run `scripts/refresh-icon-cache.sh` (moves the cache
+  aside, restarts the Dock). `release.sh` also touches the installed bundle, since `ditto` keeps its old date.
 - The macOS app links `-lsqlite3` (SQLDelight's native driver); keep it in `project.yml` `OTHER_LDFLAGS`.
 - Sync safety tests live in `shared/src/commonTest/.../sync` and `server/src/test/.../SyncEndToEndTest.kt`
   (two client stores through an in-process server). Any change to merge/outbox/sync must keep them green

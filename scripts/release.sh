@@ -113,6 +113,10 @@ if [[ "${INSTALL:-0}" == "1" ]]; then
     pgrep -fq "$INSTALLED_BIN" && die "installed ZenTask is still running; quit it and run: ditto $APP /Applications/ZenTask.app"
     rm -rf /Applications/ZenTask.app
     ditto "$APP" /Applications/ZenTask.app
+    # ditto updates files inside an existing bundle but not the bundle's own date, which macOS uses to
+    # notice a new icon; touch it and re-register so Finder/LaunchServices pick up icon changes.
+    touch /Applications/ZenTask.app
+    /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f /Applications/ZenTask.app || true
     xattr -dr com.apple.quarantine /Applications/ZenTask.app 2>/dev/null || true
     open -a /Applications/ZenTask.app
 fi
