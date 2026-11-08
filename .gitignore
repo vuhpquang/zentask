@@ -1,0 +1,11 @@
+.gradle/
+build/
+.kotlin/
+*.xcodeproj/
+xcuserdata/
+.idea/
+.DS_Store
+local.properties
+.env
+data/
+.superpowers/
