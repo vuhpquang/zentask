@@ -13,7 +13,7 @@ import kotlin.test.assertTrue
 // Public pages required by Google's OAuth consent screen (home, privacy, terms).
 class PublicPagesTest {
     private fun page(path: String, mustContain: String) = testApplication {
-        application { module() }
+        application { module(testConfig()) }
         val res = client.get(path)
         assertEquals(HttpStatusCode.OK, res.status)
         assertEquals(ContentType.Text.Html, res.contentType()?.withoutParameters())

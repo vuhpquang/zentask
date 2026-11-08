@@ -26,9 +26,9 @@ for _ in $(seq 1 30); do
     fi
     sleep 2
 done
+# The public URL is the one clients use, so it must answer. Look at vps1's loopback only to say why not.
 if out="$(ssh -o BatchMode=yes "$REMOTE" "curl -fsS --max-time 5 localhost:3100/health")"; then
-    echo "    vps1 localhost:3100/health → $out"
-    echo "    Public URL not reachable yet: DNS/tunnel not set up — see docs/setup-guide.md §1"
-    exit 0
+    echo "    vps1 localhost:3100/health → $out (server is up)"
+    die "$PUBLIC_URL/health does not answer: check DNS / Cloudflare Tunnel (docs/setup-guide.md §1)"
 fi
 die "server did not answer on vps1 (ssh $REMOTE 'cd $REMOTE_DIR && docker compose logs api')"

@@ -135,7 +135,35 @@ GOOGLE_CLIENT_SECRET=
 chmod 600 /root/zentask/.env
 ```
 
-> Lần đầu khởi động, server băm mật khẩu và chỉ giữ bản băm. Muốn đổi mật khẩu thì sửa `.env` rồi chạy lại `scripts/deploy.sh`. Các thiết bị đã đăng nhập giữ nguyên token cho tới khi anh thu hồi chúng.
+> Mỗi lần khởi động, server đọc mật khẩu từ `.env` rồi chỉ giữ bản băm (PBKDF2) trong bộ nhớ. Muốn đổi mật khẩu thì sửa `.env` rồi chạy lại `scripts/deploy.sh`. Các thiết bị đã đăng nhập vẫn giữ token cũ cho tới khi anh thu hồi (bước 2.3).
+>
+> Từ P1, server **không khởi động** nếu thiếu `ZENTASK_PASSWORD`. Khi đó `docker compose logs api` báo `ZENTASK_PASSWORD is not set`.
+
+### 2.3 Kiểm tra đăng nhập (sau khi deploy P1)
+
+Phần này chạy trên Mac, sau khi `scripts/deploy.sh` của P1 báo thành công. Lệnh `read -s` hỏi mật khẩu mà không hiện ra màn hình và không lưu vào lịch sử shell:
+
+```bash
+read -s "ZT_PW?Mật khẩu ZenTask: "; echo
+curl -s https://zentask-api.vuhpquang.com/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d "{\"password\":\"$ZT_PW\",\"deviceName\":\"curl-test\"}"
+```
+
+- Đúng mật khẩu: trả về `{"token":"…","deviceId":"…"}`. Ghi lại `token` và `deviceId` để dùng ở bước sau.
+- `{"error":"unauthorized"}`: sai mật khẩu, so lại với `.env` trên vps1.
+- `{"error":"too_many_attempts"}`: đã sai 5 lần trong 15 phút. Đợi 15 phút rồi thử lại.
+
+Xem danh sách thiết bị, rồi thu hồi thiết bị thử nghiệm vừa tạo (thay `<token>` và `<deviceId>`):
+
+```bash
+curl -s https://zentask-api.vuhpquang.com/v1/devices -H 'Authorization: Bearer <token>'
+curl -s -o /dev/null -w '%{http_code}\n' -X DELETE \
+  https://zentask-api.vuhpquang.com/v1/devices/<deviceId> -H 'Authorization: Bearer <token>'
+unset ZT_PW
+```
+
+Lệnh `DELETE` in ra `204`. Sau đó token kia trả `401`, tức là thu hồi đã có hiệu lực. App ZenTask trên Mac sẽ đăng nhập riêng (P2/P3), anh không cần giữ token này.
 
 ---
 

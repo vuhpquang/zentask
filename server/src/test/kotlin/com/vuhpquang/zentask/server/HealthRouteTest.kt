@@ -13,7 +13,7 @@ import kotlin.test.assertTrue
 class HealthRouteTest {
     @Test
     fun healthReturnsOkAndVersion() = testApplication {
-        application { module() }
+        application { module(testConfig()) }
         val res = client.get("/health")
         assertEquals(HttpStatusCode.OK, res.status)
         assertEquals("""{"status":"ok","version":"${ZenTaskInfo.version}"}""", res.bodyAsText())
@@ -21,7 +21,7 @@ class HealthRouteTest {
 
     @Test
     fun unknownRouteReturns404() = testApplication {
-        application { module() }
+        application { module(testConfig()) }
         assertEquals(HttpStatusCode.NotFound, client.get("/nope").status)
         val wrongMethod = client.post("/health").status
         assertTrue(wrongMethod == HttpStatusCode.NotFound || wrongMethod == HttpStatusCode.MethodNotAllowed, "got $wrongMethod")
@@ -29,7 +29,7 @@ class HealthRouteTest {
 
     @Test
     fun malformedUrlReturns400NotInternalError() = testApplication {
-        application { module() }
+        application { module(testConfig()) }
         val badPath = client.get("/%zz").status
         assertTrue(badPath == HttpStatusCode.BadRequest || badPath == HttpStatusCode.NotFound, "got $badPath")
     }
