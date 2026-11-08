@@ -1,0 +1,62 @@
+name: ZenTask
+options:
+  bundleIdPrefix: com.vuhpquang
+  deploymentTarget:
+    macOS: "26.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    MARKETING_VERSION: 0.1.0
+    CURRENT_PROJECT_VERSION: 1
+    SWIFT_VERSION: "6.0"
+    ARCHS: arm64
+    ONLY_ACTIVE_ARCH: NO
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "-"
+    DEVELOPMENT_TEAM: ""
+    ENABLE_HARDENED_RUNTIME: YES
+targets:
+  ZenTask:
+    type: application
+    platform: macOS
+    sources:
+      - ZenTask
+    dependencies:
+      - framework: ../../shared/build/XCFrameworks/release/ZenTaskShared.xcframework
+        embed: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.vuhpquang.zentask
+        PRODUCT_NAME: ZenTask
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: ZenTask
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
+        INFOPLIST_KEY_NSHumanReadableCopyright: "© 2026 vuhpquang"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        OTHER_LDFLAGS: ["-lc++"]
+      configs:
+        Debug:
+          PRODUCT_BUNDLE_IDENTIFIER: com.vuhpquang.zentask.dev
+  ZenTaskTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - ZenTaskTests
+    dependencies:
+      - target: ZenTask
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.vuhpquang.zentask.tests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/ZenTask.app/Contents/MacOS/ZenTask"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+schemes:
+  ZenTask:
+    build:
+      targets:
+        ZenTask: all
+        ZenTaskTests: [test]
+    test:
+      targets:
+        - ZenTaskTests
