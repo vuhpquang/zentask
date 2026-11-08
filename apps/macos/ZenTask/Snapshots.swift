@@ -19,6 +19,7 @@ enum Snapshots {
         wait { await tasks.reload() }
         both(AnyView(MainWindow()).environment(model).environment(tasks), size: windowSize, name: "tasks-empty", dir: dir)
 
+        calendarShots(model, tasks, dir: dir)
         if let csv = sampleCsv() {
             let core = model.core
             wait { _ = try? await core.importCsv(text: csv) }
@@ -45,6 +46,21 @@ enum Snapshots {
                 both(AnyView(MainWindow()).environment(model).environment(tasks), size: windowSize, name: "tasks-detail", dir: dir)
             }
         }
+    }
+
+    /// Week and month with a few sample events (offscreen, in-memory core only).
+    private static func calendarShots(_ model: AppModel, _ tasks: TasksModel, dir: URL) {
+        let core = model.core
+        let cal = CalendarModel(core: core)
+        let day = Calendar.current.startOfDay(for: .now)
+        SampleData.shared.addCalendar(core: core, dayStart: Int64(day.timeIntervalSince1970 * 1000))
+        wait { await tasks.reload(); await cal.reload() }
+        for mode in [CalendarModel.Mode.week, .month] {
+            cal.mode = mode
+            wait { await cal.reload() }
+            both(AnyView(CalendarView()).environment(model).environment(tasks).environment(cal), size: windowSize, name: "calendar-\(mode.rawValue.lowercased())", dir: dir)
+        }
+        both(AnyView(CalendarSettings().frame(width: Theme.Size.settingsWidth)).environment(model).environment(cal), size: CGSize(width: 540, height: 420), name: "settings-calendars", dir: dir)
     }
 
     private static let windowSize = CGSize(width: 1100, height: 720)

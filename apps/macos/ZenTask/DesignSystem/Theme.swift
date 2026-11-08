@@ -36,6 +36,19 @@ enum Theme {
         static let maxWidth: CGFloat = 640
     }
 
+    enum Calendar {
+        static let hourHeight: CGFloat = 52
+        static let timeGutter: CGFloat = 56
+        static let allDayMin: CGFloat = 30
+        static let panelWidth: CGFloat = 280
+        static let eventRadius: CGFloat = 6
+        static let eventFill: Double = 0.22
+        static let monthCellMin: CGFloat = 96
+        static let monthItems = 4
+        static let headerHeight: CGFloat = 44
+        static let snapMinutes = 15
+    }
+
     enum Opacity {
         static let field: Double = 0.6
         static let chip: Double = 0.15

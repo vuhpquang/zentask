@@ -9,6 +9,8 @@ struct SettingsView: View {
                 .tabItem { Label("Account", systemImage: "person.crop.circle") }
             TickTickSettings()
                 .tabItem { Label("TickTick", systemImage: "arrow.down.circle") }
+            CalendarSettings()
+                .tabItem { Label("Calendars", systemImage: "calendar") }
         }
         .frame(width: Theme.Size.settingsWidth)
     }

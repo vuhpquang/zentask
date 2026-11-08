@@ -4,6 +4,7 @@ import SwiftUI
 struct ZenTaskApp: App {
     @State private var model: AppModel
     @State private var tasks: TasksModel
+    @State private var calendar: CalendarModel
 
     init() {
         if let dir = ProcessInfo.processInfo.environment["ZENTASK_SNAPSHOT"] {
@@ -14,6 +15,7 @@ struct ZenTaskApp: App {
         _model = State(initialValue: model)
         let tasks = TasksModel(core: model.core)
         _tasks = State(initialValue: tasks)
+        _calendar = State(initialValue: CalendarModel(core: model.core))
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
             tasks.reminders = Reminders(core: model.core)
             model.start()
@@ -25,6 +27,7 @@ struct ZenTaskApp: App {
             MainWindow()
                 .environment(model)
                 .environment(tasks)
+                .environment(calendar)
         }
         .defaultSize(width: 1100, height: 720)
         .commands { TaskCommands() }
@@ -32,6 +35,7 @@ struct ZenTaskApp: App {
         Settings {
             SettingsView()
                 .environment(model)
+                .environment(calendar)
         }
     }
 }
@@ -58,7 +62,10 @@ struct MainWindow: View {
             AppRail(tab: $tab)
                 .ignoresSafeArea(.container, edges: .top) // only the rail reaches under the traffic lights
             Divider().ignoresSafeArea(.container, edges: .top)
-            TasksView()
+            switch tab {
+            case .calendar: CalendarView()
+            default: TasksView()
+            }
         }
     }
 }
