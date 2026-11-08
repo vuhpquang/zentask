@@ -272,4 +272,14 @@ class TaskActionsTest {
         assertEquals(false, got.isAllDay)
         assertEquals(zone.id, got.timeZone)
     }
+
+    @Test
+    fun allDaySpanCoversWholeDays() {
+        val t = actions.create("Trip", null, null, null, emptyList(), null, true)
+        actions.setAllDaySpan(t.id, ms("2026-11-10T00:00"), ms("2026-11-12T00:00"))
+        val got = get(t.id)
+        assertEquals(ms("2026-11-10T00:00"), got.startDate)
+        assertEquals(ms("2026-11-12T00:00"), got.dueDate)
+        assertTrue(got.isAllDay)
+    }
 }

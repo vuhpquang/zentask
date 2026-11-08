@@ -234,6 +234,12 @@ class TaskActions(
         store.update(tasks, id) { it.copy(startDate = start, dueDate = maxOf(end, start), isAllDay = false, timeZone = it.timeZone ?: z) }
     }
 
+    /** An all-day range from the day starting at [startDay] to the day starting at [endDay] (local midnights). */
+    fun setAllDaySpan(id: String, startDay: Long, endDay: Long) {
+        val z = zone().id
+        store.update(tasks, id) { it.copy(startDate = startDay, dueDate = maxOf(endDay, startDay), isAllDay = true, timeZone = it.timeZone ?: z) }
+    }
+
     /** Sets (or clears, with null) the repeat rule; [from] is "due" or "completion". */
     fun setRepeat(id: String, rule: String?, from: String?) {
         store.update(tasks, id) { it.copy(repeatRule = rule?.takeIf { r -> r.isNotBlank() }, repeatFrom = if (rule.isNullOrBlank()) null else from ?: "due") }

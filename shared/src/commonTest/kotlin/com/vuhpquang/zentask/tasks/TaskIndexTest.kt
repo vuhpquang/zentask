@@ -193,4 +193,16 @@ class TaskIndexTest {
         assertEquals(listOf("child"), m.first { it.priority == 5 }.sections.flatMap { it.rows }.map { it.task.id })
         assertEquals(listOf("parent"), m.first { it.priority == 0 }.sections.flatMap { it.rows }.map { it.task.id })
     }
+
+    @Test
+    fun summaryGroupsDoneAndOpenByList() {
+        val done = t("shipped", "2026-11-05T09:00", project = "work", status = TaskStatus.COMPLETED).copy(completedAt = ms("2026-11-06T10:00"))
+        val oldDone = t("long ago", status = TaskStatus.COMPLETED).copy(completedAt = ms("2026-10-01T10:00"))
+        val i = index(done, oldDone, t("due friday", "2026-11-06T09:00"), t("no date"), t("next month", "2026-12-10T09:00"))
+        val s = i.summary(kotlinx.datetime.LocalDate(2026, 11, 2), kotlinx.datetime.LocalDate(2026, 11, 8), now, zone)
+        assertEquals(listOf("shipped"), s.done.flatMap { it.rows }.map { it.task.id })
+        assertEquals(listOf("🏢Works"), s.done.map { it.title })
+        assertEquals(listOf("due friday"), s.open.flatMap { it.rows }.map { it.task.id }, "open tasks dated in the period (overdue counts)")
+        assertTrue(s.text().contains("✓ shipped") && s.text().contains("☐ due friday"))
+    }
 }

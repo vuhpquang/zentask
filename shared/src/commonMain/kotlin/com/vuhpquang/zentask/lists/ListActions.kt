@@ -54,6 +54,12 @@ class ListActions(
         store.update(projects, id) { it.copy(name = name.trim()) }
     }
 
+    /** "list", "kanban" or "timeline" (as TickTick stores it); anything else is ignored. */
+    fun setViewMode(id: String, mode: String) {
+        if (mode !in setOf("list", "kanban", "timeline")) return
+        store.update(EntityTypes.project, id) { it.copy(viewMode = mode) }
+    }
+
     fun setColor(id: String, color: String?) {
         store.update(projects, id) { it.copy(color = color) }
     }

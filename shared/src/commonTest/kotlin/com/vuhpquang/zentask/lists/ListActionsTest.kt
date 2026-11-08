@@ -194,4 +194,14 @@ class ListActionsTest {
         lists.trash(l.id)
         assertFailsWith<IllegalStateException> { lists.trash(l.id) }
     }
+
+    @Test
+    fun viewModeIsListKanbanOrTimeline() {
+        val p = lists.createList("Board")
+        lists.setViewMode(p.id, "kanban")
+        assertEquals("kanban", store.get(com.vuhpquang.zentask.model.EntityTypes.project, p.id)!!.viewMode)
+        lists.setViewMode(p.id, "weird")
+        assertEquals("kanban", store.get(com.vuhpquang.zentask.model.EntityTypes.project, p.id)!!.viewMode, "unknown modes are ignored")
+        assertEquals("", ViewOptions.parse("""{"sort":"date"}""").view)
+    }
 }

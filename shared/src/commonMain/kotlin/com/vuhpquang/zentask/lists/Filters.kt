@@ -53,6 +53,8 @@ data class ViewOptions(
     val hideCompleted: Boolean = false,
     /** Rows show the title only (no notes line). */
     val hideDetails: Boolean = false,
+    /** "" (list), "kanban" or "timeline" for lists that aren't a project (a project keeps `Project.viewMode`). */
+    val view: String = "",
 ) {
     fun encode(): String = ZenJson.encodeToString(serializer(), this)
 

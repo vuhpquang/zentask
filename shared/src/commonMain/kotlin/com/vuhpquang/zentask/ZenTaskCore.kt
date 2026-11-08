@@ -33,6 +33,7 @@ import com.vuhpquang.zentask.habits.HabitBoard
 import com.vuhpquang.zentask.habits.HabitDay
 import com.vuhpquang.zentask.model.HabitSection
 import com.vuhpquang.zentask.tasks.Quadrant
+import com.vuhpquang.zentask.tasks.Summary
 import com.vuhpquang.zentask.habits.HabitRow
 import com.vuhpquang.zentask.habits.Stamp
 import com.vuhpquang.zentask.lists.FilterRule
@@ -134,6 +135,12 @@ class ZenTaskCore(
     fun habitSections(): List<HabitSection> = store.list(EntityTypes.habitSection).filter { !it.deleted }.sortedBy { it.sortOrder }
 
     fun matrix(index: TaskIndex): List<Quadrant> = index.matrix(now(), zone())
+
+    /** Done and open tasks between two local days (epoch millis of their midnights), by list. */
+    fun summary(index: TaskIndex, fromDay: Long, toDay: Long): Summary {
+        val z = zone()
+        return index.summary(Instant.fromEpochMilliseconds(fromDay).toLocalDateTime(z).date, Instant.fromEpochMilliseconds(toDay).toLocalDateTime(z).date, now(), z)
+    }
 
     val focusActions: FocusActions = FocusActions(store)
 

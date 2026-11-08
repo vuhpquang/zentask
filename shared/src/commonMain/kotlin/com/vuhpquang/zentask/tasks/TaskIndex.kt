@@ -45,6 +45,24 @@ data class TaskRow(
     val overdue: Boolean,
 )
 
+/** What got done and what's still open in a period, by list. */
+data class Summary(val from: LocalDate, val to: LocalDate, val done: List<TaskSection>, val open: List<TaskSection>) {
+    /** Plain text to paste into a report: lists as headings, ✓ done and ☐ open tasks. */
+    fun text(): String = buildString {
+        appendLine("Summary $from – $to")
+        if (done.isNotEmpty()) {
+            appendLine()
+            appendLine("Done")
+            done.forEach { s -> appendLine(s.title); s.rows.forEach { appendLine("  ✓ ${it.task.title}") } }
+        }
+        if (open.isNotEmpty()) {
+            appendLine()
+            appendLine("Open")
+            open.forEach { s -> appendLine(s.title); s.rows.forEach { appendLine("  ☐ ${it.task.title}") } }
+        }
+    }.trimEnd()
+}
+
 /** One Eisenhower quadrant: open tasks of one priority, grouped by date. */
 data class Quadrant(val priority: Int, val sections: List<TaskSection>)
 
@@ -211,6 +229,28 @@ class TaskIndex(
         return listOf(Priority.HIGH, Priority.MEDIUM, Priority.LOW, Priority.NONE).map { p ->
             Quadrant(p, dateSections(open.filter { it.task.priority == p }, today, zone).map { it.copy(key = "q$p:" + it.key) })
         }
+    }
+
+    /**
+     * The summary for [from]..[to]: tasks completed in the period, and open tasks dated in it (and overdue ones
+     * when the period reaches today), grouped by list in list order.
+     */
+    fun summary(from: LocalDate, to: LocalDate, now: Instant, zone: TimeZone): Summary {
+        val today = now.toLocalDateTime(zone).date
+        val visible = tasks.filter { it.trashedAt == null && !it.deleted && it.parentId == null }
+        val done = visible.filter { t ->
+            t.isDone && t.completedAt?.let { Instant.fromEpochMilliseconds(it).toLocalDateTime(zone).date }?.let { it >= from && it <= to } == true
+        }
+        val open = visible.filter { t ->
+            t.isOpen && day(t, zone)?.let { d -> (d >= from && d <= to) || (d < from && today in from..to) } == true
+        }
+        fun byList(list: List<Task>): List<TaskSection> = list.groupBy { it.projectId }.entries
+            .sortedWith(compareBy({ projectById[it.key]?.sortOrder ?: Long.MIN_VALUE }, { projectById[it.key]?.name.orEmpty() }))
+            .map { (id, ts) ->
+                val name = projectById[id]?.name ?: "Inbox"
+                TaskSection(name, ts.sortedBy { day(it, zone) }.map { TaskRow(it, emptyList(), 0, 0, name, false) }, key = "sum:$id", color = projectById[id]?.color)
+            }
+        return Summary(from, to, byList(done), byList(open))
     }
 
     /** Open-task counts for the sidebar badges. */
