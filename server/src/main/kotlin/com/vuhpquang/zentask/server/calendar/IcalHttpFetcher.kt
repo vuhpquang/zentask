@@ -15,10 +15,24 @@ import kotlin.time.Instant
 
 /** Downloads an iCal feed and expands it ([IcalParser]). `webcal://` links are fetched over https. */
 class IcalHttpFetcher(private val http: HttpClient) : IcalFetcher {
+    /**
+     * The link is a secret: errors never carry it (Ktor's timeout messages include the URL), and the
+     * original exception is not attached as the cause.
+     */
     override suspend fun events(url: String, from: Long, until: Long): List<IcalEvent> {
-        val res = http.get(url.replaceFirst("webcal://", "https://"))
-        if (res.status.value !in 200..299) throw IllegalStateException("iCal feed: HTTP ${res.status.value}")
-        return IcalParser.parse(res.bodyAsText(), from, until)
+        val text = try {
+            val res = http.get(url.replaceFirst("webcal://", "https://"))
+            if (res.status.value !in 200..299) throw IllegalStateException("The calendar link answered HTTP ${res.status.value}")
+            res.bodyAsText()
+        } catch (e: IllegalStateException) {
+            throw e
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            throw IllegalStateException("The calendar link could not be reached (${e::class.simpleName})")
+        }
+        if (!text.contains("BEGIN:VCALENDAR")) throw IllegalStateException("That link is not an iCal calendar")
+        return IcalParser.parse(text, from, until)
     }
 }
 
@@ -30,6 +44,8 @@ class IcalHttpFetcher(private val http: HttpClient) : IcalFetcher {
 object IcalParser {
     private val DEFAULT_ZONE = TimeZone.of("Asia/Ho_Chi_Minh")
     private const val MAX_OCCURRENCES = 2000
+    /** Steps allowed to walk a long-running series up to the window (a daily series over ~100 years). */
+    private const val MAX_STEPS = 40_000
 
     private class Prop(val name: String, val params: Map<String, String>, val value: String)
 
@@ -68,12 +84,21 @@ object IcalParser {
             val excluded = e.all("EXDATE").flatMap { p -> p.value.split(',').mapNotNull { v -> time(Prop("EXDATE", p.params, v))?.millis } }.toSet() +
                 overridden[uid].orEmpty()
             val zone = start.zone?.let { runCatching { TimeZone.of(it) }.getOrNull() } ?: DEFAULT_ZONE
+            if (!Recurrence.isSupported(rule)) {
+                // A rule ZenTask can't expand (e.g. BYDAY=2TU): show the first occurrence only.
+                if (base.end >= from && base.start <= until) out += base
+                continue
+            }
             var occurrence: Long? = start.millis
-            var i = 0
-            while (occurrence != null && occurrence <= until && i < MAX_OCCURRENCES) {
-                if (occurrence !in excluded && occurrence + length >= from) out += base.copy(start = occurrence, end = occurrence + length)
-                occurrence = Recurrence.next(rule, Instant.fromEpochMilliseconds(occurrence), zone, i)?.toEpochMilliseconds()
-                i++
+            var step = 0
+            var emitted = 0
+            while (occurrence != null && occurrence <= until && step < MAX_STEPS && emitted < MAX_OCCURRENCES) {
+                if (occurrence !in excluded && occurrence + length >= from) {
+                    out += base.copy(start = occurrence, end = occurrence + length)
+                    emitted++
+                }
+                occurrence = Recurrence.next(rule, Instant.fromEpochMilliseconds(occurrence), zone, step)?.toEpochMilliseconds()
+                step++
             }
         }
         return out
@@ -117,7 +142,7 @@ object IcalParser {
         return runCatching {
             if (p.params["VALUE"] == "DATE" || v.length == 8) {
                 val d = LocalDate(v.substring(0, 4).toInt(), v.substring(4, 6).toInt(), v.substring(6, 8).toInt())
-                When(d.atStartOfDayIn(DEFAULT_ZONE).toEpochMilliseconds(), true, null)
+                When(d.atStartOfDayIn(DEFAULT_ZONE).toEpochMilliseconds(), true, DEFAULT_ZONE.id)
             } else {
                 val ldt = LocalDateTime(
                     v.substring(0, 4).toInt(), v.substring(4, 6).toInt(), v.substring(6, 8).toInt(),

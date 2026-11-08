@@ -215,9 +215,15 @@ final class AppModel {
         let kotlin = (error as NSError).userInfo["KotlinException"]
         if let e = kotlin as? SyncException {
             switch e.kind {
-            case .unauthorized: return "Wrong password"
+            case .unauthorized: return server ? "Wrong password" : "Signed out by the server. Sign in again"
             case .network: return "Can't reach the ZenTask server. Check your connection and try again"
-            default: return e.message ?? "The server answered with an error"
+            default:
+                switch e.message {
+                case "google_not_configured": return "Google Calendar isn't set up on the server yet (setup guide, section 3)"
+                case "encryption_not_configured": return "The server has no encryption key for calendars (setup guide, section 2)"
+                case "forbidden": return "This sign-in can't do that"
+                default: return e.message ?? "The server answered with an error"
+                }
             }
         }
         if let e = kotlin as? TickTickException {

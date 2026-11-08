@@ -1,5 +1,6 @@
 package com.vuhpquang.zentask.server.calendar
 
+import io.ktor.client.engine.mock.respond
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -83,4 +84,39 @@ END:VCALENDAR"""
         val narrow = IcalParser.parse(feed, ms("2026-11-20T00:00:00Z"), ms("2026-11-30T00:00:00Z"))
         assertEquals(listOf("Weekly sync"), narrow.map { it.summary })
     }
+
+    @Test
+    fun longRunningSeriesStillReachesTheWindow() {
+        val old = """BEGIN:VCALENDAR
+BEGIN:VEVENT
+UID:standup@test
+DTSTART:20150105T020000Z
+DTEND:20150105T021500Z
+RRULE:FREQ=DAILY
+SUMMARY:Daily standup
+END:VEVENT
+END:VCALENDAR"""
+        val e = IcalParser.parse(old, ms("2026-11-09T00:00:00Z"), ms("2026-11-11T00:00:00Z"))
+        assertEquals(2, e.size, "a series started years ago still shows its current occurrences")
+    }
+
+    @Test
+    fun allDayEventsKeepTheirZone() {
+        val e = IcalParser.parse(feed, from, until).single { it.uid == "allday@test" }
+        assertEquals("Asia/Ho_Chi_Minh", e.timeZone)
+    }
+
+    @Test
+    fun fetchErrorsNeverCarryTheSecretUrl() = kotlinx.coroutines.test.runTest {
+        val secret = "https://calendar.google.com/calendar/ical/x/private-SECRET123/basic.ics"
+        val http = io.ktor.client.HttpClient(io.ktor.client.engine.mock.MockEngine { throw java.io.IOException("Request timeout has expired [url=$secret]") })
+        val e = kotlin.test.assertFailsWith<IllegalStateException> { IcalHttpFetcher(http).events(secret, 0, 1) }
+        assertTrue(!e.message.orEmpty().contains("SECRET123") && e.cause == null, e.message)
+        val notFound = io.ktor.client.HttpClient(io.ktor.client.engine.mock.MockEngine { respond404() })
+        val e2 = kotlin.test.assertFailsWith<IllegalStateException> { IcalHttpFetcher(notFound).events(secret, 0, 1) }
+        assertTrue(!e2.message.orEmpty().contains("SECRET123"), e2.message)
+    }
+
+    private fun io.ktor.client.engine.mock.MockRequestHandleScope.respond404() =
+        respond("nope", io.ktor.http.HttpStatusCode.NotFound)
 }

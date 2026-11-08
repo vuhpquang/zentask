@@ -86,8 +86,8 @@ private struct RailButton: View {
 
     var body: some View {
         Button(action: action) {
-            Image(systemName: selected ? symbol + ".fill" : symbol)
-                .symbolVariant(selected ? .fill : .none)
+            Image(systemName: symbol)
+                .symbolVariant(selected ? .fill : .none) // never build names like "calendar.fill" by hand: some don't exist
                 .font(.system(size: Theme.Rail.icon, weight: .regular))
                 .foregroundStyle(selected ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
                 .frame(width: Theme.Rail.hit, height: Theme.Rail.hit)

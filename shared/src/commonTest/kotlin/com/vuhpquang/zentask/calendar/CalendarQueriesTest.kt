@@ -78,4 +78,14 @@ class CalendarQueriesTest {
         assertEquals(0 to 2, cols["c"], "c starts when a ends: reuses column 0")
         assertEquals(0 to 1, cols["d"])
     }
+
+    @Test
+    fun allDayEventFromAnotherZoneStaysOnItsDate() {
+        val la = TimeZone.of("America/Los_Angeles")
+        val start = LocalDateTime.parse("2026-11-10T00:00").toInstant(la).toEpochMilliseconds()
+        val end = LocalDateTime.parse("2026-11-11T00:00").toInstant(la).toEpochMilliseconds()
+        val e = CalendarEvent(id = "la", sourceId = "s1", title = "LA holiday", start = start, end = end, isAllDay = true, timeZone = "America/Los_Angeles")
+        val d = days(listOf(e))
+        assertEquals(listOf(emptyList(), listOf("LA holiday"), emptyList()), d.take(3).map { day -> day.allDay.map { it.title } })
+    }
 }

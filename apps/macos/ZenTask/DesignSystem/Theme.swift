@@ -38,6 +38,13 @@ enum Theme {
 
     enum Calendar {
         static let hourHeight: CGFloat = 52
+        static let minHourHeight: CGFloat = 28
+        static let maxHourHeight: CGFloat = 160
+        static let modeMenuWidth: CGFloat = 130
+        static let dot: CGFloat = 7
+        static let popoverWidth: CGFloat = 300
+        static let labelNudge: CGFloat = 7
+        static let yearCell: CGFloat = 22
         static let timeGutter: CGFloat = 56
         static let allDayMin: CGFloat = 30
         static let panelWidth: CGFloat = 280

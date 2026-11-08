@@ -35,19 +35,19 @@ final class CalendarModelTests: XCTestCase {
         XCTAssertTrue(m.calendar.isDateInToday(m.anchor))
     }
 
-    func testDroppingATaskSchedulesItSnappedTo15Minutes() async {
+    func testDroppingATaskSchedulesItSnappedTo15Minutes() async throws {
         let m = model(at: "2026-11-08T05:00:00Z")
         m.mode = .day
         let task = m.core.actions.create(title: "Call", filter: nil, projectId: nil, priority: nil, tags: [], due: nil, allDay: true)
         await m.reload()
-        let day = try! XCTUnwrap(m.days.first)
+        let day = try XCTUnwrap(m.days.first)
         m.schedule(taskId: task.id, on: day, minute: 9 * 60 + 7)
-        let t = try! XCTUnwrap(m.core.task(id: task.id))
+        let t = try XCTUnwrap(m.core.task(id: task.id))
         XCTAssertFalse(t.isAllDay)
-        let due = Date(timeIntervalSince1970: Double(t.dueDate!.int64Value) / 1000)
+        let due = Date(timeIntervalSince1970: Double(try XCTUnwrap(t.dueDate).int64Value) / 1000)
         XCTAssertEqual(m.calendar.dateComponents([.hour, .minute], from: due), DateComponents(hour: 9, minute: 0))
         m.schedule(taskId: task.id, on: day, minute: nil)
-        XCTAssertTrue(m.core.task(id: task.id)!.isAllDay)
+        XCTAssertEqual(m.core.task(id: task.id)?.isAllDay, true)
         await m.reload()
         XCTAssertEqual(m.days.first?.allDay.map(\.title), ["Call"])
     }

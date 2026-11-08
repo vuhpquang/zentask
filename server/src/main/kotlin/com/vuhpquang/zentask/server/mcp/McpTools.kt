@@ -305,7 +305,7 @@ object McpTools {
                 val sources = ctx.store.list(EntityTypes.calendarSource).filter { !it.deleted && it.accountId in accounts }.associateBy { it.id }
                 val key = a.str("query")?.let { QuickAddParser.fold(it.lowercase()) }
                 val events = ctx.store.list(EntityTypes.calendarEvent)
-                    .filter { !it.deleted && it.sourceId in sources && it.start <= until && maxOf(it.end, it.start) >= from }
+                    .filter { !it.deleted && it.sourceId in sources && it.start <= until && (it.end > from || (it.end <= it.start && it.start >= from)) }
                     .filter { e -> key == null || QuickAddParser.fold((e.title + " " + e.location).lowercase()).contains(key) }
                     .sortedBy { it.start }
                 fun fmt(ms: Long, allDay: Boolean) = Instant.fromEpochMilliseconds(ms).toLocalDateTime(zone).let { if (allDay) it.date.toString() else it.toString().take(16) }

@@ -62,6 +62,13 @@ struct CalendarSettings: View {
         }
         .formStyle(.grouped)
         .onAppear(perform: load)
+        .task {
+            // Calendars arrive with the next sync after connecting: follow record changes while open.
+            for await _ in app.core.recordChanges {
+                try? await _Concurrency.Task.sleep(for: .milliseconds(150))
+                load()
+            }
+        }
         .sheet(isPresented: $addingIcal) { IcalSheet { name, url in add(name: name, url: url) } }
         .confirmationDialog("Remove \(removing?.email ?? "")?", isPresented: Binding(get: { removing != nil }, set: { if !$0 { removing = nil } })) {
             Button("Remove", role: .destructive) { if let a = removing { remove(a) } }

@@ -12,24 +12,24 @@ final class TasksModelTests: XCTestCase {
 
     private var ids: (TasksModel) -> [String] = { m in m.sections.flatMap(\.rows).map(\.task.id) }
 
-    func testQuickAddCreatesParsedTaskInTheCurrentList() async {
+    func testQuickAddCreatesParsedTaskInTheCurrentList() async throws {
         let m = await model()
         m.sidebar = .smart(.today)
         m.quickAdd("Pay rent #home !high")
         await m.reload()
-        let task = try! XCTUnwrap(m.selectedTask)
+        let task = try XCTUnwrap(m.selectedTask)
         XCTAssertEqual(task.title, "Pay rent")
         XCTAssertEqual(task.tags, ["home"])
         XCTAssertEqual(task.priority, 5)
         XCTAssertEqual(ids(m), [task.id], "created in Today, due today")
     }
 
-    func testCompletingMovesTaskOutOfToday() async {
+    func testCompletingMovesTaskOutOfToday() async throws {
         let m = await model()
         m.sidebar = .smart(.today)
         m.quickAdd("Stretch")
         await m.reload()
-        let task = try! XCTUnwrap(m.selectedTask)
+        let task = try XCTUnwrap(m.selectedTask)
         m.toggleComplete(task)
         await m.reload()
         XCTAssertTrue(ids(m).isEmpty)
@@ -38,7 +38,7 @@ final class TasksModelTests: XCTestCase {
         XCTAssertEqual(ids(m), [task.id])
     }
 
-    func testSwitchingListClearsSelectionAndRecomputes() async {
+    func testSwitchingListClearsSelectionAndRecomputes() async throws {
         let m = await model()
         m.sidebar = .smart(.inbox)
         m.quickAdd("In the inbox")
@@ -51,7 +51,7 @@ final class TasksModelTests: XCTestCase {
         XCTAssertEqual(m.count(.smart(.inbox)), 1)
     }
 
-    func testListsSectionsAndViewOptions() async {
+    func testListsSectionsAndViewOptions() async throws {
         let m = await model()
         let list = m.core.listActions.createList(name: "Trip", color: "#2E9E88", groupId: nil)
         let column = m.core.listActions.createColumn(projectId: list.id, name: "Packing")
@@ -68,7 +68,7 @@ final class TasksModelTests: XCTestCase {
         XCTAssertEqual(m.core.viewOptions(filter: SidebarItem.project(list.id).filter).group, "none", "saved as a synced preference")
     }
 
-    func testSmartListAndArchive() async {
+    func testSmartListAndArchive() async throws {
         let m = await model()
         m.sidebar = .smart(.inbox)
         m.quickAdd("Urgent thing !high")
@@ -86,18 +86,18 @@ final class TasksModelTests: XCTestCase {
         XCTAssertFalse(m.listProjects.contains { $0.id == list.id })
     }
 
-    func testDropOntoListsDatesAndTagsAndIgnoresStaleIds() async {
+    func testDropOntoListsDatesAndTagsAndIgnoresStaleIds() async throws {
         let m = await model()
         let list = m.core.listActions.createList(name: "Trip", color: nil, groupId: nil)
         m.sidebar = .smart(.inbox)
         m.quickAdd("Passport")
         await m.reload()
-        let id = try! XCTUnwrap(m.selection)
+        let id = try XCTUnwrap(m.selection)
         XCTAssertTrue(m.drop([id], onto: .project(list.id)))
         XCTAssertTrue(m.drop([id], onto: .smart(.tomorrow)))
         XCTAssertTrue(m.drop([id], onto: .tag("travel")))
         await m.reload()
-        let t = try! XCTUnwrap(m.index?.task(id: id))
+        let t = try XCTUnwrap(m.index?.task(id: id))
         XCTAssertEqual(t.projectId, list.id)
         XCTAssertEqual(t.tags, ["travel"])
         XCTAssertTrue(Calendar.current.isDateInTomorrow(Date(timeIntervalSince1970: Double(t.dueDate!.int64Value) / 1000)))
@@ -107,14 +107,14 @@ final class TasksModelTests: XCTestCase {
         XCTAssertFalse(m.drop([id], onto: .smart(.inbox)), "trashed tasks don't move")
     }
 
-    func testReorderAndDropIntoSection() async {
+    func testReorderAndDropIntoSection() async throws {
         let m = await model()
         let list = m.core.listActions.createList(name: "Board", color: nil, groupId: nil)
         let doing = m.core.listActions.createColumn(projectId: list.id, name: "Doing")
         m.sidebar = .project(list.id)
         for title in ["A", "B", "C"] { m.quickAdd(title) }
         await m.reload(); await m.settle()
-        let noSection = try! XCTUnwrap(m.sections.first { $0.columnId == nil && !$0.isCompleted })
+        let noSection = try XCTUnwrap(m.sections.first { $0.columnId == nil && !$0.isCompleted })
         XCTAssertEqual(noSection.rows.map(\.task.title), ["C", "B", "A"], "new tasks go to the top")
         m.move(in: noSection, from: IndexSet(integer: 2), to: 0)
         await m.reload(); await m.settle()

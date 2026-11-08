@@ -54,6 +54,9 @@ class CalendarService(
         requireNotNull(db.takeOAuthState(state, STATE_TTL_MS)) { "This sign-in link has expired. Start again from ZenTask." }
         val box = requireNotNull(box) { "encryption_not_configured" }
         val tokens = google.exchange(code, redirectUri)
+        require(tokens.scope.split(' ').any { it.endsWith("/calendar.readonly") }) {
+            "ZenTask needs permission to see your calendars. Connect again and tick the calendar permission."
+        }
         val refresh = tokens.refresh_token ?: throw IllegalArgumentException("Google sent no refresh token. Remove ZenTask's access at myaccount.google.com/permissions and connect again.")
         val email = google.userEmail(tokens.access_token)
         val accountId = "google_" + hash(email.lowercase(), 16)
@@ -68,16 +71,25 @@ class CalendarService(
     suspend fun addIcal(name: String, url: String): String {
         val box = requireNotNull(box) { "encryption_not_configured" }
         require(url.startsWith("https://") || url.startsWith("webcal://")) { "The link must start with https:// or webcal://" }
+        val fetcher = requireNotNull(ical) { "iCal is not available" }
+        val clean = name.trim().ifEmpty { "Calendar" }
+        // Read the link before saving anything: a wrong link is reported, not stored.
+        try {
+            fetcher.events(url, now() - DAY, now() + DAY)
+        } catch (e: IllegalStateException) {
+            throw IllegalArgumentException("${e.message}. Check the link and try again.")
+        }
         val accountId = "ical_" + hash(url, 16)
-        db.saveCredential(ServerDb.Credential(accountId, "ICAL", name.trim().ifEmpty { "Calendar" }, box.encrypt(url), STATUS_OK))
-        writeAccount(accountId, name.trim().ifEmpty { "Calendar" }, "ICAL", STATUS_OK)
-        mutex.withLock { syncIcal(accountId, name, url) }
+        db.saveCredential(ServerDb.Credential(accountId, "ICAL", clean, box.encrypt(url), STATUS_OK))
+        writeAccount(accountId, clean, "ICAL", STATUS_OK)
+        mutex.withLock { syncIcal(accountId, clean, url) }
         return accountId
     }
 
     /** Deletes the credentials and tombstones the account, its calendars and their events. */
     suspend fun remove(accountId: String): Boolean = mutex.withLock {
         val had = db.credentials().any { it.accountId == accountId }
+        if (!had) return@withLock false
         db.deleteCredential(accountId)
         for (source in db.recordsWhere(EntityTypes.calendarSource.name, "accountId", accountId)) {
             tombstoneEvents(source.id, keep = emptySet())
@@ -102,7 +114,8 @@ class CalendarService(
                 log.warn("Calendar {} needs reconnecting", c.accountId)
                 setStatus(c.accountId, STATUS_RECONNECT)
             } catch (e: Exception) {
-                log.warn("Calendar {} sync failed: {}", c.accountId, e.message)
+                // Never log messages here: some carry URLs (iCal secrets) or response snippets.
+                log.warn("Calendar {} sync failed: {}", c.accountId, e::class.simpleName)
             }
         }
     }

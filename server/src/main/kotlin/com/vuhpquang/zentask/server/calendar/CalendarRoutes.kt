@@ -64,10 +64,13 @@ fun Route.calendarCallback(service: CalendarService) {
         try {
             val email = service.callback(code, state)
             call.respondText(page("Connected", "${escape(email)} is connected. Its calendars appear in ZenTask after the next sync. You can close this tab."), ContentType.Text.Html)
+        } catch (e: kotlinx.serialization.SerializationException) {
+            log.warn("Calendar callback: unreadable Google response")
+            call.respondText(page("Not connected", "Google answered unexpectedly. Try again from ZenTask in a moment."), ContentType.Text.Html, HttpStatusCode.BadGateway)
         } catch (e: IllegalArgumentException) {
             call.respondText(page("Not connected", escape(e.message ?: "Something went wrong.")), ContentType.Text.Html, HttpStatusCode.BadRequest)
         } catch (e: Exception) {
-            log.warn("Calendar callback failed: {}", e.message)
+            log.warn("Calendar callback failed: {}", e::class.simpleName)
             call.respondText(page("Not connected", "Google could not be reached. Try again from ZenTask in a moment."), ContentType.Text.Html, HttpStatusCode.BadGateway)
         }
     }

@@ -51,6 +51,7 @@ class CalendarTest {
         "work@group.calendar.google.com" to """[{"id":"w1","summary":"Review","start":{"dateTime":"2026-11-09T02:00:00Z"},"end":{"dateTime":"2026-11-09T03:00:00Z"}}]""",
     )
     private var grantRevoked = false
+    private var grantedScope = "openid https://www.googleapis.com/auth/calendar.readonly email"
 
     private val google = HttpClient(MockEngine { req ->
         val json = headersOf(HttpHeaders.ContentType, "application/json")
@@ -59,7 +60,7 @@ class CalendarTest {
             path.endsWith("/token") -> {
                 val body = (req.body as io.ktor.http.content.OutgoingContent.ByteArrayContent).bytes().decodeToString()
                 when {
-                    body.contains("grant_type=authorization_code") -> respond("""{"access_token":"access-1","refresh_token":"$refreshToken","expires_in":3600}""", headers = json)
+                    body.contains("grant_type=authorization_code") -> respond("""{"access_token":"access-1","refresh_token":"$refreshToken","expires_in":3600,"scope":"$grantedScope"}""", headers = json)
                     grantRevoked -> respond("""{"error":"invalid_grant"}""", HttpStatusCode.BadRequest, json)
                     else -> respond("""{"access_token":"access-2","expires_in":3600}""", headers = json)
                 }
@@ -218,5 +219,28 @@ class CalendarTest {
     fun calendarRoutesNeedAFullToken() = testApplication {
         server()
         assertEquals(HttpStatusCode.Unauthorized, client.post("/v1/calendar/google/start").status)
+    }
+
+    @Test
+    fun consentWithoutCalendarAccessIsRefused() = testApplication {
+        server()
+        val token = client.loginToken()
+        grantedScope = "openid email"
+        val page = connect(token)
+        assertEquals(HttpStatusCode.BadRequest, page.status)
+        assertTrue(page.bodyAsText().contains("see your calendars"), page.bodyAsText())
+        assertTrue(pull(token).none { it.entity.startsWith("calendar") })
+    }
+
+    @Test
+    fun brokenIcalLinkIsNotSaved() = testApplication {
+        server()
+        val token = client.loginToken()
+        val res = client.post("/v1/calendar/ical") {
+            bearerAuth(token); contentType(ContentType.Application.Json)
+            setBody("""{"name":"Work","url":"https://feeds.test/missing.ics"}""")
+        }
+        assertEquals(HttpStatusCode.BadRequest, res.status, res.bodyAsText())
+        assertTrue(pull(token).none { it.entity.startsWith("calendar") })
     }
 }

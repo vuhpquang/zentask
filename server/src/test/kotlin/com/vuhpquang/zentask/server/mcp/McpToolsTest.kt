@@ -375,5 +375,10 @@ class McpToolsTest {
         assertEquals("Work", events.single()["calendar"]!!.jsonPrimitive.content)
         assertEquals("2026-11-09T09:00", events.single()["start"]!!.jsonPrimitive.content)
         assertEquals(0, obj(client.tool(token, "list_events", """{"from":"2026-11-10","to":"2026-11-11"}""").first)["events"]!!.jsonArray.size)
+        // An all-day event on the 8th ends exactly at the 9th's midnight: not part of the 9th.
+        val db2 = ServerDb(dir.resolve("zentask.db"))
+        db2.writeServer("calendarEvent", "e2", mapOf("id" to JsonPrimitive("e2"), "sourceId" to JsonPrimitive("s1"), "title" to JsonPrimitive("Yesterday"), "isAllDay" to JsonPrimitive(true), "start" to JsonPrimitive(1_794_070_800_000L), "end" to JsonPrimitive(1_794_157_200_000L)))
+        db2.close()
+        assertEquals(listOf("Standup"), obj(client.tool(token, "list_events", """{"from":"2026-11-09","to":"2026-11-09"}""").first)["events"]!!.jsonArray.map { it.jsonObject["title"]!!.jsonPrimitive.content })
     }
 }

@@ -55,7 +55,19 @@ object CalendarQueries {
         val liveAccounts = accounts.filter { !it.deleted }.mapTo(HashSet()) { it.id }
         val visible = sources.filter { !it.deleted && it.accountId in liveAccounts && it.id !in hidden }.associateBy { it.id }
         val entries = events.filter { !it.deleted && it.sourceId in visible }.map { e ->
-            CalendarEntry(e.id, "event", e.title, e.start, maxOf(e.end, e.start), e.isAllDay, visible[e.sourceId]?.color, location = e.location)
+            if (e.isAllDay) {
+                // All-day = calendar dates: read them in the event's zone, place them on the same dates here.
+                val z = e.timeZone?.let { runCatching { TimeZone.of(it) }.getOrNull() } ?: zone
+                val firstDay = Instant.fromEpochMilliseconds(e.start).toLocalDateTime(z).date
+                val endDay = Instant.fromEpochMilliseconds(maxOf(e.end, e.start + 1)).toLocalDateTime(z).date
+                val lastExclusive = if (endDay > firstDay) endDay else firstDay.plus(1, DateTimeUnit.DAY)
+                CalendarEntry(
+                    e.id, "event", e.title, firstDay.atStartOfDayIn(zone).toEpochMilliseconds(), lastExclusive.atStartOfDayIn(zone).toEpochMilliseconds(),
+                    true, visible[e.sourceId]?.color, location = e.location,
+                )
+            } else {
+                CalendarEntry(e.id, "event", e.title, e.start, maxOf(e.end, e.start), false, visible[e.sourceId]?.color, location = e.location)
+            }
         } + tasks.filter { !it.deleted && it.trashedAt == null && it.status != -1 }.mapNotNull { t -> taskEntry(t, zone) }
 
         return (0 until count).map { i ->

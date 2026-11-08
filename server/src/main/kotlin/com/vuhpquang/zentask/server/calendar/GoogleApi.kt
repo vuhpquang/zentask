@@ -24,6 +24,7 @@ data class GoogleTokens(
     val access_token: String = "",
     val refresh_token: String? = null,
     val expires_in: Long = 0,
+    val scope: String = "",
 )
 
 @Serializable
@@ -130,7 +131,8 @@ class GoogleApi(
 
     private suspend fun <T> decode(res: HttpResponse, s: KSerializer<T>): T {
         val text = res.bodyAsText()
-        if (res.status.value == 401) throw InvalidGrantException()
+        // 401: token gone; 403: the calendar permission was not granted or was removed.
+        if (res.status.value == 401 || (res.status.value == 403 && text.contains("insufficient", ignoreCase = true))) throw InvalidGrantException()
         if (res.status.value !in 200..299) throw GoogleApiException("${res.call.request.url.encodedPath}: HTTP ${res.status.value}")
         return json.decodeFromString(s, text)
     }
@@ -143,7 +145,8 @@ class GoogleApi(
             out += page.items
             token = page.nextPageToken ?: return out
         }
-        return out
+        // A partial list would tombstone the rest: refuse instead.
+        throw GoogleApiException("too many pages")
     }
 
     private fun encode(s: String) = java.net.URLEncoder.encode(s, Charsets.UTF_8).replace("+", "%20")
