@@ -103,4 +103,21 @@ class FiltersTest {
         val byDate = index.sections(TaskFilter.InProject("work"), now, zone, ViewOptions(sort = "date", group = "none"))
         assertEquals(listOf("d", "a", "c"), byDate.first().rows.map { it.task.id }, "dated first, oldest first")
     }
+
+    @Test
+    fun matchAnyAndNewDateRanges() {
+        assertEquals(setOf("a", "c", "d", "b"), ids("""{"lists":["home"],"priorities":[5,3],"match":"any"}"""), "home OR priority")
+        // Today is Sunday 8 Nov; weeks start on Monday.
+        assertEquals(setOf("a"), ids("""{"due":"thisweek"}"""), "Mon 2 – Sun 8")
+        assertEquals(setOf("b"), ids("""{"due":"nextweek"}"""), "Mon 9 – Sun 15")
+        assertEquals(setOf("a", "b", "d"), ids("""{"due":"thismonth"}"""))
+    }
+
+    @Test
+    fun countsIncludeStatusLists() {
+        val index = TaskIndex(tasks, projects, emptyList(), emptyList(), emptyList())
+        val counts = index.counts(now, zone)
+        assertEquals(1, counts[TaskFilter.Smart(com.vuhpquang.zentask.tasks.SmartList.COMPLETED)])
+        assertEquals(0, counts[TaskFilter.Smart(com.vuhpquang.zentask.tasks.SmartList.TRASH)])
+    }
 }

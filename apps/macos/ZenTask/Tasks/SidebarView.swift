@@ -12,7 +12,7 @@ struct SidebarView: View {
         @Bindable var tasks = tasks
         List(selection: Binding(get: { tasks.sidebar }, set: { if let v = $0 { tasks.sidebar = v } })) {
             Section {
-                ForEach(smart, id: \.self) { list in
+                ForEach(smart.filter { tasks.shows($0) }, id: \.self) { list in
                     row(TasksModel.title(list), symbol: TasksModel.symbol(list), item: .smart(list))
                 }
             }
@@ -76,8 +76,10 @@ struct SidebarView: View {
                 }
             }
             Section {
-                ForEach(status, id: \.self) { list in
-                    Label(TasksModel.title(list), systemImage: TasksModel.symbol(list)).tag(SidebarItem.smart(list))
+                ForEach(status.filter { tasks.shows($0) }, id: \.self) { list in
+                    Label(TasksModel.title(list), systemImage: TasksModel.symbol(list))
+                        .tag(SidebarItem.smart(list))
+                        .dropDestination(for: String.self) { ids, _ in tasks.drop(ids, onto: .smart(list)) }
                 }
             }
         }

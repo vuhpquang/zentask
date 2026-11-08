@@ -47,4 +47,16 @@ class ZenTaskCoreTest {
         assertTrue(core.store.list(com.vuhpquang.zentask.model.EntityTypes.filter).isEmpty())
         core.close()
     }
+
+    @Test
+    fun smartListModesPersistWithDefaults() {
+        val core = ZenTaskCore(dbPath = null)
+        assertEquals("show", core.smartListMode(com.vuhpquang.zentask.tasks.SmartList.TODAY))
+        assertEquals("nonempty", core.smartListMode(com.vuhpquang.zentask.tasks.SmartList.TOMORROW))
+        core.setSmartListMode(com.vuhpquang.zentask.tasks.SmartList.TODAY, "hide")
+        core.setSmartListMode(com.vuhpquang.zentask.tasks.SmartList.TRASH, "nonempty")
+        assertEquals("hide", core.smartListMode(com.vuhpquang.zentask.tasks.SmartList.TODAY))
+        assertEquals("nonempty", core.smartListMode(com.vuhpquang.zentask.tasks.SmartList.TRASH))
+        core.close()
+    }
 }

@@ -70,6 +70,7 @@ final class TasksModel {
     private(set) var index: TaskIndex?
     private(set) var sections: [TaskSection] = []
     private(set) var counts: [String: KotlinInt] = [:]
+    private(set) var smartModes: [SmartList: String] = [:]
     private(set) var projects: [Project] = []
     private(set) var groups: [ProjectGroup] = []
     private(set) var tags: [Tag] = []
@@ -108,6 +109,7 @@ final class TasksModel {
         tags = idx.tags.filter { !$0.deleted }
         groups = core.projectGroups()
         counts = core.sidebarCounts(index: idx)
+        smartModes = Dictionary(uniqueKeysWithValues: TasksModel.allSmart.map { ($0, core.smartListMode(list: $0)) })
         recompute()
         await recomputeTask?.value
         if let reminders { await reminders.reschedule(core.plannedReminders(index: idx)) }
@@ -269,6 +271,17 @@ final class TasksModel {
         if task.trashedAt != nil { return }
         core.actions.trash(id: task.id)
         selection = nil
+    }
+
+    static let allSmart: [SmartList] = [.today, .tomorrow, .next7Days, .inbox, .all, .completed, .wontDo, .trash]
+
+    /// Sidebar visibility from Settings → Smart lists (Show / Show if not empty / Hide).
+    func shows(_ list: SmartList) -> Bool {
+        switch smartModes[list] ?? "show" {
+        case "hide": return false
+        case "nonempty": return count(.smart(list)) > 0 || sidebar == .smart(list)
+        default: return true
+        }
     }
 
     static func title(_ list: SmartList) -> String {

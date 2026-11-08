@@ -263,10 +263,15 @@ struct TaskMenu: View {
     let task: ZTask
 
     var body: some View {
+        items.labelStyle(.titleAndIcon) // menus show each item's icon, as TickTick's does
+    }
+
+    @ViewBuilder
+    private var items: some View {
         let actions = tasks.core.actions
         if task.trashedAt != nil {
-            Button("Restore") { actions.restore(id: task.id) }
-            Button("Delete permanently…", role: .destructive) { tasks.confirmDelete = task }
+            Button { actions.restore(id: task.id) } label: { Label("Restore", systemImage: "arrow.uturn.backward") }
+            Button(role: .destructive) { tasks.confirmDelete = task } label: { Label("Delete permanently…", systemImage: "trash.slash") }
         } else {
             Section("Date") {
                 ControlGroup {
@@ -296,8 +301,12 @@ struct TaskMenu: View {
                 Button { actions.wontDo(id: task.id) } label: { Label("Won't do", systemImage: "xmark.circle") }
             }
             Menu {
-                Button("Inbox") { actions.move(id: task.id, projectId: "inbox") }
-                ForEach(tasks.listProjects, id: \.id) { p in Button(p.name) { actions.move(id: task.id, projectId: p.id) } }
+                Button { actions.move(id: task.id, projectId: "inbox") } label: { Label("Inbox", systemImage: "tray") }
+                ForEach(tasks.listProjects, id: \.id) { p in
+                    Button { actions.move(id: task.id, projectId: p.id) } label: {
+                        Label { Text(p.name) } icon: { Symbols.tinted("list.bullet", NSColor(Color(hex: p.color) ?? .secondary)) }
+                    }
+                }
             } label: { Label("Move to", systemImage: "arrow.right.square") }
             Menu {
                 ForEach(tasks.tags, id: \.id) { tag in

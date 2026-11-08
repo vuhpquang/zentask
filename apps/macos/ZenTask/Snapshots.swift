@@ -14,6 +14,7 @@ enum Snapshots {
         let settings: [(String, AnyView, CGSize)] = [
             ("settings-account", AnyView(AccountSettings().frame(width: Theme.Size.settingsWidth)), CGSize(width: 540, height: 300)),
             ("settings-ticktick", AnyView(TickTickSettings().frame(width: Theme.Size.settingsWidth)), CGSize(width: 540, height: 520)),
+            ("settings-smartlists", AnyView(SmartListSettings().frame(width: Theme.Size.settingsWidth)), CGSize(width: 540, height: 480)),
         ]
         for (name, view, size) in settings { both(view.environment(model), size: size, name: name, dir: dir) }
         wait { await tasks.reload() }

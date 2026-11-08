@@ -133,13 +133,22 @@ struct FilterEditor: View {
     @State private var due = "any"
     @State private var keyword = ""
 
-    private let dues = [("any", "Any date"), ("today", "Today"), ("tomorrow", "Tomorrow"), ("next7", "Next 7 days"), ("overdue", "Overdue"), ("nodate", "No date")]
+    @State private var matchAny = false
+    private let dues = [
+        ("any", "Any date"), ("today", "Today"), ("tomorrow", "Tomorrow"), ("thisweek", "This week"), ("nextweek", "Next week"),
+        ("next7", "Next 7 days"), ("thismonth", "This month"), ("overdue", "Overdue"), ("nodate", "No date"),
+    ]
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.l) {
             Text(filter == nil ? "New smart list" : "Edit smart list").font(.title3.weight(.semibold))
             Form {
                 TextField("Name", text: $name)
+                Picker("Show tasks matching", selection: $matchAny) {
+                    Text("All conditions").tag(false)
+                    Text("Any condition").tag(true)
+                }
+                .pickerStyle(.segmented)
                 Section("Lists") {
                     ForEach(tasks.projects.filter { !$0.closed }, id: \.id) { p in
                         Toggle(p.name, isOn: binding($lists, p.id))
@@ -195,12 +204,13 @@ struct FilterEditor: View {
         priorities = Set(rule.priorities.map { $0.int32Value })
         due = rule.due ?? "any"
         keyword = rule.keyword ?? ""
+        matchAny = rule.match == "any"
     }
 
     private func save() {
         let rule = FilterRule(
             lists: Array(lists), tags: Array(tags), priorities: priorities.map { KotlinInt(int: $0) },
-            due: due == "any" ? nil : due, keyword: keyword.isEmpty ? nil : keyword
+            due: due == "any" ? nil : due, keyword: keyword.isEmpty ? nil : keyword, match: matchAny ? "any" : "all"
         )
         let saved = tasks.core.saveFilter(id: filter?.id, name: name, rule: rule)
         tasks.sidebar = .custom(saved.id)

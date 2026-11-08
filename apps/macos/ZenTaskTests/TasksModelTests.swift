@@ -73,7 +73,7 @@ final class TasksModelTests: XCTestCase {
         m.sidebar = .smart(.inbox)
         m.quickAdd("Urgent thing !high")
         m.quickAdd("Calm thing")
-        let f = m.core.saveFilter(id: nil, name: "Hot", rule: FilterRule(lists: [], tags: [], priorities: [KotlinInt(int: 5)], due: nil, keyword: nil))
+        let f = m.core.saveFilter(id: nil, name: "Hot", rule: FilterRule(lists: [], tags: [], priorities: [KotlinInt(int: 5)], due: nil, keyword: nil, match: "all"))
         await m.reload()
         m.sidebar = .custom(f.id)
         await m.settle()
@@ -123,5 +123,21 @@ final class TasksModelTests: XCTestCase {
         XCTAssertTrue(m.drop([b], intoColumn: doing.id))
         await m.reload(); await m.settle()
         XCTAssertEqual(m.sections.first { $0.columnId == doing.id }?.rows.map(\.task.title), ["B"])
+    }
+
+    func testSmartListModesHideAndShowIfNotEmpty() async throws {
+        let m = await model()
+        m.core.setSmartListMode(list: .today, mode: "hide")
+        m.core.setSmartListMode(list: .trash, mode: "nonempty")
+        await m.reload()
+        XCTAssertFalse(m.shows(.today))
+        XCTAssertFalse(m.shows(.trash), "empty trash is hidden")
+        m.sidebar = .smart(.inbox)
+        m.quickAdd("Throw away")
+        await m.reload()
+        m.core.actions.trash(id: try XCTUnwrap(m.selection))
+        await m.reload()
+        XCTAssertTrue(m.shows(.trash))
+        XCTAssertTrue(m.shows(.inbox))
     }
 }

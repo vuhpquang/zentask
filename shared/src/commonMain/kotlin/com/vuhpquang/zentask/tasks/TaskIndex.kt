@@ -16,6 +16,8 @@ import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.isoDayNumber
+import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Instant
@@ -159,6 +161,11 @@ class TaskIndex(
             val f = TaskFilter.Smart(list)
             out[f] = open.count { matches(it, f, today, zone) }
         }
+        // Status lists count everything they show ("Show if not empty" in the sidebar).
+        for (list in listOf(SmartList.COMPLETED, SmartList.WONT_DO, SmartList.TRASH)) {
+            val f = TaskFilter.Smart(list)
+            out[f] = tasks.count { matches(it, f, today, zone) }
+        }
         open.groupingBy { it.projectId }.eachCount().forEach { (id, n) -> out[TaskFilter.InProject(id)] = n }
         open.flatMap { t -> t.tags.distinct() }.groupingBy { it }.eachCount().forEach { (tag, n) -> out[TaskFilter.WithTag(tag)] = n }
         filters.forEach { f -> out[TaskFilter.Custom(f.id)] = open.count { matches(it, TaskFilter.Custom(f.id), today, zone) } }
@@ -191,23 +198,31 @@ class TaskIndex(
     }
 
     private fun ruleMatches(t: Task, r: FilterRule, today: LocalDate, zone: TimeZone): Boolean {
-        if (r.lists.isNotEmpty() && t.projectId !in r.lists) return false
-        if (r.tags.isNotEmpty() && r.tags.none { want -> t.tags.any { it.equals(want, ignoreCase = true) } }) return false
-        if (r.priorities.isNotEmpty() && t.priority !in r.priorities) return false
-        r.keyword?.takeIf { it.isNotBlank() }?.let { k ->
-            val key = QuickAddParser.fold(k.lowercase())
-            if (!QuickAddParser.fold((t.title + "\n" + t.content).lowercase()).contains(key)) return false
-        }
         val d = day(t, zone)
-        return when (r.due) {
-            null, "", "any" -> true
-            "today" -> d != null && d <= today
-            "tomorrow" -> d == today.plus(1, DateTimeUnit.DAY)
-            "next7" -> d != null && d <= today.plus(6, DateTimeUnit.DAY)
-            "overdue" -> d != null && d < today
-            "nodate" -> d == null
-            else -> false
+        val monday = today.minus(today.dayOfWeek.isoDayNumber - 1, DateTimeUnit.DAY)
+        // Each field the rule sets gives one check; unset fields don't take part.
+        val checks = buildList {
+            if (r.lists.isNotEmpty()) add(t.projectId in r.lists)
+            if (r.tags.isNotEmpty()) add(r.tags.any { want -> t.tags.any { it.equals(want, ignoreCase = true) } })
+            if (r.priorities.isNotEmpty()) add(t.priority in r.priorities)
+            r.keyword?.takeIf { it.isNotBlank() }?.let { k ->
+                add(QuickAddParser.fold((t.title + "\n" + t.content).lowercase()).contains(QuickAddParser.fold(k.lowercase())))
+            }
+            when (r.due) {
+                null, "", "any" -> Unit
+                "today" -> add(d != null && d <= today)
+                "tomorrow" -> add(d == today.plus(1, DateTimeUnit.DAY))
+                "next7" -> add(d != null && d <= today.plus(6, DateTimeUnit.DAY))
+                "thisweek" -> add(d != null && d >= monday && d <= monday.plus(6, DateTimeUnit.DAY))
+                "nextweek" -> add(d != null && d >= monday.plus(7, DateTimeUnit.DAY) && d <= monday.plus(13, DateTimeUnit.DAY))
+                "thismonth" -> add(d != null && d.year == today.year && d.month == today.month)
+                "overdue" -> add(d != null && d < today)
+                "nodate" -> add(d == null)
+                else -> add(false)
+            }
         }
+        if (checks.isEmpty()) return true
+        return if (r.match == "any") checks.any { it } else checks.all { it }
     }
 
     private fun childTags(name: String): Set<String> {

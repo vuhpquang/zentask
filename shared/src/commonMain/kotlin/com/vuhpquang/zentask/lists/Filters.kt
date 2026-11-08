@@ -7,7 +7,8 @@ import kotlinx.serialization.SerializationException
 /**
  * A custom smart list's rule (stored as JSON in `Filter.rule`). Fields combine with AND, values inside
  * a field with OR. Unknown keys are ignored; a rule that can't be read matches nothing.
- * `due`: today (incl. overdue) | tomorrow | next7 (incl. overdue) | overdue | nodate | any.
+ * `due`: today (incl. overdue) | tomorrow | next7 (incl. overdue) | thisweek | nextweek | thismonth |
+ * overdue | nodate | any (weeks start on Monday). `match`: all (fields AND, the default) | any (fields OR).
  */
 @Serializable
 data class FilterRule(
@@ -16,6 +17,7 @@ data class FilterRule(
     val priorities: List<Int> = emptyList(),
     val due: String? = null,
     val keyword: String? = null,
+    val match: String = "all",
 ) {
     fun encode(): String = ZenJson.encodeToString(serializer(), this)
 

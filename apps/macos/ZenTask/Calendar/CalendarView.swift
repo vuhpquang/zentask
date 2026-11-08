@@ -549,14 +549,39 @@ private struct AgendaList: View {
 
 // MARK: - Unscheduled panel
 
-/// Open tasks without a date, to drag onto the calendar.
+/// Tasks of a chosen list (or all lists) without a date, to drag onto the calendar.
 private struct UnscheduledPanel: View {
     @Environment(TasksModel.self) private var tasks
+    @AppStorage("calendar.panelList") private var listId = ""
 
     var body: some View {
-        let rows = (tasks.index?.allTasks ?? []).filter { $0.isOpen && $0.trashedAt == nil && $0.startDate == nil && $0.dueDate == nil && $0.parentId == nil }
+        let rows = (tasks.index?.allTasks ?? []).filter {
+            $0.isOpen && $0.trashedAt == nil && $0.startDate == nil && $0.dueDate == nil && $0.parentId == nil &&
+                (listId.isEmpty || $0.projectId == listId)
+        }
         VStack(alignment: .leading, spacing: 0) {
-            Text("Unscheduled").font(.headline).padding(Theme.Space.l)
+            Picker(selection: $listId) {
+                Label("All lists", systemImage: "square.stack").tag("")
+                Label("Inbox", systemImage: "tray").tag("inbox")
+                Divider()
+                ForEach(tasks.listProjects, id: \.id) { p in
+                    Label { Text(p.name) } icon: { Image(systemName: "list.bullet") }.tag(p.id)
+                }
+            } label: {
+                EmptyView()
+            }
+            .pickerStyle(.menu)
+            .labelsHidden()
+            .controlSize(.large)
+            .padding(.horizontal, Theme.Space.l)
+            .padding(.top, Theme.Space.l)
+            HStack {
+                Text("No date").font(.headline)
+                Spacer()
+                Text("\(rows.count)").foregroundStyle(.secondary).monospacedDigit()
+            }
+            .padding(.horizontal, Theme.Space.l)
+            .padding(.top, Theme.Space.m)
             Text("Drag a task onto the calendar to give it a time").font(.caption).foregroundStyle(.secondary)
                 .padding(.horizontal, Theme.Space.l).padding(.bottom, Theme.Space.s)
             List(rows.prefix(300), id: \.id) { task in
@@ -566,8 +591,10 @@ private struct UnscheduledPanel: View {
                 }
                 .padding(.vertical, Theme.Space.xxs)
                 .draggable(task.id)
+                .contextMenu { TaskMenu(task: task) }
             }
             .listStyle(.inset)
+            .overlay { if rows.isEmpty { ContentUnavailableView("Nothing without a date", systemImage: "checkmark.circle") } }
         }
     }
 }

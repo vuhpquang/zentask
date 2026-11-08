@@ -1,4 +1,5 @@
 import SwiftUI
+@preconcurrency import ZenTaskShared
 import UniformTypeIdentifiers
 
 /// Settings window (⌘,): stock tabs and grouped forms.
@@ -9,6 +10,8 @@ struct SettingsView: View {
                 .tabItem { Label("Account", systemImage: "person.crop.circle") }
             TickTickSettings()
                 .tabItem { Label("TickTick", systemImage: "arrow.down.circle") }
+            SmartListSettings()
+                .tabItem { Label("Smart lists", systemImage: "line.3.horizontal.decrease.circle") }
             CalendarSettings()
                 .tabItem { Label("Calendars", systemImage: "calendar") }
         }
@@ -63,7 +66,7 @@ struct AccountSettings: View {
 
     private func signIn() {
         let typed = password
-        Task {
+        _Concurrency.Task {
             await model.signIn(password: typed)
             if model.signedIn { password = "" }
         }
@@ -114,9 +117,9 @@ struct TickTickSettings: View {
                 HStack {
                     if model.ticktickBusy { ProgressView().controlSize(.small) }
                     Spacer()
-                    Button("Check for changes") { Task { await model.previewTickTick() } }
+                    Button("Check for changes") { _Concurrency.Task { await model.previewTickTick() } }
                         .disabled(!model.hasCookie || model.ticktickBusy)
-                    Button("Sync from TickTick") { Task { await model.applyTickTick(confirmed: false) } }
+                    Button("Sync from TickTick") { _Concurrency.Task { await model.applyTickTick(confirmed: false) } }
                         .keyboardShortcut(.defaultAction)
                         .disabled(model.pending == nil || model.ticktickBusy)
                 }
@@ -137,13 +140,13 @@ struct TickTickSettings: View {
         }
         .formStyle(.grouped)
         .fileImporter(isPresented: $choosingCsv, allowedContentTypes: [.commaSeparatedText, .plainText]) { result in
-            if case .success(let url) = result { Task { await model.importCsv(from: url) } }
+            if case .success(let url) = result { _Concurrency.Task { await model.importCsv(from: url) } }
         }
         .confirmationDialog(
             "Move \(model.pending.map { Int($0.plan.trashed) } ?? 0) items to Trash?",
             isPresented: $model.confirmMassTrash
         ) {
-            Button("Move to Trash", role: .destructive) { Task { await model.applyTickTick(confirmed: true) } }
+            Button("Move to Trash", role: .destructive) { _Concurrency.Task { await model.applyTickTick(confirmed: true) } }
             Button("Cancel", role: .cancel) { model.confirmMassTrash = false }
         } message: {
             Text("TickTick no longer returns them. They stay in ZenTask's Trash and can be restored.")
@@ -165,6 +168,39 @@ struct ProblemLabel: View {
             Text(text)
         } icon: {
             Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+        }
+    }
+}
+
+/// Settings → Smart lists: which built-in lists the sidebar shows (as TickTick's Smart List settings).
+struct SmartListSettings: View {
+    @Environment(AppModel.self) private var app
+    @State private var modes: [SmartList: String] = [:]
+
+    var body: some View {
+        Form {
+            Section {
+                ForEach(TasksModel.allSmart, id: \.self) { list in
+                    Picker(selection: Binding(get: { modes[list] ?? "show" }, set: { mode in
+                        app.core.setSmartListMode(list: list, mode: mode)
+                        modes[list] = mode
+                    })) {
+                        Text("Show").tag("show")
+                        Text("Show if not empty").tag("nonempty")
+                        Text("Hide").tag("hide")
+                    } label: {
+                        Label(TasksModel.title(list), systemImage: TasksModel.symbol(list))
+                    }
+                }
+            } header: {
+                Text("Smart lists")
+            } footer: {
+                Text("Your own smart lists are made with the + next to Smart lists in the sidebar. These choices sync to all your devices")
+            }
+        }
+        .formStyle(.grouped)
+        .onAppear {
+            modes = Dictionary(uniqueKeysWithValues: TasksModel.allSmart.map { ($0, app.core.smartListMode(list: $0)) })
         }
     }
 }

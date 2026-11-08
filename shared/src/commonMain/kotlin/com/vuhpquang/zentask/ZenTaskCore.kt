@@ -27,7 +27,9 @@ import com.vuhpquang.zentask.model.CalendarAccount
 import com.vuhpquang.zentask.model.CalendarSource
 import com.vuhpquang.zentask.model.ZenJson
 import kotlinx.datetime.toLocalDateTime
+import com.vuhpquang.zentask.tasks.SmartList
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
 import com.vuhpquang.zentask.lists.ListActions
 import com.vuhpquang.zentask.lists.SortOrder
@@ -125,6 +127,24 @@ class ZenTaskCore(
     }
 
     fun deleteFilter(id: String) = store.delete(EntityTypes.filter, id)
+
+    /** How each built-in smart list shows in the sidebar: `show`, `nonempty` (show if not empty) or `hide`. */
+    fun smartListMode(list: SmartList): String =
+        smartListModes()[list.name] ?: if (list == SmartList.TOMORROW || list == SmartList.WONT_DO) "nonempty" else "show"
+
+    fun setSmartListMode(list: SmartList, mode: String) {
+        val next = smartListModes() + (list.name to mode)
+        val value = ZenJson.encodeToString(MapSerializer(String.serializer(), String.serializer()), next)
+        if (store.get(EntityTypes.preference, SMART_LISTS) == null) {
+            store.put(EntityTypes.preference, Preference(id = SMART_LISTS, key = SMART_LISTS, value = value))
+        } else {
+            store.update(EntityTypes.preference, SMART_LISTS) { it.copy(value = value, deleted = false) }
+        }
+    }
+
+    private fun smartListModes(): Map<String, String> =
+        store.get(EntityTypes.preference, SMART_LISTS)?.takeIf { !it.deleted }?.value
+            ?.let { runCatching { ZenJson.decodeFromString(MapSerializer(String.serializer(), String.serializer()), it) }.getOrNull() } ?: emptyMap()
 
     fun filterRule(filter: Filter): FilterRule = FilterRule.parse(filter.rule) ?: FilterRule()
 
@@ -294,6 +314,7 @@ class ZenTaskCore(
     companion object {
         const val DEFAULT_SERVER = "https://zentask-api.vuhpquang.com"
         private const val HIDDEN_CALENDARS = "calendar.hidden"
+        private const val SMART_LISTS = "sidebar.smartLists"
 
         /** Swift-friendly constructor: default server and the platform HTTP client. */
         fun open(dbPath: String?): ZenTaskCore = ZenTaskCore(dbPath)
