@@ -66,6 +66,9 @@ enum Theme {
         static let headerHeight: CGFloat = 44
         static let snapMinutes = 15
         static let sideBarWidth: CGFloat = 260
+        /// Length of a dropped task's block (matches CalendarQueries.TASK_MINUTES).
+        static let taskMinutes = 30
+        static let ghostMin: CGFloat = 20
         static let miniDay: CGFloat = 24
         static let miniDot: CGFloat = 4
         static let lunarSize: CGFloat = 8
@@ -116,6 +119,12 @@ enum Theme {
         static let pickerIcon: CGFloat = 20
         static let barWidth: CGFloat = 3
         static let foldAnimation: Animation = .snappy(duration: 0.28)
+    }
+
+    /** The new-task card. */
+    enum Composer {
+        static let width: CGFloat = 440
+        static let bodyHeight: CGFloat = 150
     }
 
     /** Search overlay. */
@@ -191,6 +200,7 @@ enum Theme {
         static let minRow: CGFloat = 40
         static let tagField: CGFloat = 90
         static let iconField: CGFloat = 44
+        static let emojiCell: CGFloat = 32
         static let pickerWidth: CGFloat = 240
         static let pickerMaxHeight: CGFloat = 360
         static let filterWidth: CGFloat = 460

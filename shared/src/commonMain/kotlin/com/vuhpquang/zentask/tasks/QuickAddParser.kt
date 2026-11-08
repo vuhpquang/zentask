@@ -33,7 +33,7 @@ data class QuickAdd(
 
 /**
  * Quick add syntax (spec §11): `#tag`, `!high/!medium/!low/!none` (also `!1..!3`, `!cao/!vừa/!thấp`),
- * `^list` (prefix of a list name, ignoring emoji, case and diacritics), and dates in English or
+ * `^list` or `~list` (prefix of a list name, ignoring emoji, case and diacritics), and dates in English or
  * Vietnamese ("tomorrow 9am", "mai 3h chiều", "thứ 6", "tuần sau"). A token must start a word, so
  * "C# notes" or "wow!" stay as written. Capitalised "Mai" is a name, not "tomorrow". Tokens whose
  * start offset is in `ignored` (chips the user dismissed) are left in the title.
@@ -96,8 +96,8 @@ object QuickAddParser {
                     continue
                 }
             }
-            // ^list
-            if (w.text.startsWith("^") && w.text.length > 1) {
+            // ^list or ~list
+            if ((w.text.startsWith("^") || w.text.startsWith("~")) && w.text.length > 1) {
                 val query = fold(w.text.drop(1).lowercase())
                 projects.firstOrNull { nameKey(it.name).startsWith(query) }?.let { p ->
                     projectId = p.id

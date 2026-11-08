@@ -16,11 +16,7 @@ struct HabitEditor: View {
         VStack(alignment: .leading, spacing: Theme.Space.l) {
             Text(editingId == nil ? "New habit" : "Edit habit").font(.title3.weight(.semibold))
             HStack(spacing: Theme.Space.s) {
-                TextField("🙂", text: $draft.icon)
-                    .textFieldStyle(.roundedBorder)
-                    .multilineTextAlignment(.center)
-                    .frame(width: Theme.Size.iconField)
-                    .help("An emoji for the habit (optional)")
+                EmojiPicker(emoji: $draft.icon, placeholder: "target")
                 TextField("Name, e.g. Read 20 pages", text: $draft.name)
                     .textFieldStyle(.roundedBorder)
             }

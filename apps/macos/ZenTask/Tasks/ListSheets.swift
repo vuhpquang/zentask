@@ -147,11 +147,12 @@ struct FilterEditor: View {
         VStack(alignment: .leading, spacing: Theme.Space.l) {
             Text(filter == nil ? "New smart list" : "Edit smart list").font(.title3.weight(.semibold))
             Form {
-                HStack {
-                    TextField("Icon", text: $icon)
-                        .frame(width: Theme.Size.iconField)
-                        .help("An emoji shown in the sidebar")
-                    TextField("Name", text: $name)
+                HStack(spacing: Theme.Space.m) {
+                    EmojiPicker(emoji: $icon, placeholder: "line.3.horizontal.decrease.circle")
+                    TextField("Name", text: $name, prompt: Text("Name"))
+                        .labelsHidden()
+                        .textFieldStyle(.roundedBorder)
+                        .controlSize(.large)
                 }
                 Picker("Show tasks matching", selection: $matchAny) {
                     Text("All conditions").tag(false)

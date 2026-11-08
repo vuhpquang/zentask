@@ -134,4 +134,13 @@ class QuickAddParserTest {
         assertEquals("mua hoa mai", q.title)
         assertTrue(q.tokens.isEmpty())
     }
+
+    @Test
+    fun tildePicksAListLikeCaret() {
+        val a = p("Call bank ~work")
+        val b = p("Call bank ^work")
+        assertEquals("Call bank", a.title)
+        assertEquals(b.projectId, a.projectId)
+        assertTrue(a.projectId != null)
+    }
 }

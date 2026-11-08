@@ -14,6 +14,8 @@ struct SettingsView: View {
                 .tabItem { Label("Smart lists", systemImage: "line.3.horizontal.decrease.circle") }
             CalendarSettings()
                 .tabItem { Label("Calendars", systemImage: "calendar") }
+            HotkeySettings()
+                .tabItem { Label("Hotkeys", systemImage: "command") }
         }
         .frame(width: Theme.Size.settingsWidth)
     }

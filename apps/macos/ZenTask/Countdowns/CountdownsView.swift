@@ -171,11 +171,7 @@ struct CountdownEditor: View {
         VStack(alignment: .leading, spacing: Theme.Space.l) {
             Text(editingId == nil ? "New countdown" : "Edit countdown").font(.title3.weight(.semibold))
             HStack(spacing: Theme.Space.s) {
-                TextField("🎉", text: $draft.icon)
-                    .textFieldStyle(.roundedBorder)
-                    .multilineTextAlignment(.center)
-                    .frame(width: Theme.Size.iconField)
-                    .help("An emoji for the card (optional)")
+                EmojiPicker(emoji: $draft.icon, placeholder: "hourglass")
                 TextField("Name, e.g. Trip to Đà Lạt", text: $draft.name).textFieldStyle(.roundedBorder)
             }
             .controlSize(.large)

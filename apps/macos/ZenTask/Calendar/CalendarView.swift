@@ -80,7 +80,9 @@ struct CalendarView: View {
             Spacer()
             Button { addingTask = true } label: { Image(systemName: "plus") }
                 .help("New task on this day")
-                .popover(isPresented: $addingTask) { NewCalendarTask().environment(cal).environment(tasks) }
+                .popover(isPresented: $addingTask) {
+                    TaskComposer(start: .allDay(cal.calendar.startOfDay(for: cal.anchor))) { addingTask = false }.environment(tasks)
+                }
             Button("Today") { cal.today() }
                 .keyboardShortcut("t", modifiers: .command)
             HStack(spacing: Theme.Space.xxs) {
@@ -230,33 +232,131 @@ struct WeekGrid: View {
 private struct DayColumn: View {
     @Environment(CalendarModel.self) private var cal
     let day: CalendarDay
+    /// Where a dragged task would land (snapped minute), while a drag hovers this column.
+    @State private var dropMinute: Int?
+    /// A range being dragged out on empty space, then the new-task card for it.
+    @State private var draft: (start: Int, end: Int)?
+    @State private var composing = false
 
     var body: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .topLeading) {
-                VStack(spacing: 0) {
-                    ForEach(0..<24, id: \.self) { _ in
-                        Rectangle().fill(.clear).frame(height: cal.hourHeight)
-                            .overlay(alignment: .top) { Divider() }
-                    }
+        let snap = Theme.Calendar.snapMinutes
+        ZStack(alignment: .topLeading) {
+            VStack(spacing: 0) {
+                ForEach(0..<24, id: \.self) { _ in
+                    Rectangle().fill(.clear).frame(height: cal.hourHeight)
+                        .overlay(alignment: .top) { Divider() }
                 }
+            }
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 4)
+                    .onChanged { v in
+                        let a = minute(at: v.startLocation.y), b = minute(at: v.location.y)
+                        let lo = min(a, b), hi = max(max(a, b), lo + snap)
+                        if draft?.start != lo || draft?.end != hi { withMotion { draft = (lo, min(hi, 24 * 60)) } }
+                    }
+                    .onEnded { _ in composing = draft != nil },
+            )
+            GeometryReader { geo in
                 ForEach(day.timed, id: \.entry.id) { placed in
                     let width = geo.size.width / CGFloat(max(placed.columns, 1))
                     EntryBlock(entry: placed.entry)
                         .frame(width: max(width - 2, 0), height: max(CGFloat(placed.endMinute - placed.startMinute) / 60 * cal.hourHeight - 2, 18))
                         .offset(x: CGFloat(placed.column) * width + 1, y: CGFloat(placed.startMinute) / 60 * cal.hourHeight + 1)
                 }
-                if cal.calendar.isDateInToday(cal.date(of: day)) { NowLine(hourHeight: cal.hourHeight) }
             }
-            .dropDestination(for: String.self) { ids, location in
-                let live = cal.liveTaskIds(ids)
-                let minute = Int(location.y / cal.hourHeight * 60)
-                live.forEach { cal.schedule(taskId: $0, on: day, minute: minute) }
-                return !live.isEmpty
+            if cal.calendar.isDateInToday(cal.date(of: day)) { NowLine(hourHeight: cal.hourHeight) }
+            if let m = dropMinute {
+                GhostBlock(start: m, end: m + Theme.Calendar.taskMinutes, dayStart: cal.date(of: day), hourHeight: cal.hourHeight)
+                    .allowsHitTesting(false)
+            }
+            if let d = draft {
+                GhostBlock(start: d.start, end: d.end, dayStart: cal.date(of: day), hourHeight: cal.hourHeight)
+                    .popover(isPresented: $composing, arrowEdge: .trailing) {
+                        TaskComposer(start: .span(time(d.start), time(d.end))) { composing = false }
+                    }
             }
         }
         .frame(height: 24 * cal.hourHeight)
         .overlay(alignment: .leading) { Divider() }
+        .onDrop(of: [.plainText], delegate: ColumnDrop(model: cal, dayStart: day.dayStart, hourHeight: cal.hourHeight, minute: $dropMinute))
+        .onChange(of: composing) { _, open in if !open { withMotion { draft = nil } } }
+    }
+
+    /// The minute under a y position, snapped to the 15-minute grid.
+    private func minute(at y: CGFloat) -> Int {
+        let raw = Int(y / cal.hourHeight * 60)
+        let snap = Theme.Calendar.snapMinutes
+        return max(0, min(24 * 60 - snap, (raw / snap) * snap))
+    }
+
+    private func time(_ minute: Int) -> Date { cal.date(of: day).addingTimeInterval(Double(minute) * 60) }
+}
+
+/// A dashed placeholder showing where a task will go, with its time ("13:15 – 13:45").
+private struct GhostBlock: View {
+    let start: Int
+    let end: Int
+    let dayStart: Date
+    let hourHeight: CGFloat
+
+    var body: some View {
+        let from = dayStart.addingTimeInterval(Double(start) * 60)
+        let to = dayStart.addingTimeInterval(Double(end) * 60)
+        Text("\(from.formatted(date: .omitted, time: .shortened)) – \(to.formatted(date: .omitted, time: .shortened))")
+            .font(.caption.weight(.semibold).monospacedDigit())
+            .foregroundStyle(.tint)
+            .padding(Theme.Space.xs)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .frame(height: max(CGFloat(end - start) / 60 * hourHeight - 2, Theme.Calendar.ghostMin), alignment: .topLeading)
+            .background(RoundedRectangle(cornerRadius: Theme.Calendar.eventRadius, style: .continuous).fill(.tint.opacity(Theme.Opacity.chip)))
+            .overlay(RoundedRectangle(cornerRadius: Theme.Calendar.eventRadius, style: .continuous)
+                .strokeBorder(.tint, style: StrokeStyle(lineWidth: Theme.Habits.ringStrong, dash: [Theme.Space.xs, Theme.Space.xxs])))
+            .padding(.horizontal, 1)
+            .offset(y: CGFloat(start) / 60 * hourHeight + 1)
+    }
+}
+
+/// Drop target for a day column: tracks the snapped minute under the pointer (for the placeholder) and
+/// schedules the dropped task ids there.
+private struct ColumnDrop: DropDelegate {
+    let model: CalendarModel
+    let dayStart: Int64
+    let hourHeight: CGFloat
+    @Binding var minute: Int?
+
+    private func snapped(_ info: DropInfo) -> Int {
+        let snap = Theme.Calendar.snapMinutes
+        // Centre the default-length block on the pointer.
+        let raw = Int(info.location.y / hourHeight * 60) - Theme.Calendar.taskMinutes / 2
+        return max(0, min(24 * 60 - snap, Int((Double(raw) / Double(snap)).rounded()) * snap))
+    }
+
+    func validateDrop(info: DropInfo) -> Bool { info.hasItemsConforming(to: [.plainText]) }
+
+    func dropEntered(info: DropInfo) { withMotion { minute = snapped(info) } }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        let m = snapped(info)
+        if m != minute { withMotion { minute = m } }
+        return DropProposal(operation: .move)
+    }
+
+    func dropExited(info: DropInfo) { withMotion { minute = nil } }
+
+    func performDrop(info: DropInfo) -> Bool {
+        let m = snapped(info)
+        let model = self.model, dayStart = self.dayStart
+        withMotion { minute = nil }
+        let providers = info.itemProviders(for: [.plainText])
+        guard !providers.isEmpty else { return false }
+        for provider in providers {
+            _ = provider.loadObject(ofClass: NSString.self) { object, _ in
+                guard let id = object as? String else { return }
+                _Concurrency.Task { @MainActor in model.schedule(taskId: id, dayStart: dayStart, minute: m) }
+            }
+        }
+        return true
     }
 }
 

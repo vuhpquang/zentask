@@ -192,4 +192,12 @@ final class HabitsModelTests: XCTestCase {
         XCTAssertTrue(m.isFolded("all"))
         m.toggleFold("all")
     }
+
+    func testKeyComboStoresAndDisplays() throws {
+        let combo = KeyCombo(keyCode: 45, modifiers: [.control, .option, .capsLock])
+        XCTAssertEqual(KeyCombo(stored: combo.stored), combo, "round trip, caps lock ignored")
+        XCTAssertTrue(combo.display.hasPrefix("⌃⌥"))
+        XCTAssertNil(KeyCombo(stored: "junk"))
+        XCTAssertNotEqual(combo.carbonModifiers, 0)
+    }
 }

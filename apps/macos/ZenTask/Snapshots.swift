@@ -43,6 +43,8 @@ enum Snapshots {
                 both(view.environment(model).environment(tasks), size: CGSize(width: 480, height: 620), name: name, dir: dir)
             }
             both(AnyView(MatrixView(openTask: { _ in })).environment(model).environment(tasks), size: windowSize, name: "matrix", dir: dir)
+            both(AnyView(TaskComposer(start: .allDay(.now)) {}).environment(tasks), size: CGSize(width: 440, height: 300), name: "composer", dir: dir)
+            both(AnyView(HotkeySettings().frame(width: Theme.Size.settingsWidth)), size: CGSize(width: 540, height: 560), name: "settings-hotkeys", dir: dir)
             both(AnyView(SearchOverlay(open: { _, _ in }, close: {})).environment(tasks), size: CGSize(width: 600, height: 340), name: "search", dir: dir)
             tasks.sidebar = .smart(.all)
             wait { await tasks.settle() }

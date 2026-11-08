@@ -191,6 +191,12 @@ final class CalendarModel {
         ids.filter { id in core.task(id: id).map { !$0.deleted && $0.trashedAt == nil } ?? false }
     }
 
+    /// Schedules a task dropped on a day column (by the day's local midnight); ignores ids that aren't live tasks.
+    func schedule(taskId: String, dayStart: Int64, minute: Int) {
+        guard !liveTaskIds([taskId]).isEmpty, let day = days.first(where: { $0.dayStart == dayStart }) else { return }
+        schedule(taskId: taskId, on: day, minute: minute)
+    }
+
     func schedule(taskId: String, on day: CalendarDay, minute: Int?) {
         let start = date(of: day)
         if let minute {

@@ -25,6 +25,10 @@ struct ZenTaskApp: App {
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
             tasks.reminders = Reminders(core: model.core)
             model.start()
+            HotKeys.shared.start(handlers: [
+                .quickAdd: { tasks.start(); QuickAddWindow.shared.show(tasks: tasks) },
+                .toggleWindow: { toggleMainWindow() },
+            ])
         }
     }
 

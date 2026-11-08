@@ -191,38 +191,3 @@ struct CalendarViewOptionsSheet: View {
         .frame(width: Theme.Size.sheetWidth + Theme.Space.xxl)
     }
 }
-
-/// "+" in the Calendar: a quick field that adds an all-day task on the shown day (quick-add syntax works).
-struct NewCalendarTask: View {
-    @Environment(CalendarModel.self) private var cal
-    @Environment(TasksModel.self) private var tasks
-    @Environment(\.dismiss) private var dismiss
-    @State private var title = ""
-
-    var body: some View {
-        let day = cal.calendar.startOfDay(for: cal.anchor)
-        VStack(alignment: .leading, spacing: Theme.Space.m) {
-            Text("New task on \(day.formatted(.dateTime.weekday(.wide).day().month(.wide)))").font(.headline)
-            TextField("What needs doing?", text: $title)
-                .textFieldStyle(.roundedBorder)
-                .controlSize(.large)
-                .onSubmit(add)
-            HStack {
-                Button("Cancel", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
-                Spacer()
-                Button("Add", action: add).keyboardShortcut(.defaultAction).disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-        }
-        .padding(Theme.Space.l)
-        .frame(width: Theme.Calendar.popoverWidth)
-    }
-
-    private func add() {
-        let clean = title.trimmingCharacters(in: .whitespaces)
-        guard !clean.isEmpty else { return }
-        let day = cal.calendar.startOfDay(for: cal.anchor)
-        _ = tasks.core.actions.create(title: clean, filter: nil, projectId: nil, priority: nil, tags: [],
-                                      due: KotlinLong(value: Int64(day.timeIntervalSince1970 * 1000)), allDay: true)
-        dismiss()
-    }
-}

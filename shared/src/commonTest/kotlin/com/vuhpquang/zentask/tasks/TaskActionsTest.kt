@@ -261,4 +261,15 @@ class TaskActionsTest {
         assertNull(store.get(EntityTypes.task, t.id)!!.pinnedAt)
         assertNull(store.get(EntityTypes.task, t.id)!!.repeatRule)
     }
+
+    @Test
+    fun spanSetsStartAndEnd() {
+        val t = actions.create("Focus block", null, null, null, emptyList(), null, true)
+        actions.setSpan(t.id, ms("2026-11-09T13:00"), ms("2026-11-09T14:00"))
+        val got = get(t.id)
+        assertEquals(ms("2026-11-09T13:00"), got.startDate)
+        assertEquals(ms("2026-11-09T14:00"), got.dueDate)
+        assertEquals(false, got.isAllDay)
+        assertEquals(zone.id, got.timeZone)
+    }
 }

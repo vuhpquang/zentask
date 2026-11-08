@@ -90,7 +90,11 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
   `HabitSection` as cards (or rows) | detail. `Matrix/` (rail ⌘5): Eisenhower quadrants from `TaskIndex.matrix`,
   drag between quadrants sets priority. `Search/SearchOverlay` (rail search, ⌘K): tasks/notes, lists, smart lists,
   tags, accent-insensitive. `Calendar/CalendarChrome.swift`: left bar (mini month with lunar dates, show checkboxes),
-  View options sheet, "+" new task.
+  View options sheet, "+" new task. `Tasks/TaskComposer` = the new-task card (calendar "+", a range dragged on
+  empty calendar space, global Quick Add): `~` list, `!` priority, `#` tag pickers, quick-add dates. Calendar day
+  columns use a `DropDelegate` (`ColumnDrop`) that shows a 15-minute-snapped placeholder while dragging.
+  `Hotkeys/HotKeys.swift`: global hotkeys via Carbon `RegisterEventHotKey` (Quick Add ⌃⌥N by default, show/hide
+  window), stored in UserDefaults `hotkey.*`; Settings → Hotkeys records them and lists the app shortcuts.
   Task list chrome (`Tasks/ListChrome.swift`): `ListHeader` (☰ sidebar, list picker popover, `SortMenu` group/sort/
   order, "…" hide completed/details), `GroupHeaderRow` (collapsible groups, keyed by `TaskSection.key`, remembered in
   UserDefaults `tasks.collapsed`), `GroupBar` (list colour). `Calendar/CalendarPanels.swift`: `CalendarPanel` beside

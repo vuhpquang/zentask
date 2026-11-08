@@ -228,6 +228,12 @@ class TaskActions(
         }
     }
 
+    /** A timed block from [start] to [end] (e.g. dragged out on the calendar). */
+    fun setSpan(id: String, start: Long, end: Long) {
+        val z = zone().id
+        store.update(tasks, id) { it.copy(startDate = start, dueDate = maxOf(end, start), isAllDay = false, timeZone = it.timeZone ?: z) }
+    }
+
     /** Sets (or clears, with null) the repeat rule; [from] is "due" or "completion". */
     fun setRepeat(id: String, rule: String?, from: String?) {
         store.update(tasks, id) { it.copy(repeatRule = rule?.takeIf { r -> r.isNotBlank() }, repeatFrom = if (rule.isNullOrBlank()) null else from ?: "due") }
