@@ -51,7 +51,7 @@ object HabitBoard {
                     values = values,
                     todayValue = values[todayStamp] ?: 0.0,
                     doneToday = todayStamp in done,
-                    dueToday = HabitSchedule.isDue(h, today, zone) && (todayStamp in done || weekLeft(h, done, today)),
+                    dueToday = HabitSchedule.isScheduled(h, today, zone, done),
                     archived = h.archivedAt != null,
                 )
             }
@@ -60,23 +60,14 @@ object HabitBoard {
     /** Monday to Sunday of [today]'s week, over live (not archived) habits. */
     fun week(habits: List<Habit>, checkins: List<HabitCheckin>, today: LocalDate, zone: TimeZone = TimeZone.currentSystemDefault()): List<HabitDay> {
         val live = habits.filter { !it.deleted && it.archivedAt == null }
-        val ids = live.mapTo(HashSet()) { it.id }
-        val done = checkins.filter { !it.deleted && it.status == 2 && it.habitId in ids }.mapTo(HashSet()) { it.habitId to it.stamp }
+        val done = checkins.filter { !it.deleted && it.status == 2 }.groupBy { it.habitId }.mapValues { (_, cs) -> cs.mapTo(HashSet()) { it.stamp } }
         val monday = today.minus(today.dayOfWeek.isoDayNumber - 1, DateTimeUnit.DAY)
         return (0 until 7).map { i ->
             val d = monday.plus(i, DateTimeUnit.DAY)
             val stamp = Stamp.of(d)
-            val due = live.filter { HabitSchedule.isDue(it, d, zone) }
-            HabitDay(stamp, due.size, due.count { (it.id to stamp) in done })
+            val due = live.filter { HabitSchedule.isScheduled(it, d, zone, done[it.id].orEmpty()) }
+            HabitDay(stamp, due.size, due.count { stamp in done[it.id].orEmpty() })
         }
-    }
-
-    /** N-times-a-week habits stop being due once this week's target is met (Monday-first weeks). */
-    private fun weekLeft(h: Habit, done: Set<Int>, today: LocalDate): Boolean {
-        val target = HabitSchedule.weekTarget(h) ?: return true
-        val monday = today.minus(today.dayOfWeek.isoDayNumber - 1, DateTimeUnit.DAY)
-        val thisWeek = done.count { s -> Stamp.date(s)?.let { it >= monday && it <= today } == true }
-        return thisWeek < target
     }
 
     /** Upcoming soonest first, then past ones most recent first, archived last. */

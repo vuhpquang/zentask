@@ -43,7 +43,7 @@ struct MatrixView: View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
             HStack(spacing: Theme.Space.s) {
                 Image(systemName: look.symbol).foregroundStyle(look.color)
-                Text(look.title).font(.headline).foregroundStyle(look.color)
+                Text(look.title).font(.headline)
                 Text("\(count)").font(.callout.monospacedDigit()).foregroundStyle(.secondary)
                 Spacer()
             }

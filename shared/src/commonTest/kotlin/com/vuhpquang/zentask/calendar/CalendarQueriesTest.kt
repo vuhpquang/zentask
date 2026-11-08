@@ -7,6 +7,7 @@ import com.vuhpquang.zentask.model.Task
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.toInstant
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -122,7 +123,7 @@ class CalendarQueriesTest {
         ).single().let { d -> (d.allDay + d.timed.map { it.entry }).map { it.title }.toSet() }
 
         assertEquals(setOf("Work thing", "Home thing", "Done thing", "Gym", "Read"), titles(CalendarViewOptions()))
-        assertEquals(setOf("Work thing", "Home thing", "Gym", "Read"), titles(CalendarViewOptions(showCompleted = false)))
+        assertEquals(setOf("Work thing", "Home thing", "Gym"), titles(CalendarViewOptions(showCompleted = false)), "done tasks and checked-in habits hidden")
         assertEquals(setOf("Work thing", "Home thing", "Done thing"), titles(CalendarViewOptions(showHabits = false)))
         assertEquals(setOf("Work thing", "Gym", "Read"), titles(CalendarViewOptions(lists = listOf("work"))))
         assertEquals(setOf("Work thing", "Gym", "Read"), titles(CalendarViewOptions(tags = listOf("deep"))))
@@ -134,5 +135,28 @@ class CalendarQueriesTest {
         assertTrue(d.allDay.single { it.title == "Read" }.done, "checked-in habits show as done")
         assertEquals("#3B82F6", d.timed.single { it.entry.id == "w" }.entry.color, "colour by list")
         assertEquals(CalendarViewOptions(), CalendarViewOptions.parse("not json"))
+    }
+
+    @Test
+    fun habitsStayOffTheCalendarBeforeTheyExistAndOnceTheWeekIsDone() {
+        val created = LocalDate(2026, 11, 10).atStartOfDayIn(zone).toEpochMilliseconds()
+        val habits = listOf(
+            com.vuhpquang.zentask.model.Habit(id = "new", name = "New", createdAt = created),
+            com.vuhpquang.zentask.model.Habit(id = "twice", name = "Twice", repeatRule = "RRULE:FREQ=WEEKLY;TT_TIMES=1"),
+        )
+        val checkins = listOf(com.vuhpquang.zentask.model.HabitCheckin(id = "c", habitId = "twice", stamp = 20261109, status = 2))
+        val d = CalendarQueries.days(emptyList(), sources, accounts, emptyList(), LocalDate(2026, 11, 9), 3, zone, emptySet(), emptyList(), CalendarViewOptions(), habits, checkins, emptyList())
+        assertEquals(listOf("Twice"), d[0].allDay.map { it.title }, "Mon: New doesn't exist yet; Twice done")
+        assertEquals(listOf("New"), d[1].allDay.map { it.title }, "Tue: Twice's week is done")
+        assertEquals(listOf("New"), d[2].allDay.map { it.title })
+    }
+
+    @Test
+    fun hidingCompletedAlsoHidesDoneHabits() {
+        val habits = listOf(com.vuhpquang.zentask.model.Habit(id = "a@b", name = "Odd id"))
+        val checkins = listOf(com.vuhpquang.zentask.model.HabitCheckin(id = "c", habitId = "a@b", stamp = 20261109, status = 2))
+        fun day(o: CalendarViewOptions) = CalendarQueries.days(emptyList(), sources, accounts, emptyList(), LocalDate(2026, 11, 9), 1, zone, emptySet(), emptyList(), o, habits, checkins, emptyList()).single()
+        assertEquals("a@b@20261109", day(CalendarViewOptions()).allDay.single().id)
+        assertTrue(day(CalendarViewOptions(showCompleted = false)).allDay.isEmpty())
     }
 }

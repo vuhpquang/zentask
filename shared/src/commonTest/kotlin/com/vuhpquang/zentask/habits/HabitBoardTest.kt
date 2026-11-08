@@ -5,6 +5,7 @@ import com.vuhpquang.zentask.model.Habit
 import com.vuhpquang.zentask.model.HabitCheckin
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -86,5 +87,23 @@ class HabitBoardTest {
         assertEquals((20261102..20261108).toList(), week.map { it.stamp }, "Monday to Sunday")
         assertEquals(listOf(2, 1, 2, 1, 1, 1, 1), week.map { it.due })
         assertEquals(listOf(2, 0, 0, 0, 0, 0, 0), week.map { it.done }, "archived habits don't count")
+    }
+
+    @Test
+    fun weekCountsTimesAWeekByTargetAndSkipsDaysBeforeTheHabit() {
+        val created = LocalDate(2026, 11, 4).atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
+        val habits = listOf(
+            Habit(id = "m", name = "Meditate", repeatRule = "RRULE:FREQ=WEEKLY;TT_TIMES=2"),
+            Habit(id = "n", name = "New", createdAt = created),
+        )
+        val checkins = listOf(
+            HabitCheckin(id = "1", habitId = "m", stamp = 20261102, status = 2),
+            HabitCheckin(id = "2", habitId = "m", stamp = 20261103, status = 2),
+        )
+        val week = HabitBoard.week(habits, checkins, LocalDate(2026, 11, 8))
+        // Meditate: due on the two days it was done, then the week's target is met.
+        // New: from Wednesday 4 Nov on.
+        assertEquals(listOf(1, 1, 1, 1, 1, 1, 1), week.map { it.due })
+        assertEquals(listOf(1, 1, 0, 0, 0, 0, 0), week.map { it.done })
     }
 }

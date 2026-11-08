@@ -14,7 +14,7 @@ struct TaskListView: View {
                 options: tasks.options,
                 setOptions: { tasks.setOptions($0) },
                 toggleSidebar: {
-                    withAnimation(Theme.List.foldAnimation) { tasks.columnVisibility = tasks.columnVisibility == .detailOnly ? .all : .detailOnly }
+                    withMotion { tasks.columnVisibility = tasks.columnVisibility == .detailOnly ? .all : .detailOnly }
                 }
             ) {
                 if let project = tasks.currentProject {
@@ -23,7 +23,7 @@ struct TaskListView: View {
                 }
                 Divider()
                 Toggle("Calendar beside tasks", systemImage: "calendar", isOn: Binding(get: { tasks.showCalendarPanel }, set: { v in
-                    withAnimation(Theme.List.foldAnimation) { tasks.showCalendarPanel = v }
+                    withMotion { tasks.showCalendarPanel = v }
                 }))
             }
             .padding(.horizontal, Theme.Space.l)
@@ -129,6 +129,8 @@ struct TaskListView: View {
     /// Manual reordering makes sense inside a list's own sections (not date or priority groups).
     private func canReorder(_ section: TaskSection) -> Bool {
         guard case .project = tasks.sidebar, !section.isCompleted else { return false }
+        // Drops use on-screen neighbours: a reversed order or pinned rows on top would place the task wrongly.
+        guard tasks.options.order != "desc", !section.rows.contains(where: { $0.task.pinnedAt != nil }) else { return false }
         // Moves map to rows only when no subtask rows sit between them.
         guard section.rows.allSatisfy({ $0.subtasks.isEmpty }) else { return false }
         return tasks.options.group.isEmpty || tasks.options.group == "column" || tasks.options.group == "none"

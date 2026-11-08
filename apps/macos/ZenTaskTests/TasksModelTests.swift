@@ -186,4 +186,28 @@ final class TasksModelTests: XCTestCase {
         await panel.recompute(m)
         XCTAssertEqual(panel.sections.flatMap(\.rows).map(\.task.title), ["Undated"])
     }
+
+    func testRevealShowsATaskWhereItIsListedAndUnfoldsItsGroup() async throws {
+        let saved = UserDefaults.standard.stringArray(forKey: "tasks.collapsed")
+        defer { UserDefaults.standard.set(saved, forKey: "tasks.collapsed") }
+        let m = TasksModel(core: ZenTaskCore.companion.open(dbPath: nil))
+        let done = m.core.actions.create(title: "Done", filter: nil, projectId: nil, priority: nil, tags: [], due: nil, allDay: true)
+        m.core.actions.complete(id: done.id)
+        let open = m.core.actions.create(title: "Open", filter: nil, projectId: nil, priority: nil, tags: [], due: nil, allDay: true)
+        await m.reload()
+        m.reveal(done.id)
+        XCTAssertEqual(m.sidebar, .smart(.completed))
+        XCTAssertEqual(m.selection, done.id)
+        m.sidebar = .project("inbox")
+        await m.settle()
+        m.setOptions(m.options.with(group: "priority"))
+        await m.settle()
+        let group = try XCTUnwrap(m.sections.first { s in s.rows.contains { $0.task.id == open.id } })
+        m.toggleCollapsed(group, in: "project:inbox")
+        m.reveal(open.id)
+        XCTAssertEqual(m.sidebar, .project("inbox"))
+        for _ in 0..<20 where m.isCollapsed(group, in: "project:inbox") { try await _Concurrency.Task.sleep(for: .milliseconds(20)) }
+        XCTAssertFalse(m.isCollapsed(group, in: "project:inbox"), "unfolded to show the task")
+        m.setOptions(m.options.with(group: ""))
+    }
 }

@@ -58,4 +58,23 @@ class ReminderPlannerTest {
         assertEquals(60, r.size)
         assertTrue(r.zipWithNext().all { (a, b) -> a.fireAt <= b.fireAt })
     }
+
+    @Test
+    fun allDayPresetsFireAtNineOnTheRightDay() {
+        val due = ms("2026-11-20T00:00")
+        val expected = listOf("2026-11-20T09:00", "2026-11-19T09:00", "2026-11-18T09:00", "2026-11-13T09:00").map(::ms)
+        assertEquals(expected, ReminderPresets.allDay.map { (trigger, _) -> due + ReminderPlanner.offsetMillis(trigger)!! })
+        val start = ms("2026-11-20T14:00")
+        assertEquals(listOf("2026-11-20T14:00", "2026-11-20T13:55", "2026-11-20T13:30", "2026-11-20T13:00", "2026-11-19T14:00").map(::ms),
+            ReminderPresets.timed.map { (trigger, _) -> start + ReminderPlanner.offsetMillis(trigger)!! })
+    }
+
+    @Test
+    fun switchingBetweenAllDayAndTimedMapsReminders() {
+        assertEquals(listOf("TRIGGER:PT9H", "TRIGGER:-PT15H"), ReminderPresets.convert(listOf("TRIGGER:PT0S", "TRIGGER:-P1D", "TRIGGER:-PT30M"), toAllDay = true))
+        assertEquals(listOf("TRIGGER:PT0S", "TRIGGER:-P1D", "TRIGGER:-P2D", "TRIGGER:-P7D"),
+            ReminderPresets.convert(listOf("TRIGGER:PT9H", "TRIGGER:-PT15H", "TRIGGER:-P1DT15H", "TRIGGER:-P6DT15H"), toAllDay = false))
+        assertEquals("1 day early (9:00)", ReminderPresets.title("TRIGGER:-PT15H"))
+        assertEquals(null, ReminderPresets.title("TRIGGER:-PT45M"))
+    }
 }

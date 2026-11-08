@@ -84,9 +84,38 @@ final class TasksModel {
 
     /// Opens a `zentask://task/<id>` link: shows the task in All (or Trash).
     func open(_ url: URL) {
-        guard url.scheme == "zentask", url.host() == "task", let id = url.pathComponents.dropFirst().first, let task = index?.task(id: id) else { return }
-        sidebar = task.trashedAt != nil ? .smart(.trash) : .project(task.projectId)
+        guard url.scheme == "zentask", url.host() == "task", let id = url.pathComponents.dropFirst().first else { return }
+        reveal(id)
+    }
+
+    /// Shows a task where it is actually listed (Trash, Won't do, Completed or its list), selects it and
+    /// unfolds its group once the list is computed.
+    func reveal(_ id: String) {
+        guard let task = index?.task(id: id) else { return }
+        let list = (index?.projects ?? []).first { $0.id == task.projectId }
+        if task.trashedAt != nil || list?.trashedAt != nil {
+            sidebar = .smart(.trash)
+        } else if task.status == -1 {
+            sidebar = .smart(.wontDo)
+        } else if task.isDone {
+            sidebar = .smart(.completed)
+        } else {
+            sidebar = .project(task.projectId)
+        }
         selection = id
+        pendingReveal = id
+        _Concurrency.Task {
+            await settle()
+            unfold(id)
+        }
+    }
+
+    private var pendingReveal: String?
+
+    private func unfold(_ id: String) {
+        guard pendingReveal == id, let section = sections.first(where: { s in s.rows.contains { $0.task.id == id || $0.subtasks.contains { $0.id == id } } }) else { return }
+        pendingReveal = nil
+        if section.isCompleted { showCompleted = true } else if isCollapsed(section, in: sidebar.storageKey) { toggleCollapsed(section, in: sidebar.storageKey) }
     }
     private(set) var options = ViewOptions(sort: "", group: "", showCompleted: false, order: "", hideCompleted: false, hideDetails: false)
 

@@ -258,8 +258,8 @@ class ZenTaskCore(
 
     /** Checks in (or undoes) a habit from a calendar entry id `<habitId>@<yyyyMMdd>`. */
     fun toggleHabitEntry(entryId: String) {
-        val habitId = entryId.substringBefore("@")
-        val stamp = entryId.substringAfter("@").toIntOrNull() ?: return
+        val habitId = entryId.substringBeforeLast("@")
+        val stamp = entryId.substringAfterLast("@").toIntOrNull() ?: return
         habitCheckIn(habitId, stamp)
     }
 

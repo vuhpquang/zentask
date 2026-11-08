@@ -122,6 +122,12 @@ class TaskIndex(
 
     fun sections(filter: TaskFilter, now: Instant, zone: TimeZone, options: ViewOptions = ViewOptions()): List<TaskSection> {
         val today = now.toLocalDateTime(zone).date
+        // Completed, Won't do and Trash are flat lists: only the sort applies, and they ignore "hide completed".
+        if (filter is TaskFilter.Smart && filter.list in setOf(SmartList.COMPLETED, SmartList.WONT_DO, SmartList.TRASH)) {
+            val rows = rows(filter, now, zone)
+            val sorted = if (options.sort.isEmpty() && options.order != "desc") rows else sortRows(rows, options, zone)
+            return listOf(TaskSection("", sorted, key = "all")).filter { it.rows.isNotEmpty() }
+        }
         val sections = if (options.sort.isNotEmpty() || options.group.isNotEmpty() || options.order == "desc") {
             customSections(filter, now, zone, options, today)
         } else {
@@ -151,16 +157,29 @@ class TaskIndex(
     private fun customSections(filter: TaskFilter, now: Instant, zone: TimeZone, o: ViewOptions, today: LocalDate): List<TaskSection> {
         val rows = rows(filter, now, zone)
         val open = rows.filter { !it.task.isDone }
-        val sorted = when (o.sort) {
+        val sorted = sortRows(open, o.copy(order = ""), zone)
+        val groups = groupRows(filter, sorted, rows, o, zone, today) ?: return reversedIn(projectSections((filter as TaskFilter.InProject).id, sorted, rows), o)
+        val done = if (filter is TaskFilter.Smart && filter.list in setOf(SmartList.TODAY, SmartList.TOMORROW, SmartList.NEXT_7_DAYS, SmartList.ALL) || filter is TaskFilter.Custom) emptyList() else completed(rows)
+        return reversedIn(groups.filter { it.rows.isNotEmpty() }, o) + done
+    }
+
+    /** "desc" reverses the rows inside each group; the groups keep their order. */
+    private fun reversedIn(sections: List<TaskSection>, o: ViewOptions) =
+        if (o.order == "desc") sections.map { if (it.isCompleted) it else it.copy(rows = it.rows.reversed()) } else sections
+
+    private fun sortRows(open: List<TaskRow>, o: ViewOptions, zone: TimeZone): List<TaskRow> = when (o.sort) {
             "date" -> open.sortedWith(compareBy<TaskRow>({ day(it.task, zone) == null }, { day(it.task, zone) }, { !it.task.isAllDay }, { it.task.startDate ?: it.task.dueDate }, { -it.task.priority }, { it.task.sortOrder }))
             "priority" -> open.sortedWith(compareBy<TaskRow>({ -it.task.priority }, { day(it.task, zone) == null }, { day(it.task, zone) }, { it.task.startDate ?: it.task.dueDate }))
             "title" -> open.sortedBy { it.task.title.lowercase() }
             "manual" -> open.sortedBy { it.task.sortOrder }
             else -> open // the default order is by date
         }.let { if (o.order == "desc") it.reversed() else it }
+
+    /** Groups for a sort/group choice; null = the list's own sections (handled by the caller). */
+    private fun groupRows(filter: TaskFilter, sorted: List<TaskRow>, rows: List<TaskRow>, o: ViewOptions, zone: TimeZone, today: LocalDate): List<TaskSection>? {
         // No group chosen: a list keeps its sections, smart lists group by date.
         val group = o.group.ifEmpty { if (filter is TaskFilter.InProject) "column" else "date" }
-        val groups: List<TaskSection> = when (group) {
+        return when (group) {
             "priority" -> listOf(5 to "High", 3 to "Medium", 1 to "Low", 0 to "None")
                 .map { (p, title) -> TaskSection(title, sorted.filter { it.task.priority == p }, key = "prio:$p") }
             "list" -> sorted.groupBy { it.task.projectId }.entries
@@ -171,12 +190,10 @@ class TaskIndex(
                 sorted.forEach { r -> byTag.getOrPut(r.task.tags.firstOrNull()?.let { "#$it" } ?: "No tag") { mutableListOf() } += r }
                 byTag.entries.sortedBy { if (it.key == "No tag") "\uFFFF" else it.key }.map { TaskSection(it.key, it.value, key = "tag:${it.key}") }
             }
-            "column" -> if (filter is TaskFilter.InProject) return projectSections(filter.id, sorted, rows) else listOf(TaskSection("", sorted, key = "all"))
+            "column" -> if (filter is TaskFilter.InProject) return null else listOf(TaskSection("", sorted, key = "all"))
             "none" -> listOf(TaskSection("", sorted, key = "all"))
             else -> dateSections(sorted, today, zone)
         }
-        val done = if (filter is TaskFilter.Smart && filter.list in setOf(SmartList.TODAY, SmartList.TOMORROW, SmartList.NEXT_7_DAYS, SmartList.ALL) || filter is TaskFilter.Custom) emptyList() else completed(rows)
-        return groups.filter { it.rows.isNotEmpty() } + done
     }
 
     /**
@@ -185,7 +202,12 @@ class TaskIndex(
      */
     fun matrix(now: Instant, zone: TimeZone): List<Quadrant> {
         val today = now.toLocalDateTime(zone).date
-        val open = rows(TaskFilter.Smart(SmartList.ALL), now, zone).filter { it.task.isOpen }
+        // Subtasks are their own rows here: each lands in the quadrant of its own priority.
+        val open = rows(TaskFilter.Smart(SmartList.ALL), now, zone).filter { it.task.isOpen }.flatMap { r ->
+            listOf(r.copy(subtasks = emptyList())) + r.subtasks.filter { it.isOpen && it.trashedAt == null }.map { sub ->
+                TaskRow(sub, emptyList(), 0, 0, r.projectName, day(sub, zone)?.let { it < today } == true)
+            }
+        }
         return listOf(Priority.HIGH, Priority.MEDIUM, Priority.LOW, Priority.NONE).map { p ->
             Quadrant(p, dateSections(open.filter { it.task.priority == p }, today, zone).map { it.copy(key = "q$p:" + it.key) })
         }

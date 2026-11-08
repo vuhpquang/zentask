@@ -49,7 +49,7 @@ struct CalendarPanel: View {
                     }
                     Divider()
                     Button("Close", systemImage: "xmark") {
-                        withAnimation(Theme.List.foldAnimation) { tasks.showCalendarPanel = false }
+                        withMotion { tasks.showCalendarPanel = false }
                     }
                 } label: {
                     Image(systemName: "ellipsis").frame(width: Theme.List.headerButton, height: Theme.List.headerButton)
@@ -225,7 +225,21 @@ final class TaskPanelState {
 
 struct TaskPanel: View {
     @Environment(TasksModel.self) private var tasks
-    @State private var state = TaskPanelState()
+    /// Created once on first appearance (an inline initial value would rebuild it on every parent render).
+    @State private var holder: TaskPanelState?
+    let close: () -> Void
+
+    var body: some View {
+        Group {
+            if let holder { TaskPanelContent(state: holder, close: close) } else { Color.clear }
+        }
+        .onAppear { if holder == nil { holder = TaskPanelState() } }
+    }
+}
+
+private struct TaskPanelContent: View {
+    @Environment(TasksModel.self) private var tasks
+    @Bindable var state: TaskPanelState
     let close: () -> Void
 
     var body: some View {

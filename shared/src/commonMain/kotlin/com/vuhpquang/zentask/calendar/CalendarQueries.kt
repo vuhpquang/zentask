@@ -77,6 +77,8 @@ data class CalendarDay(val dayStart: Long, val allDay: List<CalendarEntry>, val 
 object CalendarQueries {
     private const val TASK_MINUTES = 30
     private const val HABIT_MINUTES = 30
+    /** A habit reminder time, "19:00". */
+    private val CLOCK = Regex("""^(\d{1,2}):(\d{2})$""")
     private const val DAY_MINUTES = 24 * 60
 
     fun days(
@@ -118,7 +120,7 @@ object CalendarQueries {
         } + tasks.filter { !it.deleted && it.trashedAt == null && it.status != -1 && wanted(it) && (options.showCompleted || !it.isDone) }
             .mapNotNull { t -> taskEntry(t, zone)?.let { e -> if (options.colorBy == "list") e.copy(color = listColor[t.projectId]) else e } } +
             (if (options.showCountdowns) countdownEntries(countdowns, first, count, zone) else emptyList()) +
-            (if (options.showHabits) habitEntries(habits, checkins, first, count, zone) else emptyList())
+            (if (options.showHabits) habitEntries(habits, checkins, first, count, zone).filter { options.showCompleted || !it.done } else emptyList())
 
         return (0 until count).map { i ->
             val date = first.plus(i, DateTimeUnit.DAY)
@@ -153,15 +155,16 @@ object CalendarQueries {
 
     /** Habits on the days they're due: at their first reminder time (30 min), or all day without one. */
     private fun habitEntries(habits: List<Habit>, checkins: List<HabitCheckin>, first: LocalDate, count: Int, zone: TimeZone): List<CalendarEntry> {
-        val done = checkins.filter { !it.deleted && it.status == 2 }.mapTo(HashSet()) { it.habitId to it.stamp }
+        val done = checkins.filter { !it.deleted && it.status == 2 }.groupBy { it.habitId }.mapValues { (_, cs) -> cs.mapTo(HashSet()) { it.stamp } }
         return habits.filter { !it.deleted && it.archivedAt == null }.flatMap { h ->
-            val time = h.reminders.firstNotNullOfOrNull { r -> Regex("""^(\d{1,2}):(\d{2})$""").matchEntire(r.trim())?.let { it.groupValues[1].toInt() * 60 + it.groupValues[2].toInt() } }
-            (0 until count).map { first.plus(it, DateTimeUnit.DAY) }.filter { HabitSchedule.isDue(h, it, zone) }.map { d ->
+            val mine = done[h.id].orEmpty()
+            val time = h.reminders.firstNotNullOfOrNull { r -> CLOCK.matchEntire(r.trim())?.let { it.groupValues[1].toInt() * 60 + it.groupValues[2].toInt() } }
+            (0 until count).map { first.plus(it, DateTimeUnit.DAY) }.filter { HabitSchedule.isScheduled(h, it, zone, mine) }.map { d ->
                 val stamp = Stamp.of(d)
                 val midnight = d.atStartOfDayIn(zone).toEpochMilliseconds()
                 val start = if (time != null) midnight + time * 60_000L else midnight
                 val end = if (time != null) start + HABIT_MINUTES * 60_000L else d.plus(1, DateTimeUnit.DAY).atStartOfDayIn(zone).toEpochMilliseconds()
-                CalendarEntry("${h.id}@$stamp", "habit", h.name, start, end, time == null, h.color, (h.id to stamp) in done)
+                CalendarEntry("${h.id}@$stamp", "habit", h.name, start, end, time == null, h.color, stamp in mine)
             }
         }
     }

@@ -37,7 +37,6 @@ struct ZenTaskApp: App {
                 .environment(habits)
                 .environment(countdowns)
                 .environment(panelCalendar)
-                .onOpenURL { tasks.open($0) }
         }
         .defaultSize(width: 1100, height: 720)
         .commands { TaskCommands() }
@@ -71,7 +70,7 @@ struct MainWindow: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            AppRail(tab: $tab, search: { withAnimation(Theme.List.foldAnimation) { searching = true } })
+            AppRail(tab: $tab, search: { withMotion { searching = true } })
                 .ignoresSafeArea(.container, edges: .top) // only the rail reaches under the traffic lights
             Divider().ignoresSafeArea(.container, edges: .top)
             switch tab {
@@ -82,12 +81,18 @@ struct MainWindow: View {
             default: TasksView()
             }
         }
+        .environment(\.searchOpen, searching)
+        .onOpenURL { url in
+            // zentask://task/<id> (Copy link): show it in Tasks whatever area is open.
+            guard url.scheme == "zentask", url.host() == "task", let id = url.pathComponents.dropFirst().first else { return }
+            open(nil, id)
+        }
         .overlay(alignment: .top) {
             if searching {
                 ZStack(alignment: .top) {
                     Color.black.opacity(Theme.Opacity.scrim).ignoresSafeArea()
-                        .onTapGesture { withAnimation(Theme.List.foldAnimation) { searching = false } }
-                    SearchOverlay(open: { item, id in open(item, id) }, close: { withAnimation(Theme.List.foldAnimation) { searching = false } })
+                        .onTapGesture { withMotion { searching = false } }
+                    SearchOverlay(open: { item, id in open(item, id) }, close: { withMotion { searching = false } })
                         .padding(.top, Theme.Search.topInset)
                 }
                 .transition(.opacity)
@@ -98,9 +103,10 @@ struct MainWindow: View {
     /// Shows a list (and a task in it) in the Tasks area.
     private func open(_ item: SidebarItem?, _ taskId: String?) {
         tab = .tasks
-        if let item { tasks.sidebar = item } else if let id = taskId, let t = tasks.index?.task(id: id) {
-            tasks.sidebar = t.isDone ? .smart(.completed) : .project(t.projectId)
+        if let taskId {
+            tasks.reveal(taskId)
+        } else if let item {
+            tasks.sidebar = item
         }
-        if let taskId { tasks.selection = taskId }
     }
 }

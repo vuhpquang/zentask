@@ -72,8 +72,15 @@ final class CalendarModel {
     /// The Vietnamese lunar date for a day ("30", "1/10"), when lunar dates are on.
     func lunar(_ date: Date) -> String? {
         guard viewOptions.showLunar else { return nil }
-        return core.lunarLabel(dayMillis: Int64(calendar.startOfDay(for: date).timeIntervalSince1970 * 1000))
+        let day = Int64(calendar.startOfDay(for: date).timeIntervalSince1970 * 1000)
+        if let hit = lunarCache[day] { return hit }
+        let label = core.lunarLabel(dayMillis: day)
+        lunarCache[day] = label
+        return label
     }
+
+    /// Lunar labels per local midnight (pure maths, but called for every cell on every render).
+    @ObservationIgnored private var lunarCache: [Int64: String] = [:]
 
     /// Weeks start on Monday (Vietnamese convention; spec P5 ruling).
     static func mondayFirst() -> Calendar {

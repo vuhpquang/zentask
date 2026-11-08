@@ -10,6 +10,8 @@ struct SearchOverlay: View {
     @State private var query = ""
     @State private var cursor = 0
     @FocusState private var focused: Bool
+    /// Tasks with their accent-free title and notes, built once when the overlay opens.
+    @State private var corpus: [(task: ZTask, title: String, notes: String)] = []
 
     struct Hit: Identifiable {
         let id: String
@@ -76,7 +78,10 @@ struct SearchOverlay: View {
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Theme.Radius.card, style: .continuous).strokeBorder(.quaternary))
         .shadow(radius: Theme.Space.xl, y: Theme.Space.s)
-        .onAppear { focused = true }
+        .onAppear {
+            focused = true
+            corpus = (tasks.index?.allTasks ?? []).filter { $0.trashedAt == nil && !$0.deleted }.map { ($0, Self.fold($0.title), Self.fold($0.content)) }
+        }
         .onKeyPress(.downArrow) { cursor = min(cursor + 1, max(0, hits.count - 1)); return .handled }
         .onKeyPress(.upArrow) { cursor = max(cursor - 1, 0); return .handled }
     }
@@ -104,11 +109,10 @@ struct SearchOverlay: View {
         for t in tasks.tags where Self.fold(t.name).contains(q) || Self.fold(t.label).contains(q) {
             out.append(Hit(id: "t:" + t.id, title: "#" + (t.label.isEmpty ? t.name : t.label), detail: "Tag", symbol: "number", item: .tag(t.name), taskId: nil))
         }
-        let all = (tasks.index?.allTasks ?? []).filter { $0.trashedAt == nil && !$0.deleted }
         var found = 0
-        for t in all where found < Theme.Search.maxTasks {
-            let inTitle = Self.fold(t.title).contains(q)
-            guard inTitle || Self.fold(t.content).contains(q) else { continue }
+        for (t, title, notes) in corpus where found < Theme.Search.maxTasks {
+            let inTitle = title.contains(q)
+            guard inTitle || notes.contains(q) else { continue }
             found += 1
             let where_ = tasks.projectName(t.projectId) + (t.isDone ? " · completed" : "")
             out.append(Hit(id: "k:" + t.id, title: t.title.isEmpty ? "Untitled" : t.title, detail: inTitle ? where_ : where_ + " · in notes",

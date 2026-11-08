@@ -169,4 +169,28 @@ class TaskIndexTest {
         assertEquals(listOf("chore"), m[2].sections.flatMap { it.rows }.map { it.task.id })
         assertEquals(listOf("someday"), m[3].sections.flatMap { it.rows }.map { it.task.id })
     }
+
+    @Test
+    fun statusListsIgnoreGroupingAndHideCompleted() {
+        val i = index(t("done1", status = TaskStatus.COMPLETED), t("done2", "2026-11-07T09:00", status = TaskStatus.COMPLETED), t("nope", status = TaskStatus.WONT_DO))
+        val o = com.vuhpquang.zentask.lists.ViewOptions(sort = "title", order = "desc", hideCompleted = true)
+        assertEquals(listOf("done2", "done1"), i.sections(TaskFilter.Smart(SmartList.COMPLETED), now, zone, o).flatMap { it.rows }.map { it.task.id }, "sorted, still shown")
+        assertEquals(listOf("all"), i.sections(TaskFilter.Smart(SmartList.WONT_DO), now, zone, com.vuhpquang.zentask.lists.ViewOptions(group = "date")).map { it.key })
+    }
+
+    @Test
+    fun descendingKeepsDateGroupsInOrder() {
+        val i = index(t("a", "2026-11-07T09:00"), t("b", "2026-11-07T10:00"), t("c"))
+        val s = i.sections(TaskFilter.Smart(SmartList.ALL), now, zone, com.vuhpquang.zentask.lists.ViewOptions(order = "desc"))
+        assertEquals(listOf("Overdue", "No date"), s.map { it.title })
+        assertEquals(listOf("b", "a"), s.first().rows.map { it.task.id })
+    }
+
+    @Test
+    fun matrixIncludesOpenSubtasksByTheirOwnPriority() {
+        val i = index(t("parent"), t("child", priority = 5, parent = "parent"))
+        val m = i.matrix(now, zone)
+        assertEquals(listOf("child"), m.first { it.priority == 5 }.sections.flatMap { it.rows }.map { it.task.id })
+        assertEquals(listOf("parent"), m.first { it.priority == 0 }.sections.flatMap { it.rows }.map { it.task.id })
+    }
 }

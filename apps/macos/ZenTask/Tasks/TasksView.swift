@@ -27,14 +27,14 @@ struct TasksView: View {
                     Divider()
                     CalendarPanel()
                         .frame(width: Theme.Panel.calendarWidth)
-                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                        .transition(Motion.slide(.trailing))
                 }
             }
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    withAnimation(Theme.List.foldAnimation) { tasks.showCalendarPanel.toggle() }
+                    withMotion { tasks.showCalendarPanel.toggle() }
                 } label: {
                     Label("Calendar", systemImage: "sidebar.right")
                 }

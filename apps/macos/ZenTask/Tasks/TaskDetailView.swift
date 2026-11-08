@@ -75,7 +75,7 @@ struct TaskDetailView: View {
                 .textFieldStyle(.plain)
                 .focused($focus, equals: .title)
                 .onSubmit { commit(.title) }
-            if task.pinnedAt != nil { Image(systemName: "pin.fill").foregroundStyle(.orange).help("Pinned") }
+            if task.pinnedAt != nil { Image(systemName: "pin.fill").foregroundStyle(Theme.Habits.gold).help("Pinned") }
             if task.trashedAt == nil { TaskMoreMenu(task: task) { focus = .subtask } }
         }
     }
@@ -310,6 +310,9 @@ private struct DueEditor: View {
     @State private var hasTime = false
     @State private var reminders: [String] = []
     @State private var rule: String?
+    /// A repeat chosen from the menu: rebuilt from the date on save, so moving the date moves the weekday too.
+    @State private var preset: Int?
+    @State private var original: (date: Date, hasTime: Bool)?
 
     private var cal: Calendar { Calendar.current }
 
@@ -331,22 +334,29 @@ private struct DueEditor: View {
                 if hasTime {
                     DatePicker("Time", selection: $date, displayedComponents: [.hourAndMinute]).labelsHidden().fixedSize()
                 }
-                Toggle("Time", isOn: $hasTime.animation(Theme.List.foldAnimation)).labelsHidden().toggleStyle(.switch).controlSize(.small)
+                Toggle("Time", isOn: $hasTime).labelsHidden().toggleStyle(.switch).controlSize(.small)
+                    .onChange(of: hasTime) { _, timed in
+                        // Keep reminders meaning the same thing (on time ↔ 9:00 on the day…); drop ones that can't.
+                        reminders = ReminderPresets.shared.convert(triggers: reminders, toAllDay: !timed)
+                    }
             }
             row("Reminder", symbol: "bell", value: reminders.isEmpty ? "None" : reminders.map(ReminderText.describe).joined(separator: ", ")) {
                 Button("None") { reminders = [] }
                 Divider()
-                ForEach(Self.reminderChoices(allDay: !hasTime), id: \.0) { trigger, title in
+                let presets = (hasTime ? ReminderPresets.shared.timed : ReminderPresets.shared.allDay).map { ($0.first as String? ?? "", $0.second as String? ?? "") }
+                // Existing reminders that aren't presets stay listed so they can be turned off.
+                let others = reminders.filter { r in !presets.contains { $0.0 == r } }.map { ($0, ReminderText.describe($0)) }
+                ForEach(presets + others, id: \.0) { trigger, title in
                     Toggle(title, isOn: Binding(get: { reminders.contains(trigger) }, set: { on in
                         if on { reminders.append(trigger) } else { reminders.removeAll { $0 == trigger } }
                     }))
                 }
             }
-            row("Repeat", symbol: "repeat", value: rule.map { tasks.core.describeRepeat(rule: $0) } ?? "None") {
-                Button("None") { rule = nil }
+            row("Repeat", symbol: "repeat", value: repeatTitle) {
+                Button("None") { rule = nil; preset = nil }
                 Divider()
-                ForEach(repeatChoices, id: \.0) { r, title in
-                    Button { rule = r } label: { if rule == r { Label(title, systemImage: "checkmark") } else { Text(title) } }
+                ForEach(Array(repeatChoices.enumerated()), id: \.offset) { i, choice in
+                    Button { preset = i; rule = choice.0 } label: { if preset == i { Label(choice.1, systemImage: "checkmark") } else { Text(choice.1) } }
                 }
             }
             HStack {
@@ -371,7 +381,14 @@ private struct DueEditor: View {
             hasTime = !task.isAllDay && (task.dueDate != nil || task.startDate != nil)
             reminders = task.reminders
             rule = task.repeatRule
+            preset = repeatChoices.firstIndex { $0.0 == task.repeatRule }
+            original = (date, hasTime)
         }
+    }
+
+    private var repeatTitle: String {
+        if let preset, repeatChoices.indices.contains(preset) { return repeatChoices[preset].1 }
+        return rule.map { tasks.core.describeRepeat(rule: $0) } ?? "None"
     }
 
     private var daysToNextMonday: Int {
@@ -382,7 +399,9 @@ private struct DueEditor: View {
     private func set(day offset: Int, hour: Int? = nil) {
         let base = cal.date(byAdding: .day, value: offset, to: cal.startOfDay(for: .now)) ?? .now
         if let hour {
-            date = cal.date(bySettingHour: hour, minute: 0, second: 0, of: base) ?? base
+            let evening = cal.date(bySettingHour: hour, minute: 0, second: 0, of: base) ?? base
+            // "Tonight" after 20:00 means the next full hour, never a time already past.
+            date = evening > .now ? evening : (cal.nextDate(after: .now, matching: DateComponents(minute: 0), matchingPolicy: .nextTime) ?? evening)
             hasTime = true
         } else {
             date = hasTime ? (cal.date(bySettingHour: cal.component(.hour, from: date), minute: cal.component(.minute, from: date), second: 0, of: base) ?? base) : base
@@ -408,12 +427,6 @@ private struct DueEditor: View {
         }
     }
 
-    static func reminderChoices(allDay: Bool) -> [(String, String)] {
-        allDay
-            ? [("TRIGGER:PT9H", "On the day (9:00)"), ("TRIGGER:-PT15H", "1 day early (9:00)"), ("TRIGGER:-P2DT15H", "2 days early (9:00)"), ("TRIGGER:-P6DT15H", "1 week early (9:00)")]
-            : [("TRIGGER:PT0S", "On time"), ("TRIGGER:-PT5M", "5 minutes early"), ("TRIGGER:-PT30M", "30 minutes early"), ("TRIGGER:-PT1H", "1 hour early"), ("TRIGGER:-P1D", "1 day early")]
-    }
-
     private var repeatChoices: [(String, String)] {
         let codes = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"]
         let wd = cal.component(.weekday, from: date)
@@ -431,9 +444,14 @@ private struct DueEditor: View {
     private func save() {
         let value = hasTime ? date : cal.startOfDay(for: date)
         let actions = tasks.core.actions
-        actions.setDue(id: task.id, due: KotlinLong(value: Int64(value.timeIntervalSince1970 * 1000)), allDay: !hasTime)
+        let hadDate = task.startDate != nil || task.dueDate != nil
+        // Only touch the date when it changed: setDue clears a start–end range.
+        if !hadDate || original.map({ $0.date != date || $0.hasTime != hasTime }) ?? true {
+            actions.setDue(id: task.id, due: KotlinLong(value: Int64(value.timeIntervalSince1970 * 1000)), allDay: !hasTime)
+        }
         if reminders != task.reminders { actions.setReminders(id: task.id, triggers: reminders) }
-        if rule != task.repeatRule { actions.setRepeat(id: task.id, rule: rule, from: task.repeatFrom ?? "due") }
+        let finalRule = preset.flatMap { repeatChoices.indices.contains($0) ? repeatChoices[$0].0 : nil } ?? rule
+        if finalRule != task.repeatRule { actions.setRepeat(id: task.id, rule: finalRule, from: task.repeatFrom ?? "due") }
     }
 }
 
@@ -473,6 +491,7 @@ private struct TaskMoreMenu: View {
 enum ReminderText {
     /// `TRIGGER:-PT15M` → "15 min before"; `TRIGGER:PT0S` → "On time".
     static func describe(_ trigger: String) -> String {
+        if let preset = ReminderPresets.shared.title(trigger: trigger) { return preset }
         let t = trigger.replacingOccurrences(of: "TRIGGER:", with: "")
         if t == "PT0S" || t == "P0D" { return "On time" }
         let before = t.hasPrefix("-")

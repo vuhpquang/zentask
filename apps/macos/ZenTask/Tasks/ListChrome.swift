@@ -159,7 +159,8 @@ struct SortMenu: View {
     private let sorts = [("", "Default"), ("date", "Date"), ("priority", "Priority"), ("title", "Title"), ("manual", "Manual")]
 
     private var orders: [(String, String)] {
-        switch options.sort {
+        let listDefault: Bool = { if case .project = item { return options.sort.isEmpty } else { return false } }()
+        return switch listDefault ? "manual" : options.sort {
         case "priority": [("", "Highest first"), ("desc", "Lowest first")]
         case "date", "": [("", "Earliest first"), ("desc", "Latest first")]
         case "title": [("", "A to Z"), ("desc", "Z to A")]
@@ -202,11 +203,10 @@ struct GroupHeaderRow: View {
     let collapsed: Bool
     var color: Color?
     let toggle: () -> Void
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         Button {
-            withAnimation(reduceMotion ? nil : Theme.List.foldAnimation) { toggle() }
+            withMotion { toggle() }
         } label: {
             HStack(spacing: Theme.Space.s) {
                 Image(systemName: "chevron.right")

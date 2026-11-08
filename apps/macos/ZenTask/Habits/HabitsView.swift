@@ -165,10 +165,11 @@ private struct HabitCard: View {
                 VStack(alignment: .leading, spacing: Theme.Space.xxs) {
                     Text(row.habit.name).font(.body.weight(.semibold)).lineLimit(1)
                     HStack(spacing: Theme.Space.s) {
-                        Label("\(row.stats.totalDays) days", systemImage: "bolt.fill").foregroundStyle(.blue)
-                        Label("\(row.stats.currentStreak) \(row.stats.unit)", systemImage: "flame.fill").foregroundStyle(.orange)
+                        Label { Text("\(row.stats.totalDays) days") } icon: { Image(systemName: "bolt.fill").foregroundStyle(.blue) }
+                        Label { Text("\(row.stats.currentStreak) \(row.stats.unit)") } icon: { Image(systemName: "flame.fill").foregroundStyle(.orange) }
                     }
                     .font(.caption)
+                    .foregroundStyle(.secondary)
                     .labelStyle(.titleAndIcon)
                 }
                 Spacer(minLength: 0)
@@ -221,8 +222,7 @@ private struct HabitRowView: View {
                 Text(row.habit.name).font(.body.weight(.medium)).lineLimit(1)
                 HStack(spacing: Theme.Space.s) {
                     if row.stats.currentStreak > 0 {
-                        Label("\(row.stats.currentStreak) \(row.stats.unit)", systemImage: "flame.fill")
-                            .foregroundStyle(.orange)
+                        Label { Text("\(row.stats.currentStreak) \(row.stats.unit)") } icon: { Image(systemName: "flame.fill").foregroundStyle(.orange) }
                     }
                     Text(row.schedule).foregroundStyle(.secondary)
                 }

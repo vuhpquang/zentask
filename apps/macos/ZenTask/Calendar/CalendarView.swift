@@ -17,7 +17,7 @@ struct CalendarView: View {
             if showSideBar {
                 CalendarSideBar()
                     .frame(width: Theme.Calendar.sideBarWidth)
-                    .transition(.move(edge: .leading).combined(with: .opacity))
+                    .transition(Motion.slide(.leading))
                 Divider()
             }
             VStack(spacing: 0) {
@@ -32,9 +32,9 @@ struct CalendarView: View {
             }
             if showPanel {
                 Divider()
-                TaskPanel(close: { withAnimation(Theme.List.foldAnimation) { showPanel = false } })
+                TaskPanel(close: { withMotion { showPanel = false } })
                     .frame(width: Theme.Panel.tasksWidth)
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                    .transition(Motion.slide(.trailing))
             }
         }
         .onAppear {
@@ -69,7 +69,7 @@ struct CalendarView: View {
         @Bindable var cal = cal
         return HStack(spacing: Theme.Space.m) {
             Button {
-                withAnimation(Theme.List.foldAnimation) { showSideBar.toggle() }
+                withMotion { showSideBar.toggle() }
             } label: {
                 Image(systemName: "sidebar.left").symbolVariant(showSideBar ? .fill : .none)
             }
@@ -111,10 +111,10 @@ struct CalendarView: View {
             Menu {
                 Button("View options…", systemImage: "slider.horizontal.3") { showingOptions = true }
                 Toggle("Arrange tasks", systemImage: "sidebar.right", isOn: Binding(get: { showPanel }, set: { v in
-                    withAnimation(Theme.List.foldAnimation) { showPanel = v }
+                    withMotion { showPanel = v }
                 }))
                 Toggle("Month and filters", systemImage: "sidebar.left", isOn: Binding(get: { showSideBar }, set: { v in
-                    withAnimation(Theme.List.foldAnimation) { showSideBar = v }
+                    withMotion { showSideBar = v }
                 }))
                 Divider()
                 SettingsLink { Label("Calendar accounts…", systemImage: "person.crop.circle") }
@@ -459,18 +459,24 @@ struct DraggableTask: ViewModifier {
 
 /// Menu item shortcut: the mode's letter (D, W, M, Y, A).
 private struct LetterShortcut: ViewModifier {
+    @Environment(\.searchOpen) private var searchOpen
     let mode: CalendarModel.Mode
 
     func body(content: Content) -> some View {
-        if let keys = mode.keys { content.keyboardShortcut(KeyEquivalent(keys.letter), modifiers: []) } else { content }
+        if let keys = mode.keys, !searchOpen { content.keyboardShortcut(KeyEquivalent(keys.letter), modifiers: []) } else { content }
     }
 }
 
 /// Hidden buttons for the number shortcuts (1–5), alongside the letters in the menu.
 private struct ModeShortcuts: View {
     @Environment(CalendarModel.self) private var cal
+    @Environment(\.searchOpen) private var searchOpen
 
     var body: some View {
+        if !searchOpen { shortcuts }
+    }
+
+    private var shortcuts: some View {
         ZStack {
             ForEach(CalendarModel.Mode.allCases.filter { $0.keys != nil }) { mode in
                 Button("") { cal.mode = mode }

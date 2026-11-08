@@ -59,6 +59,23 @@ object HabitSchedule {
         return start.daysUntil(date).mod(interval) == 0
     }
 
+    /** The habit's first day: its start date, else the day it was created; null when unknown. */
+    fun startDay(h: Habit, zone: TimeZone): LocalDate? =
+        h.targetStartDate?.let(Stamp::date) ?: h.createdAt.takeIf { it > 0 }?.let { Instant.fromEpochMilliseconds(it).toLocalDateTime(zone).date }
+
+    /**
+     * Whether the habit belongs on [date] in week strips and the calendar: not before it existed, and for
+     * N-times-a-week habits only on days it was done or while the week's target isn't met yet.
+     * [done] = the habit's done days (yyyyMMdd).
+     */
+    fun isScheduled(h: Habit, date: LocalDate, zone: TimeZone, done: Set<Int>): Boolean {
+        startDay(h, zone)?.let { if (date < it) return false }
+        val target = weekTarget(h) ?: return isDue(h, date, zone)
+        if (Stamp.of(date) in done) return true
+        val monday = date.minus(date.dayOfWeek.isoDayNumber - 1, DateTimeUnit.DAY)
+        return done.count { s -> Stamp.date(s)?.let { it >= monday && it < date } == true } < target
+    }
+
     fun describe(h: Habit): String {
         weekTarget(h)?.let { return "$it times a week" }
         val days = weekdays(h)
