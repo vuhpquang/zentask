@@ -57,6 +57,16 @@ class TickTickSync(
     fun apply(snapshot: TickTickSnapshot, confirmMassTrash: Boolean = false): SyncPlan =
         apply(snapshot, confirmMassTrash, SOURCE_API)
 
+    /**
+     * One-off import of a CSV backup ([TickTickCsv]). Refused once TickTick data came in through the API:
+     * CSV ids never match real TickTick ids, so mixing the two would duplicate tasks. Re-importing the
+     * same file is harmless (content-derived ids).
+     */
+    fun importCsv(snapshot: TickTickSnapshot): SyncPlan {
+        check(!hasApiData) { "TickTick data was already synced with the cookie; a CSV import would duplicate tasks" }
+        return apply(snapshot, confirmMassTrash = true, source = SOURCE_CSV)
+    }
+
     internal fun apply(snapshot: TickTickSnapshot, confirmMassTrash: Boolean, source: String): SyncPlan = store.inTransaction { db ->
         val plan = plan(db, snapshot)
         if (plan.summary.needsConfirmation && !confirmMassTrash) throw MassTrashException(plan.summary)
@@ -198,6 +208,7 @@ class TickTickSync(
         const val KEY_LAST_SYNC = "lastSyncAt"
         const val KEY_SOURCE = "source"
         const val SOURCE_API = "api"
+        const val SOURCE_CSV = "csv"
         const val MASS_TRASH_MIN = 10
         const val MASS_TRASH_SHARE = 0.2
 
