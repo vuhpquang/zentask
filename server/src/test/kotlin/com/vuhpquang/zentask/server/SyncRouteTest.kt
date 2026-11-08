@@ -4,6 +4,7 @@ import com.vuhpquang.zentask.model.ZenJson
 import com.vuhpquang.zentask.server.sync.MAX_CHANGES
 import com.vuhpquang.zentask.server.sync.PULL_PAGE
 import com.vuhpquang.zentask.sync.Hlc
+import com.vuhpquang.zentask.sync.RejectedChange
 import com.vuhpquang.zentask.sync.SyncRecord
 import com.vuhpquang.zentask.sync.SyncRequest
 import com.vuhpquang.zentask.sync.SyncResponse
@@ -105,11 +106,21 @@ class SyncRouteTest {
         assertEquals(JsonPrimitive(5), rec.fields["priority"])
     }
 
-    private suspend fun ApplicationTestBuilder.assertRejected(code: String, vararg changes: SyncRecord, checkpoint: Long = 0) {
+    /** A per-change problem: 200, the change listed in `rejected` with [reason], the rest applied. */
+    private suspend fun ApplicationTestBuilder.assertRejected(reason: String, bad: SyncRecord) {
         val token = client.loginToken()
-        val res = client.sync(token, checkpoint, changes.toList())
+        val resp = client.sync(token, 0, listOf(task("good1"), bad, task("good2"))).body()
+        assertEquals(listOf(RejectedChange(bad.entity, bad.id, reason)), resp.rejected)
+        assertEquals(setOf("good1", "good2"), client.pullAll(token).first.map { it.id }.toSet())
+    }
+
+    /** A request-level problem: 400 and nothing applied. */
+    private suspend fun ApplicationTestBuilder.assertBadRequest(changes: List<SyncRecord>, checkpoint: Long = 0) {
+        val token = client.loginToken()
+        val res = client.sync(token, checkpoint, changes)
         assertEquals(HttpStatusCode.BadRequest, res.status)
-        assertEquals("""{"error":"$code"}""", res.bodyAsText())
+        assertEquals("""{"error":"bad_request"}""", res.bodyAsText())
+        assertTrue(client.pullAll(token).first.isEmpty())
     }
 
     @Test
@@ -130,7 +141,6 @@ class SyncRouteTest {
         assertRejected("bad_request", task("").copy(id = ""))
         assertRejected("bad_request", task("x".repeat(65)))
         assertRejected("bad_request", task("t1").copy(fields = mapOf("id" to JsonPrimitive("t2"))))
-        assertRejected("bad_request", task("t1"), checkpoint = -1)
     }
 
     @Test
@@ -138,7 +148,7 @@ class SyncRouteTest {
         server()
         val noClock = task("t1", "title" to JsonPrimitive("a")).let { it.copy(clocks = it.clocks - "title") }
         assertRejected("bad_request", noClock)
-        val badClock = task("t1", "title" to JsonPrimitive("a")).let { it.copy(clocks = it.clocks + ("title" to "yesterday")) }
+        val badClock = task("t2", "title" to JsonPrimitive("a")).let { it.copy(clocks = it.clocks + ("title" to "yesterday")) }
         assertRejected("bad_request", badClock)
     }
 
@@ -147,22 +157,25 @@ class SyncRouteTest {
         server()
         assertRejected("clock_skew", task("t1", at = clock(now + 25 * 3_600_000L)))
         val token = client.loginToken()
-        assertEquals(HttpStatusCode.OK, client.sync(token, 0, listOf(task("t1", at = clock(now + 23 * 3_600_000L)))).status)
+        assertTrue(client.sync(token, 0, listOf(task("t9", at = clock(now + 23 * 3_600_000L)))).body().rejected.isEmpty())
     }
 
     @Test
-    fun rejectsTooManyChanges() = testApplication {
+    fun requestLevelProblemsAre400AndApplyNothing() = testApplication {
         server()
-        assertRejected("bad_request", *Array(MAX_CHANGES + 1) { task("t$it") })
+        assertBadRequest(Array(MAX_CHANGES + 1) { task("t$it") }.toList())
+        assertBadRequest(listOf(task("t1")), checkpoint = -1)
     }
 
     @Test
-    fun rejectedRequestAppliesNothing() = testApplication {
+    fun checkpointAheadOfServerRotatesServerId() = testApplication {
         server()
         val token = client.loginToken()
-        val res = client.sync(token, 0, listOf(task("good1"), task("bad").copy(entity = "nope"), task("good2")))
-        assertEquals(HttpStatusCode.BadRequest, res.status)
-        assertTrue(client.pullAll(token).first.isEmpty())
+        val first = client.sync(token, 0, listOf(task("t1"))).body()
+        val restored = client.sync(token, first.checkpoint + 100).body()
+        assertTrue(restored.serverId != first.serverId, "a checkpoint the server never issued means its DB went back in time")
+        val after = client.sync(token, 0).body()
+        assertEquals(restored.serverId, after.serverId, "the new id sticks")
     }
 
     @Test

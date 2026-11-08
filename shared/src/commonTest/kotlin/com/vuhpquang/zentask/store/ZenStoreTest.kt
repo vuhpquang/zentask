@@ -1,5 +1,6 @@
 package com.vuhpquang.zentask.store
 
+import com.vuhpquang.zentask.model.CalendarEvent
 import com.vuhpquang.zentask.model.EntityTypes
 import com.vuhpquang.zentask.model.Priority
 import com.vuhpquang.zentask.model.Task
@@ -11,6 +12,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -174,5 +176,85 @@ class ZenStoreTest {
     fun nodeIdsDifferBetweenDatabases() {
         val other = ZenStore(createSqlDriver(null), wall = { wall })
         assertNotEquals(store.nodeId, other.nodeId)
+    }
+
+    @Test
+    fun putRejectsServerOwnedType() {
+        assertFailsWith<IllegalArgumentException> {
+            store.put(EntityTypes.calendarEvent, CalendarEvent(id = "e1"))
+        }
+    }
+
+    @Test
+    fun markAllPendingSkipsServerOwnedEntities() {
+        val clock = Hlc(1, 0, "srv").encode()
+        store.applyRemote(listOf(SyncRecord("calendarEvent", "e1", mapOf("id" to JsonPrimitive("e1")), mapOf("id" to clock))))
+        store.put(task, Task(id = "t1"))
+        store.markSynced(store.pending(100))
+        store.markAllPending()
+        assertEquals(listOf("t1"), store.pending(100).map { it.record.id })
+    }
+
+    @Test
+    fun resetForNewServerQueuesEverythingAndRestartsPull() {
+        store.put(task, Task(id = "a"))
+        store.markSynced(store.pending(100))
+        store.checkpoint = 30
+        store.serverId = "old"
+        store.resetForNewServer("new")
+        assertEquals("new", store.serverId)
+        assertEquals(0L, store.checkpoint)
+        assertEquals(listOf("a"), store.pending(100).map { it.record.id })
+    }
+
+    @Test
+    fun staleCopyWithBaseKeepsRemoteEdit() {
+        store.put(task, Task(id = "t1", title = "old", priority = Priority.NONE))
+        val uiCopy = store.get(task, "t1")!!
+        store.applyRemote(
+            listOf(SyncRecord("task", "t1", mapOf("title" to JsonPrimitive("remote")), mapOf("title" to Hlc(9_000, 0, "zz").encode()))),
+        )
+        wall += 10_000
+        store.put(task, uiCopy.copy(priority = Priority.HIGH), base = uiCopy)
+        val got = store.get(task, "t1")!!
+        assertEquals("remote", got.title)
+        assertEquals(Priority.HIGH, got.priority)
+    }
+
+    @Test
+    fun updateTransformsTheCurrentValue() {
+        store.put(task, Task(id = "t1", title = "a"))
+        store.applyRemote(
+            listOf(SyncRecord("task", "t1", mapOf("title" to JsonPrimitive("remote")), mapOf("title" to Hlc(9_000, 0, "zz").encode()))),
+        )
+        wall += 10_000
+        val updated = store.update(task, "t1") { it.copy(priority = Priority.LOW) }
+        assertEquals("remote", updated!!.title)
+        assertEquals(Priority.LOW, store.get(task, "t1")!!.priority)
+        assertNull(store.update(task, "missing") { it })
+    }
+
+    @Test
+    fun parkedChangeLeavesPendingUntilEditedAgain() {
+        store.put(task, Task(id = "t1", title = "a"))
+        val out = store.pending(100).single()
+        store.park(out, "bad_request")
+        assertTrue(store.pending(100).isEmpty())
+        assertEquals(listOf("t1" to "bad_request"), store.parked().map { it.first.id to it.second })
+        wall += 1
+        store.put(task, store.get(task, "t1")!!.copy(title = "b"))
+        assertEquals(listOf("t1"), store.pending(100).map { it.record.id })
+        assertTrue(store.parked().isEmpty())
+    }
+
+    @Test
+    fun restampMovesFarFutureClocksToNow() {
+        val future = Hlc(wall + 48 * 3_600_000L, 0, "skewed").encode()
+        store.applyRemote(listOf(SyncRecord("task", "t1", mapOf("id" to JsonPrimitive("t1"), "title" to JsonPrimitive("x")), mapOf("id" to future, "title" to future))))
+        store.restampFuture("task", "t1")
+        val rec = store.rawRecord("task", "t1")!!
+        assertTrue(rec.clocks.values.all { Hlc.parse(it)!!.millis <= wall + 3_600_000L }, "${rec.clocks}")
+        assertEquals(JsonPrimitive("x"), rec.fields["title"])
+        assertEquals(listOf("t1"), store.pending(100).map { it.record.id })
     }
 }

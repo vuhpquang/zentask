@@ -17,6 +17,9 @@ import io.ktor.server.routing.HttpMethodRouteSelector
 import io.ktor.server.routing.RoutingRoot
 import io.ktor.server.routing.getAllRoutes
 import io.ktor.server.testing.testApplication
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.builtins.ListSerializer
 import java.nio.file.Files
 import kotlin.io.path.readBytes
@@ -60,6 +63,17 @@ class AuthTest {
         assertEquals("""{"error":"too_many_attempts"}""", blocked.bodyAsText())
         now += 15 * 60 * 1000 + 1
         assertEquals(HttpStatusCode.OK, client.login().status)
+    }
+
+    @Test
+    fun parallelWrongPasswordsCannotExceedTheLimit() = testApplication {
+        application { module(testConfig()) }
+        startApplication()
+        val statuses = coroutineScope {
+            (1..20).map { async { client.login(password = "bad-$it").status } }.awaitAll()
+        }
+        assertEquals(5, statuses.count { it == HttpStatusCode.Unauthorized }, "statuses: $statuses")
+        assertEquals(15, statuses.count { it == HttpStatusCode.TooManyRequests })
     }
 
     @Test

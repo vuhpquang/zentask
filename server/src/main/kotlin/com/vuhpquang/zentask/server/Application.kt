@@ -83,15 +83,16 @@ fun Application.module(config: ServerConfig = ServerConfig.fromEnv(), now: () ->
         route("/v1") {
             post("/auth/login") {
                 val req = call.receive<LoginRequest>()
-                if (limiter.blocked()) {
+                val slot = limiter.reserve()
+                if (slot == null) {
                     log.warn("Login refused: too many failed attempts")
                     return@post call.respond(HttpStatusCode.TooManyRequests, ApiError("too_many_attempts"))
                 }
                 if (!password.matches(req.password)) {
-                    limiter.recordFailure()
                     log.warn("Login failed (wrong password)")
                     return@post call.respond(HttpStatusCode.Unauthorized, ApiError("unauthorized"))
                 }
+                limiter.succeeded(slot)
                 val token = Tokens.issue()
                 val name = req.deviceName.trim().take(100).ifEmpty { "Unknown device" }
                 val deviceId = db.createDevice(name, Tokens.hash(token))

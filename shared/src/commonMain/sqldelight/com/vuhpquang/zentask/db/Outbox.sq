@@ -4,20 +4,33 @@ CREATE TABLE pending_change (
     entity TEXT NOT NULL,
     id TEXT NOT NULL,
     seq INTEGER NOT NULL,
+    -- Non-null = the server refused this change for that reason; kept (never dropped) until edited again.
+    parked TEXT,
     PRIMARY KEY (entity, id)
 );
 
 mark:
-INSERT OR REPLACE INTO pending_change(entity, id, seq) VALUES (?, ?, ?);
+INSERT OR REPLACE INTO pending_change(entity, id, seq, parked) VALUES (?, ?, ?, NULL);
 
 markAll:
-INSERT OR REPLACE INTO pending_change(entity, id, seq) SELECT entity, id, ? FROM record;
+INSERT OR REPLACE INTO pending_change(entity, id, seq, parked)
+SELECT entity, id, ?, NULL FROM record WHERE entity IN ?;
 
 pending:
 SELECT p.entity, p.id, p.seq, r.fields, r.clocks
 FROM pending_change p JOIN record r ON r.entity = p.entity AND r.id = p.id
+WHERE p.parked IS NULL
 ORDER BY p.seq, p.entity, p.id
 LIMIT ?;
+
+park:
+UPDATE pending_change SET parked = ? WHERE entity = ? AND id = ? AND seq <= ?;
+
+parked:
+SELECT p.entity, p.id, p.parked, r.fields, r.clocks
+FROM pending_change p JOIN record r ON r.entity = p.entity AND r.id = p.id
+WHERE p.parked IS NOT NULL
+ORDER BY p.seq;
 
 clear:
 DELETE FROM pending_change WHERE entity = ? AND id = ? AND seq <= ?;

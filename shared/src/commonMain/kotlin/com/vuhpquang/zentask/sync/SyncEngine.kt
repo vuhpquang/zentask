@@ -55,12 +55,18 @@ class SyncEngine(
             if (known != null && response.serverId != known) {
                 // The server's database was replaced (restore/recreate): it may lack records this client
                 // already synced. Re-upload everything and pull from the start.
-                store.serverId = response.serverId
-                store.checkpoint = 0
-                store.markAllPending()
+                store.resetForNewServer(response.serverId)
                 return@repeat
             }
-            store.markSynced(outgoing)
+            val refused = response.rejected.associateBy { it.entity to it.id }
+            store.markSynced(outgoing.filter { (it.record.entity to it.record.id) !in refused })
+            for (item in outgoing) {
+                val reason = refused[item.record.entity to item.record.id]?.reason ?: continue
+                // A clock from a device clock that was wrong: re-stamp and resend. Anything else: keep it
+                // parked (never dropped) so it can't block the rest of the sync.
+                if (reason == "clock_skew" && store.restampFuture(item.record.entity, item.record.id)) continue
+                store.park(item, reason) // no-op if the record was edited again meanwhile (newer seq)
+            }
             store.applyRemote(response.changes)
             store.checkpoint = response.checkpoint
             store.serverId = response.serverId

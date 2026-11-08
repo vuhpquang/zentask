@@ -23,7 +23,9 @@ class ServerDb(file: Path, private val now: () -> Long = System::currentTimeMill
     private val conn: Connection
 
     /** Random id of this database; clients re-upload everything when it changes (restored/recreated DB). */
-    val serverId: String
+    @Volatile
+    var serverId: String
+        private set
 
     init {
         file.parent?.let { Files.createDirectories(it) }
@@ -45,6 +47,12 @@ class ServerDb(file: Path, private val now: () -> Long = System::currentTimeMill
             )
         }
         serverId = meta("serverId") ?: UUID.randomUUID().toString().also { setMeta("serverId", it) }
+    }
+
+    /** Gives this database a new id (it was restored or recreated); clients then re-upload everything. */
+    @Synchronized
+    fun rotateServerId() {
+        serverId = UUID.randomUUID().toString().also { setMeta("serverId", it) }
     }
 
     /** The version of the last record write (0 for an empty database). */
@@ -78,7 +86,7 @@ class ServerDb(file: Path, private val now: () -> Long = System::currentTimeMill
             setMeta("version", version.toString())
             conn.commit()
         } catch (e: Throwable) {
-            conn.rollback()
+            runCatching { conn.rollback() }.exceptionOrNull()?.let(e::addSuppressed)
             throw e
         } finally {
             conn.autoCommit = true

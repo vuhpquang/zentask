@@ -56,4 +56,20 @@ class HlcTest {
         val clock = HlcClock("n", { 10L }, last = Hlc(500, 3, "n"))
         assertTrue(clock.tick() > Hlc(500, 3, "n"))
     }
+
+    @Test
+    fun farFutureLastIsClampedToWallClock() {
+        val clock = HlcClock("n", { 1_000L }, last = Hlc(1_000L + 48 * 3_600_000L, 5, "n"))
+        assertEquals(Hlc(1_000, 0, "n"), clock.tick())
+        val nearFuture = HlcClock("n", { 1_000L }, last = Hlc(1_000L + 60_000, 5, "n"))
+        assertEquals(Hlc(61_000, 6, "n"), nearFuture.tick())
+    }
+
+    @Test
+    fun counterOverflowStaysParsable() {
+        val clock = HlcClock("n", { 0L }, last = Hlc(10, 999_999, "n"))
+        val next = clock.tick()
+        assertTrue(next > Hlc(10, 999_999, "n"))
+        assertEquals(next, Hlc.parse(next.encode()))
+    }
 }

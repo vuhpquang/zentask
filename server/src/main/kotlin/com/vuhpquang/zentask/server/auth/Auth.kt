@@ -30,27 +30,33 @@ class PasswordCheck(password: String, private val iterations: Int = 120_000) {
 }
 
 /**
- * Global login throttle: after [maxFailures] failed logins within [windowMs], every login (even a
- * correct one) is refused until the oldest failure leaves the window. Global because all traffic
+ * Global login throttle: at most [maxFailures] failed logins within [windowMs]; beyond that every login
+ * (even a correct one) is refused until the oldest failure leaves the window. Global because all traffic
  * arrives through cloudflared, so client IPs mean nothing.
+ *
+ * An attempt reserves a failure slot *before* the (slow) password check and gives it back on success,
+ * so parallel requests can't all slip past the limit. In memory: a server restart clears it.
  */
 class LoginLimiter(
     private val now: () -> Long,
     private val maxFailures: Int = 5,
     private val windowMs: Long = 15 * 60 * 1000,
 ) {
-    private val failures = ArrayDeque<Long>()
+    private val attempts = ArrayDeque<Long>()
 
+    /** Reserves a slot; null when the limit is reached. Pass the result to [succeeded] if the password was right. */
     @Synchronized
-    fun blocked(): Boolean {
+    fun reserve(): Long? {
         val t = now()
-        while (failures.isNotEmpty() && t - failures.first() > windowMs) failures.removeFirst()
-        return failures.size >= maxFailures
+        while (attempts.isNotEmpty() && t - attempts.first() > windowMs) attempts.removeFirst()
+        if (attempts.size >= maxFailures) return null
+        attempts.addLast(t)
+        return t
     }
 
     @Synchronized
-    fun recordFailure() {
-        failures.addLast(now())
+    fun succeeded(slot: Long) {
+        attempts.remove(slot)
     }
 }
 

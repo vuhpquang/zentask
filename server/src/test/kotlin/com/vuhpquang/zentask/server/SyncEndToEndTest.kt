@@ -10,6 +10,7 @@ import com.vuhpquang.zentask.sync.SyncEngine
 import com.vuhpquang.zentask.sync.SyncStatus
 import io.ktor.server.testing.ApplicationTestBuilder
 import io.ktor.server.testing.testApplication
+import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -146,5 +147,37 @@ class SyncEndToEndTest {
         assertEquals(checkpoint, b.store.checkpoint)
         assertTrue(a.store.pending(10).isEmpty())
         assertTrue(b.store.pending(10).isEmpty())
+    }
+
+    @Test
+    fun serverRestoredFromBackupGetsEverythingBack() {
+        val live = Files.createTempDirectory("zentask-live")
+        val backup = Files.createTempDirectory("zentask-backup")
+        val storeA = ZenStore(createSqlDriver(null), wall = { wall })
+        lateinit var tokenA: String
+        testApplication {
+            application { module(testConfig(live), now = { wall }) }
+            tokenA = client.loginToken("A")
+            val a = Device(storeA, SyncEngine(storeA, SyncApi(client, "", { tokenA }), wall = { wall }), { wall })
+            storeA.put(EntityTypes.task, Task(id = "before-backup"))
+            a.sync()
+        }
+        live.toFile().copyRecursively(backup.toFile(), overwrite = true)
+        testApplication {
+            application { module(testConfig(live), now = { wall }) }
+            val a = Device(storeA, SyncEngine(storeA, SyncApi(client, "", { tokenA }), wall = { wall }), { wall })
+            wall += 1_000
+            storeA.put(EntityTypes.task, Task(id = "after-backup"))
+            a.sync()
+        }
+        // The server is restored from the backup: it lost "after-backup", which A has already synced.
+        testApplication {
+            application { module(testConfig(backup), now = { wall }) }
+            val a = Device(storeA, SyncEngine(storeA, SyncApi(client, "", { tokenA }), wall = { wall }), { wall })
+            a.sync()
+            val b = device("B")
+            b.sync()
+            assertEquals(setOf("before-backup", "after-backup"), b.store.list(EntityTypes.task).map { it.id }.toSet())
+        }
     }
 }

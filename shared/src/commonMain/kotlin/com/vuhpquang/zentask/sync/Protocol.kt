@@ -20,9 +20,21 @@ data class SyncRequest(val checkpoint: Long, val changes: List<SyncRecord>)
 /**
  * Server changes after the request's checkpoint (one page). [serverId] identifies the server database:
  * when it changes, the client re-uploads everything. More pages follow while [hasMore].
+ * The server changes [serverId] itself when a client's checkpoint is ahead of its version (restored DB).
  */
 @Serializable
-data class SyncResponse(val serverId: String, val checkpoint: Long, val changes: List<SyncRecord>, val hasMore: Boolean)
+data class SyncResponse(
+    val serverId: String,
+    val checkpoint: Long,
+    val changes: List<SyncRecord>,
+    val hasMore: Boolean,
+    /** Pushed changes the server refused; every other pushed change was applied. */
+    val rejected: List<RejectedChange> = emptyList(),
+)
+
+/** [reason]: `clock_skew` (re-stamp and resend) or `bad_request` (the client parks it). */
+@Serializable
+data class RejectedChange(val entity: String, val id: String, val reason: String)
 
 /** Error body: `{"error": "<code>"}`. */
 @Serializable

@@ -130,4 +130,36 @@ class SyncEngineTest {
         assertEquals(listOf(0L, 1L, 2L, 3L), requests.map { it.checkpoint })
         assertEquals(4L, store.checkpoint)
     }
+
+    @Test
+    fun rejectedChangeIsParkedAndPullStillHappens() = runTest {
+        store.put(EntityTypes.task, Task(id = "bad"))
+        store.put(EntityTypes.task, Task(id = "good"))
+        val remote = SyncRecord("task", "r1", mapOf("id" to kotlinx.serialization.json.JsonPrimitive("r1")), mapOf("id" to Hlc(5, 0, "b").encode()))
+        val status = engine { req ->
+            if (req.changes.any { it.id == "bad" }) {
+                ok(SyncResponse("srv", 3, listOf(remote), false, rejected = listOf(RejectedChange("task", "bad", "bad_request"))))
+            } else ok(echo(checkpoint = 3))
+        }.syncOnce()
+        assertIs<SyncStatus.Synced>(status)
+        assertTrue(store.pending(10).isEmpty())
+        assertEquals(listOf("bad"), store.parked().map { it.first.id })
+        assertTrue(store.get(EntityTypes.task, "r1") != null)
+        assertEquals(1, requests.size)
+    }
+
+    @Test
+    fun clockSkewRejectionRestampsAndRetries() = runTest {
+        val future = Hlc(wall + 48 * 3_600_000L, 0, store.nodeId).encode()
+        store.applyRemote(listOf(SyncRecord("task", "t1", mapOf("id" to kotlinx.serialization.json.JsonPrimitive("t1")), mapOf("id" to future))))
+        store.markAllPending()
+        val status = engine { req ->
+            val skewed = req.changes.filter { r -> r.clocks.values.any { Hlc.parse(it)!!.millis > wall + 24 * 3_600_000L } }
+            ok(SyncResponse("srv", 1, emptyList(), false, rejected = skewed.map { RejectedChange(it.entity, it.id, "clock_skew") }))
+        }.syncOnce()
+        assertIs<SyncStatus.Synced>(status)
+        assertEquals(2, requests.size)
+        assertTrue(store.pending(10).isEmpty())
+        assertTrue(store.parked().isEmpty())
+    }
 }
