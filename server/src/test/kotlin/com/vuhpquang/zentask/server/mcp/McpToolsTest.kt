@@ -351,4 +351,29 @@ class McpToolsTest {
         assertEquals("update_list", tool)
         assertTrue(changes.contains("\"Trip\"") && changes.contains("\"Japan\""), changes)
     }
+
+    @Test
+    fun listEventsReadsCalendarRecords() = testApplication {
+        server()
+        val token = client.loginToken()
+        client.tool(token, "list_tags") // start the app (creates the db)
+        val db = ServerDb(dir.resolve("zentask.db"))
+        db.writeServer("calendarAccount", "acc", mapOf("id" to JsonPrimitive("acc"), "email" to JsonPrimitive("me@x")))
+        db.writeServer("calendarSource", "s1", mapOf("id" to JsonPrimitive("s1"), "accountId" to JsonPrimitive("acc"), "name" to JsonPrimitive("Work")))
+        db.writeServer(
+            "calendarEvent", "e1",
+            mapOf(
+                "id" to JsonPrimitive("e1"), "sourceId" to JsonPrimitive("s1"), "title" to JsonPrimitive("Standup"),
+                "start" to JsonPrimitive(1_794_189_600_000L), "end" to JsonPrimitive(1_794_190_500_000L), "location" to JsonPrimitive("Room 1"),
+            ),
+        )
+        db.close()
+        val (text, err) = client.tool(token, "list_events", """{"from":"2026-11-09","to":"2026-11-09"}""")
+        assertFalse(err, text)
+        val events = obj(text)["events"]!!.jsonArray.map { it.jsonObject }
+        assertEquals("Standup", events.single()["title"]!!.jsonPrimitive.content)
+        assertEquals("Work", events.single()["calendar"]!!.jsonPrimitive.content)
+        assertEquals("2026-11-09T09:00", events.single()["start"]!!.jsonPrimitive.content)
+        assertEquals(0, obj(client.tool(token, "list_events", """{"from":"2026-11-10","to":"2026-11-11"}""").first)["events"]!!.jsonArray.size)
+    }
 }

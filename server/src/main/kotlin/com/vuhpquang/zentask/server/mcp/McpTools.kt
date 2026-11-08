@@ -292,6 +292,44 @@ object McpTools {
                 ctx.store.put(EntityTypes.filter, f)
                 ToolResult("Created smart list ${f.name} (${f.id})")
             },
+            Tool(
+                "list_events",
+                "Calendar events (Google/iCal, read-only) between two dates, inclusive. Default: today.",
+                schema("from" to str("ISO date, e.g. 2026-11-09"), "to" to str("ISO date (inclusive)"), "query" to str("Text in title or location"), "timezone" to str("IANA zone, default Asia/Ho_Chi_Minh")),
+                writes = false,
+            ) { a, ctx, zone ->
+                val today = Clock.System.now().toLocalDateTime(zone).date.toString()
+                val from = date(a.str("from") ?: today, zone).first
+                val until = endOfDay(a.str("to") ?: a.str("from") ?: today, zone)
+                val accounts = ctx.store.list(EntityTypes.calendarAccount).filter { !it.deleted }.map { it.id }.toSet()
+                val sources = ctx.store.list(EntityTypes.calendarSource).filter { !it.deleted && it.accountId in accounts }.associateBy { it.id }
+                val key = a.str("query")?.let { QuickAddParser.fold(it.lowercase()) }
+                val events = ctx.store.list(EntityTypes.calendarEvent)
+                    .filter { !it.deleted && it.sourceId in sources && it.start <= until && maxOf(it.end, it.start) >= from }
+                    .filter { e -> key == null || QuickAddParser.fold((e.title + " " + e.location).lowercase()).contains(key) }
+                    .sortedBy { it.start }
+                fun fmt(ms: Long, allDay: Boolean) = Instant.fromEpochMilliseconds(ms).toLocalDateTime(zone).let { if (allDay) it.date.toString() else it.toString().take(16) }
+                ToolResult(
+                    json(
+                        buildJsonObject {
+                            putJsonArray("events") {
+                                events.take(200).forEach { e ->
+                                    add(
+                                        buildJsonObject {
+                                            put("title", e.title)
+                                            put("start", fmt(e.start, e.isAllDay))
+                                            put("end", fmt(if (e.isAllDay) e.end - 1 else e.end, e.isAllDay))
+                                            if (e.isAllDay) put("all_day", true)
+                                            if (e.location.isNotEmpty()) put("location", e.location)
+                                            put("calendar", sources[e.sourceId]?.name.orEmpty())
+                                        },
+                                    )
+                                }
+                            }
+                        },
+                    ),
+                )
+            },
             Tool("list_lists", "All lists with their folder and open-task count.", schema(), writes = false) { _, ctx, zone ->
                 val counts = ctx.index.counts(Clock.System.now(), zone)
                 val groups = ctx.store.list(EntityTypes.projectGroup).associate { it.id to it.name }

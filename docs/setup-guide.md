@@ -271,6 +271,25 @@ Nếu lúc kết nối email công ty, Google báo *"Access blocked: … has not
 
 ---
 
+### 3.8 Kết nối lịch trong ZenTask (sau khi đã làm 3.1–3.6)
+
+Làm một lần cho mỗi tài khoản Google: cá nhân và công ty.
+
+1. Mở ZenTask, nhấn `⌘,` và chọn tab **Calendars**. Nếu chưa đăng nhập ZenTask thì làm bước 5.1 trước.
+2. Bấm **Connect Google account…**. Trình duyệt mở trang đăng nhập Google.
+3. Chọn tài khoản muốn kết nối.
+4. Google báo **"Google hasn't verified this app"**. Đây là bình thường với app cá nhân (bước 3.6). Bấm **Advanced** rồi **Go to ZenTask (unsafe)**.
+5. Tick quyền **See and download any calendar you can access using your Google Calendar** rồi bấm **Continue**.
+6. Trình duyệt hiện trang **"Connected"** của ZenTask. Đóng tab đó.
+7. Quay lại ZenTask: tab Calendars liệt kê các lịch của tài khoản (bấm **Refresh** nếu chưa thấy). Bỏ tick lịch nào không muốn hiện, ví dụ lịch ngày lễ.
+8. Mở **Calendar** trên thanh bên trái (`⌘2`) để xem Day, Week và Month.
+
+Lặp lại bước 2–6 cho tài khoản thứ hai.
+
+> - Nếu tài khoản công ty báo **"Access blocked"** hoặc **"admin_policy_enforced"**, công ty đã chặn app bên ngoài. Dùng cách ở mục 4 (link iCal) cho tài khoản đó.
+> - Nếu một tài khoản hiện **"Needs reconnecting"** (anh đổi mật khẩu Google hoặc đã gỡ quyền), bấm **Reconnect** rồi làm lại bước 3–6. Các sự kiện cũ vẫn giữ nguyên trong lúc chờ.
+> - ZenTask chỉ **đọc** lịch: không tạo, sửa hay xoá sự kiện nào trên Google.
+
 ## 4. (Tuỳ chọn) Link iCal bí mật của lịch
 
 Chỉ dùng khi bước 3 bị chặn với tài khoản nào đó.
@@ -279,7 +298,8 @@ Chỉ dùng khi bước 3 bị chặn với tài khoản nào đó.
 2. ⚙️ **Settings** → cột trái, mục **Settings for my calendars** → chọn lịch (thường là tên của anh).
 3. Kéo xuống **Integrate calendar** → **Secret address in iCal format** → bấm copy.
    - Nếu mục này bị ẩn hoặc báo đã tắt, nghĩa là admin công ty cũng chặn chia sẻ ra ngoài, nên cách này không dùng được.
-4. Khi tới P5: **ZenTask → Settings → Calendar → Add iCal URL** → dán link.
+4. Trong ZenTask: `⌘,` → tab **Calendars** → **Add iCal link…** → điền tên (ví dụ "Công ty") và dán link → **Add**.
+5. Lịch xuất hiện sau vài giây. Server đọc lại link mỗi 10 phút.
 
 > Link này cho phép bất kỳ ai đọc lịch của anh. Đừng gửi cho ai, đừng commit. ZenTask lưu nó mã hoá trên server.
 

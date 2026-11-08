@@ -1,6 +1,6 @@
 # ZenTask — Thiết kế tổng thể
 
-Ngày: 2026-11-08 · Trạng thái: P0, P1, P2, P3, P3b, P4 xong (plan trong `docs/superpowers/plans/`)
+Ngày: 2026-11-08 · Trạng thái: P0, P1, P2, P3, P3b, P4, P5 xong (plan trong `docs/superpowers/plans/`)
 
 ## 1. Ý định
 

@@ -53,12 +53,20 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
   - `lists/` — `ListActions` (lists/folders/sections, trash+restore by shared timestamp, Inbox protected,
     `SortOrder` gaps of 2^32 with renumber on exhaustion), `FilterRule` (custom smart lists, JSON in
     `Filter.rule`), `ViewOptions` (per-list sort/group, synced as Preference `view.<key>`).
+  - `calendar/` — `CalendarQueries` (Day/Week/Month content: visible events + dated tasks, all-day row,
+    timed entries clipped per day with overlap columns). Calendar records are server-owned; which
+    calendars show is the Preference `calendar.hidden`.
   - `ZenTaskCore` — the Swift-facing entry point (typed helpers; Kotlin `Task` is `ZenTaskShared.Task` in Swift).
 - `server/` — Ktor/JVM, depends on `shared` (same models, merge and protocol).
   `Application.module(config, now)`; `ServerConfig.fromEnv()` (`ZENTASK_PASSWORD` required, `HOST`
   defaults to 127.0.0.1). `ServerDb` = SQLite over JDBC (`records` with a global version, `devices`, `meta`
   with `serverId`, `mcp_audit`). Routes: `POST /v1/auth/login`, `GET/DELETE /v1/devices`, `POST /v1/sync`,
   `POST /mcp`; everything except login, health and the public pages needs a device bearer token.
+  `calendar/`: Google OAuth (start → browser → public `/v1/calendar/google/callback`, one-time state),
+  refresh tokens sealed with AES-GCM (`ZENTASK_ENCRYPTION_KEY`) in the server-only `calendar_credentials`
+  table, `CalendarService.syncAll` every 10 min writing calendar records via `ServerDb.writeServer`
+  (field diffs, server HLC node), `IcalParser` for secret links. `module(config, now, http)` takes the
+  HttpClient so tests fake Google.
   `mcp/`: MCP (JSON-RPC over Streamable HTTP, written by hand) — `McpReplica` is a `ZenStore` at
   `<dataDir>/mcp.db` synced in-process with `ServerDb` (pull → shared TaskActions → push), so AI edits
   follow the app's rules; `McpTools` = the tool set; every write is audited.
@@ -70,7 +78,8 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
   `TaskIndex` off the main thread on `core.recordChanges` (80 ms debounce). `Services/Reminders` schedules
   local notifications from `core.plannedReminders`. The window is `MainWindow` = `AppRail` (always-visible
   icon rail, ⌘1–5) + the area. List management: `Tasks/ListSheets.swift` (sheets), sidebar context menus,
-  drag and drop with task-id String payloads validated in `TasksModel.drop`.
+  drag and drop with task-id String payloads validated in `TasksModel.drop`. `Calendar/` (rail ⌘2):
+  `CalendarModel` + `CalendarView` (Week/Day grid, Month, Unscheduled panel); Settings → Calendars.
   In Swift, write `_Concurrency.Task { }` in files that import ZenTaskShared (Kotlin `Task` shadows it).
   UI snapshots: `ZENTASK_SNAPSHOT=/tmp/shots build/DerivedData/Build/Products/Debug/ZenTask.app/Contents/MacOS/ZenTask`.
 - `scripts/` — `lib/env.sh` (sourced by all), build, release, deploy, signing, icon.
