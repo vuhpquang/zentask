@@ -54,8 +54,11 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
 - `server/` — Ktor/JVM, depends on `shared` (same models, merge and protocol).
   `Application.module(config, now)`; `ServerConfig.fromEnv()` (`ZENTASK_PASSWORD` required, `HOST`
   defaults to 127.0.0.1). `ServerDb` = SQLite over JDBC (`records` with a global version, `devices`, `meta`
-  with `serverId`). Routes: `POST /v1/auth/login`, `GET/DELETE /v1/devices`, `POST /v1/sync`; everything
-  under `/v1` except login needs a device bearer token.
+  with `serverId`, `mcp_audit`). Routes: `POST /v1/auth/login`, `GET/DELETE /v1/devices`, `POST /v1/sync`,
+  `POST /mcp`; everything except login, health and the public pages needs a device bearer token.
+  `mcp/`: MCP (JSON-RPC over Streamable HTTP, written by hand) — `McpReplica` is a `ZenStore` at
+  `<dataDir>/mcp.db` synced in-process with `ServerDb` (pull → shared TaskActions → push), so AI edits
+  follow the app's rules; `McpTools` = the tool set; every write is audited.
 - `apps/macos/` — xcodegen project (`project.yml`); never hand-edit or commit the `.xcodeproj`.
   Links the **release** XCFramework in both configs. `AppModel` (@Observable) owns `ZenTaskCore`; DB in
   `~/Library/Application Support/ZenTask[-dev]/zentask.db`; server token + TickTick cookie in the Keychain

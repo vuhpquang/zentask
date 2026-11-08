@@ -9,7 +9,7 @@ Các bước dưới đây cần tài khoản hoặc quyền mà chỉ anh có. 
 | 3 | Google Cloud OAuth client cho Google Calendar, publish app (bước 3.6) | P5 (calendar) |
 | 4 | (Tuỳ chọn) Link iCal bí mật của lịch công ty | P5, chỉ khi bước 3 bị công ty chặn |
 | 5 | Đăng nhập ZenTask trên Mac + cookie TickTick | P2 |
-| 6 | Kết nối MCP cho AI (Claude Code) | P3b (hướng dẫn chi tiết sẽ thêm khi tới P3b) |
+| 6 | Kết nối MCP cho AI (Claude Code) | P3b |
 
 ---
 
@@ -345,3 +345,54 @@ Chỉ dùng khi chưa lấy được cookie. Trong TickTick, vào **Settings →
 > - Nếu nhập CSV trước rồi mới sync bằng cookie, các task nhập từ CSV được chuyển vào Trash (ZenTask sẽ hỏi lại) và thay bằng bản có ID thật từ TickTick. Những gì anh đã sửa trên bản CSV sẽ nằm trong Trash.
 >
 > Nếu đã có cookie thì bỏ qua CSV.
+
+---
+
+## 6. Kết nối Claude Code (MCP) với ZenTask
+
+Server ZenTask có endpoint MCP tại `https://zentask-api.vuhpquang.com/mcp`. Claude dùng nó để tìm, thêm, sửa, hoàn thành và xoá task, tag. Thay đổi do AI làm xuất hiện trên Mac sau lần sync kế tiếp.
+
+> AI dùng một **token riêng** như một thiết bị, thu hồi được bất cứ lúc nào. "Xoá" mặc định là đưa vào Trash; AI chỉ xoá hẳn được task đã nằm trong Trash. Mọi thay đổi qua MCP được ghi nhật ký trên server (bảng `mcp_audit`).
+
+### 6.1 Tạo token cho Claude (chạy trên Mac)
+
+```bash
+read -s "ZT_PW?Mật khẩu ZenTask: "; echo
+curl -s https://zentask-api.vuhpquang.com/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d "{\"password\":\"$ZT_PW\",\"deviceName\":\"Claude Code\"}" \
+  -w '\nHTTP %{http_code}\n'
+unset ZT_PW
+```
+
+Kết quả là `HTTP 200` cùng `{"token":"…","deviceId":"…"}`. Copy giá trị `token`, và ghi lại `deviceId` để sau này có thể thu hồi.
+
+### 6.2 Thêm vào Claude Code
+
+Thay `<token>` bằng token vừa lấy. Tham số `--scope user` để dùng được ở mọi thư mục:
+
+```bash
+claude mcp add --scope user --transport http zentask https://zentask-api.vuhpquang.com/mcp \
+  --header "Authorization: Bearer <token>"
+claude mcp list        # phải thấy: zentask … ✓ Connected
+```
+
+### 6.3 Thử
+
+Trong Claude Code, gõ chẳng hạn:
+- "Hôm nay tôi có task gì trong ZenTask?"
+- "Thêm task gọi ngân hàng ngày mai 9h, priority cao, tag #finance"
+- "Đánh dấu xong task gọi ngân hàng"
+
+Sau đó, trên Mac, bấm sync ở góc dưới sidebar (hoặc đợi vài giây) để thấy thay đổi.
+
+### 6.4 Thu hồi quyền của Claude
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' -X DELETE \
+  https://zentask-api.vuhpquang.com/v1/devices/<deviceId> -H 'Authorization: Bearer <token>'
+claude mcp remove zentask --scope user
+```
+
+Lệnh `DELETE` in ra `204`. Từ lúc đó token của Claude trả `401`.
+
