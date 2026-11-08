@@ -40,6 +40,7 @@ kotlin {
             binaries.framework {
                 baseName = "ZenTaskShared"
                 isStatic = true
+                binaryOption("bundleId", "com.vuhpquang.zentask.shared")
                 xcf.add(this)
             }
         }
