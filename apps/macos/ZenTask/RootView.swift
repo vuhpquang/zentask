@@ -27,8 +27,11 @@ struct RootView: View {
             .frame(width: Theme.Size.summaryWidth)
 
             HStack(spacing: Theme.Space.s) {
-                Label(model.syncText, systemImage: model.syncFailed ? "exclamationmark.triangle" : "arrow.triangle.2.circlepath")
-                    .foregroundStyle(model.syncFailed ? .orange : .secondary)
+                if model.syncFailed {
+                    ProblemLabel(text: model.syncText)
+                } else {
+                    Label(model.syncText, systemImage: "arrow.triangle.2.circlepath").foregroundStyle(.secondary)
+                }
                 if !model.signedIn {
                     SettingsLink { Text("Sign in…") }
                 }

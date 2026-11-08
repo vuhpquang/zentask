@@ -168,4 +168,59 @@ class TickTickSyncTest {
         assertTrue(store.pending(10).isEmpty())
         assertNull(sync.lastSyncAt)
     }
+
+    @Test
+    fun deviceWithoutBaselineAdoptsInsteadOfOverwriting() {
+        // Device A imports, then the owner edits in ZenTask.
+        sync.apply(snap(task("x", title = "TT title"), task("y")))
+        wall += 1_000
+        store.update(EntityTypes.task, "tt_x") { it.copy(title = "Renamed in ZenTask", trashedAt = wall) }
+        store.delete(EntityTypes.task, "tt_y")
+        // Device B receives those records through server sync, then syncs TickTick for the first time.
+        val storeB = ZenStore(createSqlDriver(null), wall = { wall })
+        storeB.applyRemote(listOf("project" to "inbox", "project" to "tt_p1", "task" to "tt_x", "task" to "tt_y").map { (e, id) -> store.rawRecord(e, id)!! })
+        val plan = TickTickSync(storeB, wall = { wall }).apply(snap(task("x", title = "TT title"), task("y")))
+        assertEquals(0, plan.updated)
+        assertEquals(0, plan.restored)
+        val x = storeB.get(EntityTypes.task, "tt_x")!!
+        assertEquals("Renamed in ZenTask", x.title)
+        assertEquals(wall, x.trashedAt)
+        assertTrue(storeB.get(EntityTypes.task, "tt_y")!!.deleted)
+        assertTrue(storeB.pending(100).isEmpty(), "B wrote nothing")
+    }
+
+    @Test
+    fun missingKeysAreNotTreatedAsCleared() {
+        sync.apply(snap(task("a").copy(tags = listOf("work"), items = listOf(TtItem(id = "i1", title = "one")))))
+        val plan = sync.apply(snap(task("a").copy(tags = null, items = null)))
+        assertEquals(0, plan.trashed)
+        assertEquals(listOf("work"), local("a").tags)
+        assertEquals(listOf("tt_i1"), store.list(EntityTypes.checklistItem).map { it.id })
+    }
+
+    @Test
+    fun thinTaskDoesNotClearFields() {
+        sync.apply(snap(task("a").copy(dueDate = "2026-10-30T04:00:00.000+0000", content = "notes")))
+        val thin = snap(TtTask(id = "a", projectId = "p1", title = "Task a", status = 2)).copy(thinTaskIds = setOf("a"))
+        sync.apply(thin)
+        assertEquals(1_793_332_800_000L, local("a").dueDate)
+        assertEquals("notes", local("a").content)
+        assertEquals(2, local("a").status, "fields that are present still update")
+    }
+
+    @Test
+    fun truncatedCompletedListDoesNotTrashCompletedTasks() {
+        sync.apply(snap(task("open1"), task("done1", status = 2)))
+        val plan = sync.apply(snap(task("open1")).copy(completedTruncated = true))
+        assertEquals(0, plan.trashed)
+        assertNull(local("done1").trashedAt)
+    }
+
+    @Test
+    fun deletedChecklistItemThatReturnsIsRecreated() {
+        sync.apply(snap(task("a").copy(items = listOf(TtItem(id = "i1", title = "one"), TtItem(id = "i2", title = "two")))))
+        sync.apply(snap(task("a").copy(items = listOf(TtItem(id = "i1", title = "one")))))
+        sync.apply(snap(task("a").copy(items = listOf(TtItem(id = "i1", title = "one"), TtItem(id = "i2", title = "two")))))
+        assertEquals(setOf("tt_i1", "tt_i2"), store.list(EntityTypes.checklistItem).map { it.id }.toSet())
+    }
 }

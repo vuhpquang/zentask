@@ -168,8 +168,18 @@ data class TickTickSnapshot(
     val columnsAvailable: Boolean = false,
     val habitsAvailable: Boolean = false,
     val countdownsAvailable: Boolean = false,
+    /**
+     * Tasks known only from the completed/closed lists, whose objects may be thinner than `batch/check`'s:
+     * a missing key there means "not sent", never "cleared".
+     */
+    val thinTaskIds: Set<String> = emptySet(),
+    /** The completed list could not be read completely (more than a page of ties): don't trash completed tasks. */
+    val completedTruncated: Boolean = false,
 ) {
     companion object {
+        /** An empty snapshot (tests, previews). */
+        fun empty(inboxId: String?): TickTickSnapshot = TickTickSnapshot(inboxId = inboxId)
+
         fun fromBatch(b: TtBatch) = TickTickSnapshot(
             inboxId = b.inboxId,
             groups = b.projectGroups.orEmpty(),

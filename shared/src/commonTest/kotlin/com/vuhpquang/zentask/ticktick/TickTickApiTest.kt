@@ -93,7 +93,7 @@ class TickTickApiTest {
         }.snapshot()
         assertEquals(2, pages.size)
         assertEquals("2027-01-15 08:00:00", pages[0])
-        assertEquals("2026-11-01 00:59:59", pages[1], "next page ends just before the oldest completion seen")
+        assertEquals("2026-11-01 01:00:00", pages[1], "next page includes the oldest second (ties) — duplicates are dropped by id")
         assertEquals(101, s.tasks.count { it.status == 2 })
         assertEquals("2000-01-01 00:00:00", requests.first { it.url.encodedPath.endsWith("completed") }.url.parameters["from"])
     }
@@ -141,5 +141,20 @@ class TickTickApiTest {
         }.snapshot()
         assertEquals(1, s.tasks.count { it.id == "t1" })
         assertEquals(0, s.tasks.single { it.id == "t1" }.status)
+    }
+
+    @Test
+    fun fullPageWithNothingNewMarksCompletedAsTruncated() = runTest {
+        val sameSecond = "[" + (0 until 100).joinToString(",") { completedTask("s$it", "2026-11-01T01:00:00.000+0000") } + "]"
+        val s = api { req -> if (req.url.encodedPath == "/api/v2/project/all/completed") json(sameSecond) else null }.snapshot()
+        assertTrue(s.completedTruncated)
+        assertEquals(100, s.tasks.count { it.status == 2 })
+        assertFalse(api().snapshot().completedTruncated)
+    }
+
+    @Test
+    fun completedOnlyTasksAreMarkedThin() = runTest {
+        val s = api().snapshot()
+        assertEquals(setOf("c1", "w1"), s.thinTaskIds)
     }
 }

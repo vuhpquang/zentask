@@ -10,7 +10,7 @@ import kotlin.test.assertTrue
 
 class ZenTaskCoreTest {
     @Test
-    fun countsReflectImportedData() {
+    fun countsReflectImportedData() = kotlinx.coroutines.test.runTest {
         val core = ZenTaskCore(dbPath = null)
         assertEquals(Counts(lists = 0, openTasks = 0, completedTasks = 0, trashedTasks = 0), core.counts())
         val plan = core.importCsv(SAMPLE_CSV)

@@ -21,11 +21,14 @@ struct AccountSettings: View {
     var body: some View {
         Form {
             Section {
-                LabeledContent("Server", value: "zentask-api.vuhpquang.com")
+                LabeledContent("Server", value: AppModel.serverHost)
                 if model.signedIn {
                     LabeledContent("Status") {
-                        Label(model.syncText, systemImage: model.syncFailed ? "exclamationmark.triangle" : "checkmark.icloud")
-                            .foregroundStyle(model.syncFailed ? .orange : .secondary)
+                        if model.syncFailed {
+                            ProblemLabel(text: model.syncText)
+                        } else {
+                            Label(model.syncText, systemImage: "checkmark.icloud").foregroundStyle(.secondary)
+                        }
                     }
                     HStack {
                         Button("Sign out", role: .destructive) { model.signOut() }
@@ -37,8 +40,7 @@ struct AccountSettings: View {
                     SecureField("Password", text: $password)
                         .onSubmit(signIn)
                     if let error = model.signInError {
-                        Label(error, systemImage: "exclamationmark.triangle")
-                            .foregroundStyle(.orange)
+                        ProblemLabel(text: error)
                     }
                     HStack {
                         Spacer()
@@ -51,7 +53,7 @@ struct AccountSettings: View {
             } header: {
                 Text("ZenTask server")
             } footer: {
-                Text("Your tasks are stored on this Mac and synced to your own server. Use the password from the server's .env file.")
+                Text("Your tasks are stored on this Mac and synced to your own server. Use the password from the server's .env file")
             }
         }
         .formStyle(.grouped)
@@ -95,7 +97,7 @@ struct TickTickSettings: View {
             } header: {
                 Text("TickTick sign-in")
             } footer: {
-                Text("Copy the t cookie from ticktick.com in your browser. Steps: docs/setup-guide.md, section 5.")
+                Text("Copy the value of the t cookie from ticktick.com in your browser. The setup guide, section 5, shows where to find it")
             }
 
             Section("Sync from TickTick") {
@@ -105,15 +107,14 @@ struct TickTickSettings: View {
                         .foregroundStyle(.secondary)
                 }
                 if let error = model.ticktickError {
-                    Label(error, systemImage: "exclamationmark.triangle")
-                        .foregroundStyle(.orange)
+                    ProblemLabel(text: error)
                 }
                 HStack {
                     if model.ticktickBusy { ProgressView().controlSize(.small) }
                     Spacer()
                     Button("Check for changes") { Task { await model.previewTickTick() } }
                         .disabled(!model.hasCookie || model.ticktickBusy)
-                    Button("Sync from TickTick") { Task { await model.applyTickTick() } }
+                    Button("Sync from TickTick") { Task { await model.applyTickTick(confirmed: false) } }
                         .keyboardShortcut(.defaultAction)
                         .disabled(model.pending == nil || model.ticktickBusy)
                 }
@@ -128,19 +129,19 @@ struct TickTickSettings: View {
                 } header: {
                     Text("CSV backup")
                 } footer: {
-                    Text("Only for a first import without a cookie. Syncing with the cookie later moves CSV-imported tasks to Trash and brings in TickTick's own copies.")
+                    Text("Only for a first import without a cookie. Syncing with the cookie later moves CSV-imported tasks to Trash and brings in TickTick's own copies")
                 }
             }
         }
         .formStyle(.grouped)
         .fileImporter(isPresented: $choosingCsv, allowedContentTypes: [.commaSeparatedText, .plainText]) { result in
-            if case .success(let url) = result { model.importCsv(from: url) }
+            if case .success(let url) = result { Task { await model.importCsv(from: url) } }
         }
         .confirmationDialog(
             "Move \(model.pending.map { Int($0.plan.trashed) } ?? 0) items to Trash?",
             isPresented: $model.confirmMassTrash
         ) {
-            Button("Move to Trash", role: .destructive) { Task { await model.applyTickTick() } }
+            Button("Move to Trash", role: .destructive) { Task { await model.applyTickTick(confirmed: true) } }
             Button("Cancel", role: .cancel) { model.confirmMassTrash = false }
         } message: {
             Text("TickTick no longer returns them. They stay in ZenTask's Trash and can be restored.")
@@ -150,5 +151,18 @@ struct TickTickSettings: View {
     private func saveCookie() {
         model.saveCookie(cookie)
         cookie = ""
+    }
+}
+
+/// An error line: the icon carries the warning colour, the text stays primary for contrast.
+struct ProblemLabel: View {
+    let text: String
+
+    var body: some View {
+        Label {
+            Text(text)
+        } icon: {
+            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+        }
     }
 }

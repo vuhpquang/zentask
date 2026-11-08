@@ -86,7 +86,7 @@ class ZenTaskCore(
 
     /** Imports a TickTick CSV backup (only before any cookie sync). */
     @Throws(Exception::class)
-    fun importCsv(text: String): SyncPlan = ticktick.importCsv(TickTickCsv.parse(text)).also { scheduler.requestNow() }
+    suspend fun importCsv(text: String): SyncPlan = io { ticktick.importCsv(TickTickCsv.parse(text)) }.also { scheduler.requestNow() }
 
     val ticktickLastSyncAt: Long? get() = ticktick.lastSyncAt
     val ticktickHasApiData: Boolean get() = ticktick.hasApiData

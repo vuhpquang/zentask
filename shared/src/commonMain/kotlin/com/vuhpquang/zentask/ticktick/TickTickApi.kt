@@ -48,7 +48,9 @@ class TickTickApi(
         val batch = getJson("/api/v2/batch/check/0", TtBatch.serializer())
         if (batch.inboxId.isNullOrEmpty()) throw TickTickException(TickTickErrorKind.COOKIE_EXPIRED, "TickTick returned no account data")
         val completed = completedTasks("/api/v2/project/all/completed")
+        // A truncated won't-do list counts as unavailable: its missing tasks prove nothing.
         val wontDo = optional { completedTasks("/api/v2/project/all/closed") { parameter("status", "Abandoned") } }
+            ?.takeIf { !it.truncated }?.tasks
         val trash = optional { trashedIds() }
         val columns = optional { listOf("/api/v2/column", TtColumn.serializer()) { parameter("from", 0) } }
         val habits = optional { getJson("/api/v2/habits", ListSerializer(TtHabit.serializer())) }
@@ -56,7 +58,9 @@ class TickTickApi(
         val countdowns = optional { listOf("/api/v2/countdown/list", TtCountdown.serializer()) }
 
         val tasks = LinkedHashMap<String, TtTask>()
-        for (t in batch.syncTaskBean?.update.orEmpty() + completed + wontDo.orEmpty()) tasks.getOrPut(t.id) { t }
+        val open = batch.syncTaskBean?.update.orEmpty()
+        for (t in open + completed.tasks + wontDo.orEmpty()) tasks.getOrPut(t.id) { t }
+        val openIds = open.map { it.id }.toSet()
         return TickTickSnapshot.fromBatch(batch).copy(
             tasks = tasks.values.toList(),
             trashedTaskIds = trash.orEmpty(),
@@ -69,11 +73,20 @@ class TickTickApi(
             columnsAvailable = columns != null,
             habitsAvailable = habits != null,
             countdownsAvailable = countdowns != null,
+            thinTaskIds = tasks.keys - openIds,
+            completedTruncated = completed.truncated,
         )
     }
 
-    /** Completed (or closed) tasks, 100 per page, walking back in time until a short page. */
-    private suspend fun completedTasks(path: String, extra: HttpRequestBuilder.() -> Unit = {}): List<TtTask> {
+    /** A paged list of finished tasks; [truncated] when a full page brought nothing new (more ties than a page). */
+    private class Finished(val tasks: List<TtTask>, val truncated: Boolean)
+
+    /**
+     * Completed (or closed) tasks, 100 per page, walking back in time. Each next page ends at the oldest
+     * completion second seen (inclusive, so tasks completed in the same second aren't skipped); duplicates
+     * are dropped by id; it stops at a short page or a page with nothing new.
+     */
+    private suspend fun completedTasks(path: String, extra: HttpRequestBuilder.() -> Unit = {}): Finished {
         val all = LinkedHashMap<String, TtTask>()
         var to = now()
         repeat(MAX_PAGES) {
@@ -83,14 +96,15 @@ class TickTickApi(
                 parameter("limit", PAGE)
                 extra()
             }
+            val before = all.size
             page.forEach { all.getOrPut(it.id) { it } }
-            if (page.size < PAGE) return all.values.toList()
-            val oldest = page.mapNotNull { TickTickMapper.parseTime(it.completedTime) }.minOrNull() ?: return all.values.toList()
-            val next = (oldest / 1000) * 1000 - 1000
-            if (next >= to) return all.values.toList() // no progress: stop instead of looping
-            to = next
+            if (page.size < PAGE) return Finished(all.values.toList(), truncated = false)
+            if (all.size == before) return Finished(all.values.toList(), truncated = true)
+            val oldest = page.mapNotNull { TickTickMapper.parseTime(it.completedTime) }.minOrNull()
+                ?: return Finished(all.values.toList(), truncated = true)
+            to = minOf(to, (oldest / 1000) * 1000)
         }
-        return all.values.toList()
+        return Finished(all.values.toList(), truncated = true)
     }
 
     private suspend fun trashedIds(): Set<String> {

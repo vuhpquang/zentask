@@ -21,7 +21,10 @@ enum Snapshots {
             }
         }
         if let csv = sampleCsv() {
-            _ = try? model.core.importCsv(text: csv)
+            let semaphore = DispatchSemaphore(value: 0)
+            let core = model.core
+            _Concurrency.Task.detached { _ = try? await core.importCsv(text: csv); semaphore.signal() }
+            while semaphore.wait(timeout: .now()) == .timedOut { RunLoop.current.run(until: Date().addingTimeInterval(0.05)) }
             model.refresh()
             model.ticktickMessage = "Imported: 824 new"
             for (suffix, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {

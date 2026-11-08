@@ -15,6 +15,8 @@ final class AppModel {
     let core: ZenTaskCore
     private let keychain: Keychain
 
+    static let serverHost = URL(string: ZenTaskCore.companion.DEFAULT_SERVER)?.host() ?? ZenTaskCore.companion.DEFAULT_SERVER
+
     private(set) var signedIn = false
     private(set) var signingIn = false
     var signInError: String?
@@ -151,30 +153,43 @@ final class AppModel {
         }
     }
 
-    func applyTickTick() async {
+    /**
+     * Applies the previewed sync. When it would move many items to Trash, the first call only asks
+     * ([confirmMassTrash] opens the dialog); the dialog's button calls again with `confirmed: true`.
+     */
+    func applyTickTick(confirmed: Bool) async {
         guard let pending else { return }
-        if pending.plan.needsConfirmation && !confirmMassTrash {
+        if pending.plan.needsConfirmation && !confirmed {
             confirmMassTrash = true
             return
         }
         ticktickBusy = true
-        defer { ticktickBusy = false; confirmMassTrash = false }
+        defer { ticktickBusy = false }
         do {
-            let plan = try await core.ticktickApply(snapshot: pending.snapshot, confirmMassTrash: pending.plan.needsConfirmation)
+            let plan = try await core.ticktickApply(snapshot: pending.snapshot, confirmMassTrash: confirmed)
             self.pending = nil
+            ticktickError = nil
             ticktickMessage = "Done: " + Self.summary(plan)
             refresh()
         } catch {
-            ticktickError = Self.describe(error, server: false)
+            // TickTick data changed between preview and apply and now trips the guard: ask with the new plan.
+            if let guarded = (error as NSError).userInfo["KotlinException"] as? MassTrashException {
+                self.pending = PendingSync(snapshot: pending.snapshot, plan: guarded.plan)
+                confirmMassTrash = true
+            } else {
+                ticktickError = Self.describe(error, server: false)
+            }
         }
     }
 
-    func importCsv(from url: URL) {
+    func importCsv(from url: URL) async {
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        ticktickBusy = true
+        defer { ticktickBusy = false }
         do {
             let text = try String(contentsOf: url, encoding: .utf8)
-            let plan = try core.importCsv(text: text)
+            let plan = try await core.importCsv(text: text)
             ticktickError = nil
             ticktickMessage = "Imported: " + Self.summary(plan)
             refresh()

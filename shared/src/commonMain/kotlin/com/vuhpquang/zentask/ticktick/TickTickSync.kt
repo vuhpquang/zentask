@@ -10,6 +10,7 @@ import com.vuhpquang.zentask.model.fromFields
 import com.vuhpquang.zentask.model.toFields
 import com.vuhpquang.zentask.store.ZenStore
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.intOrNull
@@ -120,33 +121,42 @@ class TickTickSync(
             val key = m.type.name to m.entity.id
             if (key in newBaselines) continue // the same record twice in one snapshot: first wins
             @Suppress("UNCHECKED_CAST")
-            val fields = (m.type as EntityType<Entity>).toFields(m.entity) - VOLATILE
-            newBaselines[key] = fields
+            val fields = (m.type as EntityType<Entity>).toFields(m.entity) - NOT_FROM_TICKTICK - m.absent
             val base = baselines[key]
+            // Keys TickTick didn't send keep their previous baseline value.
+            newBaselines[key] = base?.fields.orEmpty() + fields
             val local = store.rawRecord(m.type.name, m.entity.id)
             if (local == null) {
                 writes += Write(m.type, m.entity.id, fields, isNew = true)
                 created++
                 continue
             }
-            val changed = fields.filter { (k, v) -> if (base == null) local.fields[k] != v else base.fields[k] != v }.toMutableMap()
-            if (base?.gone == true) {
-                restoreField(m.type)?.let { changed[it] = fields[it] ?: JsonPrimitive(null as String?) }
-                restored++
+            // A record this device has but never baselined (it arrived from another device through
+            // server sync, or this is a reinstall): adopt TickTick's current values as the baseline and
+            // write nothing — the device that imported it already merged it, and the local values may
+            // hold edits made in ZenTask since.
+            if (base == null) continue
+            val changed = fields.filter { (k, v) -> base.fields[k] != v }.toMutableMap()
+            if (base.gone) {
+                when (m.type) {
+                    EntityTypes.task, EntityTypes.project -> changed["trashedAt"] = JsonNull
+                    EntityTypes.habit, EntityTypes.countdown -> changed["archivedAt"] = fields["archivedAt"] ?: JsonNull
+                    EntityTypes.checklistItem -> changed["deleted"] = JsonPrimitive(false)
+                }
             }
             if (changed.any { (k, v) -> local.fields[k] != v }) {
                 writes += Write(m.type, m.entity.id, changed, isNew = false)
-                if (base?.gone != true) updated++
+                if (base.gone) restored++ else updated++
             }
         }
-        val presentTaskIds = mapped.filter { it.type == EntityTypes.task }.map { it.entity.id }.toSet()
+        val itemsKnown = mapped.filter { it.type == EntityTypes.task && it.itemsKnown }.map { it.entity.id }.toSet()
         val gone = mutableListOf<Gone>()
         var trashed = 0
         var untouched = 0
         for ((key, base) in baselines) {
             if (key in newBaselines || base.gone) continue
             val type = EntityTypes.byName(key.first) ?: continue
-            val action = goneAction(type, base, s, presentTaskIds)
+            val action = goneAction(type, base, s, itemsKnown)
             if (action == null) continue // its source was unavailable this time: no evidence it's gone
             gone += Gone(type, key.second, action)
             when (action) {
@@ -161,18 +171,22 @@ class TickTickSync(
     }
 
     /** What to do with a record TickTick no longer returns; null = its source wasn't fetched, do nothing. */
-    private fun goneAction(type: EntityType<*>, base: Baseline, s: TickTickSnapshot, presentTaskIds: Set<String>): GoneAction? =
+    private fun goneAction(type: EntityType<*>, base: Baseline, s: TickTickSnapshot, itemsKnown: Set<String>): GoneAction? =
         when (type) {
             EntityTypes.task -> {
                 val status = (base.fields["status"] as? JsonPrimitive)?.intOrNull
-                if (status == TaskStatus.WONT_DO && !s.wontDoAvailable) null else GoneAction.TRASH
+                when {
+                    status == TaskStatus.WONT_DO && !s.wontDoAvailable -> null
+                    (status == TaskStatus.COMPLETED || status == 1) && s.completedTruncated -> null
+                    else -> GoneAction.TRASH
+                }
             }
             EntityTypes.project -> GoneAction.TRASH
             EntityTypes.checklistItem -> {
                 val taskId = (base.fields["taskId"] as? JsonPrimitive)?.content
                 // Removed from a task that still exists: follow TickTick. If the whole task went, it is
                 // trashed and keeps its items for a restore.
-                if (taskId != null && taskId in presentTaskIds) GoneAction.DELETE else null
+                if (taskId != null && taskId in itemsKnown) GoneAction.DELETE else null
             }
             EntityTypes.habit -> if (s.habitsAvailable) GoneAction.ARCHIVE else null
             EntityTypes.countdown -> if (s.countdownsAvailable) GoneAction.ARCHIVE else null
@@ -212,7 +226,10 @@ class TickTickSync(
         const val MASS_TRASH_MIN = 10
         const val MASS_TRASH_SHARE = 0.2
 
-        /** Fields the store manages itself; never part of a baseline comparison. */
-        val VOLATILE = setOf("updatedAt")
+        /**
+         * Fields TickTick never owns: `updatedAt` is the store's; `deleted` and `trashedAt` are ZenTask's own
+         * (set by the owner, or by this sync only through the gone/restore rules).
+         */
+        val NOT_FROM_TICKTICK = setOf("updatedAt", "deleted", "trashedAt")
     }
 }

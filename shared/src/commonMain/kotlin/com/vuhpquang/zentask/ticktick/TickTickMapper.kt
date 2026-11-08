@@ -15,8 +15,17 @@ import com.vuhpquang.zentask.model.Task
 import com.vuhpquang.zentask.model.TaskStatus
 import kotlin.time.Instant
 
-/** A ZenTask entity produced from TickTick data, with its type. */
-data class Mapped(val type: EntityType<*>, val entity: Entity)
+/**
+ * A ZenTask entity produced from TickTick data, with its type. [absent] lists fields TickTick did not
+ * send (unknown, not cleared): the sync neither writes nor baselines them. [itemsKnown] is false when a
+ * task came without its checklist, so its items must not be treated as removed.
+ */
+data class Mapped(
+    val type: EntityType<*>,
+    val entity: Entity,
+    val absent: Set<String> = emptySet(),
+    val itemsKnown: Boolean = true,
+)
 
 /**
  * TickTick snapshot → ZenTask entities. Ids are deterministic (`tt_<ticktickId>`, tags `tt_tag_<name>`,
@@ -66,8 +75,15 @@ object TickTickMapper {
             )
         }
         s.tasks.forEach { t ->
+            val absent = mutableSetOf<String>()
+            if (t.tags == null) absent += "tags"
+            if (t.reminders == null) absent += "reminders"
+            if (t.id in s.thinTaskIds) absent += thinAbsent(t)
             out += Mapped(
-                EntityTypes.task,
+                absent = absent,
+                itemsKnown = t.items != null,
+                type = EntityTypes.task,
+                entity =
                 Task(
                     id = id(t.id), ticktickId = t.id,
                     createdAt = parseTime(t.createdTime) ?: 0,
@@ -132,6 +148,31 @@ object TickTickMapper {
             )
         }
         return out
+    }
+
+    /** ZenTask fields of a thin task object whose TickTick source key was missing. */
+    private fun thinAbsent(t: TtTask): Set<String> = buildSet {
+        if (t.projectId == null) add("projectId")
+        if (t.parentId == null) add("parentId")
+        if (t.columnId == null) add("columnId")
+        if (t.title == null) add("title")
+        if (t.content == null) add("content")
+        if (t.desc == null) add("desc")
+        if (t.kind == null) add("kind")
+        if (t.priority == null) add("priority")
+        if (t.status == null) add("status")
+        if (t.startDate == null) add("startDate")
+        if (t.dueDate == null) add("dueDate")
+        if (t.isAllDay == null) add("isAllDay")
+        if (t.timeZone == null) add("timeZone")
+        if (t.isFloating == null) add("isFloating")
+        if (t.repeatFlag == null) add("repeatRule")
+        if (t.repeatFrom == null) add("repeatFrom")
+        if (t.repeatTaskId == null) add("repeatTaskId")
+        if (t.sortOrder == null) add("sortOrder")
+        if (t.completedTime == null) add("completedAt")
+        if (t.createdTime == null) add("createdAt")
+        if (t.pinnedTime == null) add("pinnedAt")
     }
 
     /** TickTick reminder trigger, stored with the `TRIGGER:` prefix (spec §6). */
