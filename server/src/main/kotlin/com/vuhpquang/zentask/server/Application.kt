@@ -10,7 +10,18 @@ import com.vuhpquang.zentask.server.auth.LoginLimiter
 import com.vuhpquang.zentask.server.auth.PasswordCheck
 import com.vuhpquang.zentask.server.auth.Tokens
 import com.vuhpquang.zentask.server.auth.deviceBearer
+import com.vuhpquang.zentask.defaultHttpClient
+import com.vuhpquang.zentask.server.calendar.CalendarService
+import com.vuhpquang.zentask.server.calendar.GoogleApi
+import com.vuhpquang.zentask.server.calendar.IcalHttpFetcher
+import com.vuhpquang.zentask.server.calendar.SecretBox
+import com.vuhpquang.zentask.server.calendar.calendarCallback
+import com.vuhpquang.zentask.server.calendar.calendarRoutes
 import com.vuhpquang.zentask.server.mcp.McpRateLimiter
+import io.ktor.client.HttpClient
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import com.vuhpquang.zentask.server.mcp.McpReplica
 import com.vuhpquang.zentask.server.mcp.mcpRoutes
 import com.vuhpquang.zentask.server.store.ServerDb
@@ -56,13 +67,30 @@ fun main() {
     embeddedServer(Netty, port = config.port, host = config.host) { module(config) }.start(wait = true)
 }
 
-fun Application.module(config: ServerConfig = ServerConfig.fromEnv(), now: () -> Long = System::currentTimeMillis) {
+fun Application.module(
+    config: ServerConfig = ServerConfig.fromEnv(),
+    now: () -> Long = System::currentTimeMillis,
+    http: HttpClient = defaultHttpClient(),
+) {
     val db = ServerDb(config.dataDir.resolve("zentask.db"), now)
     monitor.subscribe(ApplicationStopped) { db.close() }
     val password = PasswordCheck(config.password)
     val limiter = LoginLimiter(now)
     val replica = McpReplica(db, config.dataDir.resolve("mcp.db"), now)
     val mcpLimiter = McpRateLimiter(now)
+    val box = config.encryptionKey.takeIf { it.isNotBlank() }?.let { runCatching { SecretBox(it) }.onFailure { e -> log.error("Calendar disabled: {}", e.message) }.getOrNull() }
+    val calendars = CalendarService(
+        db, GoogleApi(http, config.googleClientId, config.googleClientSecret), box, config.publicUrl, now,
+        ical = IcalHttpFetcher(http),
+    )
+    // Calendar refresh every 10 minutes (first pass a minute after start).
+    launch {
+        delay(60_000)
+        while (isActive) {
+            runCatching { calendars.syncAll() }.onFailure { log.warn("Calendar sync pass failed: {}", it.message) }
+            delay(10 * 60_000)
+        }
+    }
     monitor.subscribe(ApplicationStopped) { replica.close() }
 
     install(ContentNegotiation) { json(ZenJson) }
@@ -92,6 +120,7 @@ fun Application.module(config: ServerConfig = ServerConfig.fromEnv(), now: () ->
         authenticate(DEVICE_AUTH) {
             mcpRoutes(db, replica, mcpLimiter)
         }
+        calendarCallback(calendars)
 
         route("/v1") {
             post("/auth/login") {
@@ -122,6 +151,7 @@ fun Application.module(config: ServerConfig = ServerConfig.fromEnv(), now: () ->
                     call.respond(db.listDevices().map { DeviceInfo(it.id, it.name, it.createdAt, it.lastSeenAt, it.scope) })
                 }
                 syncRoutes(db, now)
+                calendarRoutes(calendars)
                 delete("/devices/{id}") {
                     if (db.revoke(call.parameters["id"].orEmpty())) {
                         call.respond(HttpStatusCode.NoContent)

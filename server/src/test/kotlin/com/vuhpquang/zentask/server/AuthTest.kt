@@ -131,6 +131,9 @@ class AuthTest {
             val status = client.request(path) { this.method = method }.status
             if (path == "/v1/auth/login") {
                 assertTrue(status != HttpStatusCode.OK, "login without body must not succeed")
+            } else if (path == "/v1/calendar/google/callback") {
+                // Public on purpose (Google redirects the browser here); guarded by a one-time state.
+                assertEquals(HttpStatusCode.BadRequest, status, "no code/state → nothing happens")
             } else {
                 assertEquals(HttpStatusCode.Unauthorized, status, "$method $path")
             }

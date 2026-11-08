@@ -10,6 +10,10 @@ data class ServerConfig(
     val dataDir: Path,
     val password: String,
     val publicUrl: String,
+    val googleClientId: String = "",
+    val googleClientSecret: String = "",
+    /** Base64 32-byte AES key for calendar refresh tokens (`ZENTASK_ENCRYPTION_KEY`). */
+    val encryptionKey: String = "",
 ) {
     override fun toString() = "ServerConfig(host=$host, port=$port, dataDir=$dataDir, publicUrl=$publicUrl)"
 
@@ -24,6 +28,9 @@ data class ServerConfig(
                 dataDir = Paths.get(env["DATA_DIR"]?.takeIf { it.isNotBlank() } ?: "data"),
                 password = password,
                 publicUrl = env["ZENTASK_PUBLIC_URL"].orEmpty(),
+                googleClientId = env["GOOGLE_CLIENT_ID"].orEmpty().trim(),
+                googleClientSecret = env["GOOGLE_CLIENT_SECRET"].orEmpty().trim(),
+                encryptionKey = env["ZENTASK_ENCRYPTION_KEY"].orEmpty().trim(),
             )
         }
     }

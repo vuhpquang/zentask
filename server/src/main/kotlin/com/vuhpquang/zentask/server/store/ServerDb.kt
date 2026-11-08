@@ -1,7 +1,10 @@
 package com.vuhpquang.zentask.server.store
 
 import com.vuhpquang.zentask.model.ZenJson
+import com.vuhpquang.zentask.sync.Hlc
+import com.vuhpquang.zentask.sync.HlcClock
 import com.vuhpquang.zentask.sync.SyncRecord
+import kotlinx.serialization.json.JsonElement
 import com.vuhpquang.zentask.sync.merge
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
@@ -41,6 +44,12 @@ class ServerDb(file: Path, private val now: () -> Long = System::currentTimeMill
             )
             st.execute("CREATE INDEX IF NOT EXISTS records_version ON records(version)")
             st.execute(
+                """CREATE TABLE IF NOT EXISTS calendar_credentials (
+                    account_id TEXT PRIMARY KEY, provider TEXT NOT NULL, email TEXT NOT NULL,
+                    secret_enc TEXT NOT NULL, created_at INTEGER NOT NULL, status TEXT NOT NULL)""",
+            )
+            st.execute("CREATE TABLE IF NOT EXISTS oauth_states (state TEXT PRIMARY KEY, device_id TEXT NOT NULL, created_at INTEGER NOT NULL)")
+            st.execute(
                 """CREATE TABLE IF NOT EXISTS mcp_audit (
                     id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, device_id TEXT NOT NULL,
                     tool TEXT NOT NULL, args TEXT NOT NULL, changes TEXT NOT NULL)""",
@@ -55,6 +64,84 @@ class ServerDb(file: Path, private val now: () -> Long = System::currentTimeMill
         val hasScope = conn.createStatement().use { st -> st.executeQuery("PRAGMA table_info(devices)").use { rs -> generateSequence { if (rs.next()) rs.getString("name") else null }.toList() } }.contains("scope")
         if (!hasScope) conn.createStatement().use { it.execute("ALTER TABLE devices ADD COLUMN scope TEXT NOT NULL DEFAULT 'full'") }
         serverId = meta("serverId") ?: UUID.randomUUID().toString().also { setMeta("serverId", it) }
+    }
+
+    // ---- calendar (server-only secrets and server-written records) ----
+
+    /** The server's own HLC node for records it writes (calendar data). */
+    private val serverClock by lazy { HlcClock("server", now, meta("hlc")?.let(Hlc::parse)) }
+
+    /**
+     * Writes a server-owned record: only fields that differ from what is stored get a new clock, so an
+     * unchanged calendar event costs nothing (no new version). Returns whether anything changed.
+     */
+    @Synchronized
+    fun writeServer(entity: String, id: String, fields: Map<String, JsonElement>): Boolean {
+        val existing = load(entity, id)
+        val changed = fields.filter { (k, v) -> existing?.fields?.get(k) != v }
+        if (changed.isEmpty()) return false
+        val clock = serverClock.tick().encode()
+        setMeta("hlc", clock)
+        apply(listOf(SyncRecord(entity, id, changed, changed.mapValues { clock })))
+        return true
+    }
+
+    /** Live server records of [entity] whose JSON [field] equals [value]. */
+    @Synchronized
+    fun recordsWhere(entity: String, field: String, value: String): List<SyncRecord> =
+        conn.prepareStatement("SELECT * FROM records WHERE entity = ? AND json_extract(fields, ?) = ? AND coalesce(json_extract(fields, '$.deleted'), 0) = 0").use { st ->
+            st.setString(1, entity); st.setString(2, "$.$field"); st.setString(3, value)
+            st.executeQuery().use { rs -> buildList { while (rs.next()) add(rs.toRecord()) } }
+        }
+
+    data class Credential(val accountId: String, val provider: String, val email: String, val secretEnc: String, val status: String)
+
+    @Synchronized
+    fun saveCredential(c: Credential) {
+        conn.prepareStatement("INSERT OR REPLACE INTO calendar_credentials(account_id, provider, email, secret_enc, created_at, status) VALUES (?, ?, ?, ?, ?, ?)").use {
+            it.setString(1, c.accountId); it.setString(2, c.provider); it.setString(3, c.email); it.setString(4, c.secretEnc)
+            it.setLong(5, now()); it.setString(6, c.status); it.executeUpdate()
+        }
+    }
+
+    @Synchronized
+    fun credentials(): List<Credential> =
+        conn.prepareStatement("SELECT * FROM calendar_credentials ORDER BY created_at").use { st ->
+            st.executeQuery().use { rs ->
+                buildList {
+                    while (rs.next()) add(Credential(rs.getString("account_id"), rs.getString("provider"), rs.getString("email"), rs.getString("secret_enc"), rs.getString("status")))
+                }
+            }
+        }
+
+    @Synchronized
+    fun setCredentialStatus(accountId: String, status: String) {
+        conn.prepareStatement("UPDATE calendar_credentials SET status = ? WHERE account_id = ?").use { it.setString(1, status); it.setString(2, accountId); it.executeUpdate() }
+    }
+
+    @Synchronized
+    fun deleteCredential(accountId: String) {
+        conn.prepareStatement("DELETE FROM calendar_credentials WHERE account_id = ?").use { it.setString(1, accountId); it.executeUpdate() }
+    }
+
+    @Synchronized
+    fun putOAuthState(state: String, deviceId: String) {
+        conn.prepareStatement("INSERT INTO oauth_states(state, device_id, created_at) VALUES (?, ?, ?)").use {
+            it.setString(1, state); it.setString(2, deviceId); it.setLong(3, now()); it.executeUpdate()
+        }
+    }
+
+    /** One-time use: returns the device that started the flow, or null if unknown or older than [maxAgeMs]. */
+    @Synchronized
+    fun takeOAuthState(state: String, maxAgeMs: Long): String? {
+        val row = conn.prepareStatement("SELECT device_id, created_at FROM oauth_states WHERE state = ?").use { st ->
+            st.setString(1, state)
+            st.executeQuery().use { rs -> if (rs.next()) rs.getString(1) to rs.getLong(2) else null }
+        }
+        conn.prepareStatement("DELETE FROM oauth_states WHERE state = ? OR created_at < ?").use {
+            it.setString(1, state); it.setLong(2, now() - maxAgeMs); it.executeUpdate()
+        }
+        return row?.takeIf { now() - it.second <= maxAgeMs }?.first
     }
 
     /** Gives this database a new id (it was restored or recreated); clients then re-upload everything. */
