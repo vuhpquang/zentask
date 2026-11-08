@@ -46,6 +46,10 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
     optional sources flagged) → `TickTickSnapshot` → `TickTickMapper` (deterministic ids `tt_<id>`, Inbox →
     `inbox`) → `TickTickSync` (per-record baseline in `ticktick_baseline`; gone → Trash/archive, never
     delete; mass-trash guard). `TickTickCsv` = one-off backup import, refused after any API sync.
+  - `tasks/` — domain rules shared by the app and (P3b) MCP: `TaskIndex` (load once per data change,
+    smart lists/sections/counts), `TaskActions` (create/complete incl. recurring copies/trash/edit/checklist —
+    always via `store.update`), `Recurrence` (RRULE subset), `QuickAddParser` (EN/VI), `TagActions`,
+    `ReminderPlanner`. Pure: clock and zone are parameters.
   - `ZenTaskCore` — the Swift-facing entry point (typed helpers; Kotlin `Task` is `ZenTaskShared.Task` in Swift).
 - `server/` — Ktor/JVM, depends on `shared` (same models, merge and protocol).
   `Application.module(config, now)`; `ServerConfig.fromEnv()` (`ZENTASK_PASSWORD` required, `HOST`
@@ -56,6 +60,9 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
   Links the **release** XCFramework in both configs. `AppModel` (@Observable) owns `ZenTaskCore`; DB in
   `~/Library/Application Support/ZenTask[-dev]/zentask.db`; server token + TickTick cookie in the Keychain
   (service = bundle id). Settings (⌘,) = Account + TickTick tabs. Tokens in `DesignSystem/Theme.swift`.
+  Main window = `Tasks/TasksView` (sidebar | list | detail) driven by `TasksModel`, which reloads the
+  `TaskIndex` off the main thread on `core.recordChanges` (80 ms debounce). `Services/Reminders` schedules
+  local notifications from `core.plannedReminders`.
   In Swift, write `_Concurrency.Task { }` in files that import ZenTaskShared (Kotlin `Task` shadows it).
   UI snapshots: `ZENTASK_SNAPSHOT=/tmp/shots build/DerivedData/Build/Products/Debug/ZenTask.app/Contents/MacOS/ZenTask`.
 - `scripts/` — `lib/env.sh` (sourced by all), build, release, deploy, signing, icon.
