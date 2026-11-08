@@ -198,6 +198,23 @@ Khi tới P5, deploy lại server rồi vào **ZenTask → Settings → Calendar
 
 ### 3.6 Publish app (bỏ giới hạn 7 ngày)
 
+Nút **Publish app** chỉ bấm được khi trang **Branding** đã điền đủ. Ba trang trang chủ / chính sách bảo mật / điều khoản do chính server ZenTask phục vụ, nên **server phải được deploy trước** (`scripts/deploy.sh`). Kiểm tra: mở https://zentask-api.vuhpquang.com/privacy thấy trang "Privacy Policy".
+
+**Điền trang Branding** (Google Auth Platform → **Branding**):
+
+| Ô | Giá trị |
+|---|---|
+| App name | `ZenTask` |
+| User support email | email cá nhân của anh (vd `vuhpq.personal@gmail.com`) |
+| App logo | **để trống** (upload logo sẽ bắt buộc xét duyệt) |
+| Application home page | `https://zentask-api.vuhpquang.com/` |
+| Application privacy policy link | `https://zentask-api.vuhpquang.com/privacy` |
+| Application terms of service link | `https://zentask-api.vuhpquang.com/terms` |
+| Authorized domain 1 | `vuhpquang.com` |
+| Developer contact information → Email addresses | email cá nhân của anh |
+
+Bấm **Save**. Sau đó publish:
+
 App cá nhân dưới 100 người dùng được phép chạy ở chế độ **In production mà không qua xét duyệt**. Cái giá duy nhất là màn hình cảnh báo "Google chưa xác minh ứng dụng này" mỗi lần kết nối một tài khoản.
 
 1. Menu ☰ → **APIs & Services → OAuth consent screen** (hoặc **Google Auth Platform → Audience**).
