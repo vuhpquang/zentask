@@ -19,7 +19,7 @@ scripts/build-shared.sh [debug|release]         # → shared/build/XCFrameworks/
 scripts/build-mac.sh [Debug|Release]            # xcodegen + xcodebuild → build/ZenTask.app (ad-hoc signed)
 (cd apps/macos && xcodegen generate && xcodebuild test -scheme ZenTask \
     -destination 'platform=macOS,arch=arm64' -derivedDataPath ../../build/DerivedData)
-INSTALL=1 scripts/release.sh X.Y.Z [notes.md]   # bump, test, build, sign, verify, tag, push, GitHub release, install
+INSTALL=1 scripts/release.sh X.Y.Z [notes.md]   # bump, test, build, sign, verify, tag, push, GitHub release (+ Android/Wear APKs), install
 DRY_RUN=1 scripts/release.sh X.Y.Z              # build + verify only
 scripts/deploy.sh                               # server → vps1 (allowed without asking once tests pass)
 swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appiconset docs/brand/zentask-logo.png apps/macos/ZenTask/ZenTask.icon

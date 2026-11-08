@@ -425,7 +425,12 @@ Lệnh `DELETE` phải chạy bằng token của **app** (một token phạm vi 
 
 App Android (P7) dùng chung lõi với bản Mac và sync qua cùng server. Cần Android 14 trở lên.
 
-### 7.1 Build file APK (chạy trên Mac)
+### 7.1 Lấy file APK
+
+Cách nhanh nhất: trên điện thoại, mở https://github.com/vuhpquang/zentask/releases/latest và tải
+`ZenTask-<phiên bản>-android.apk` (mỗi bản release có kèm APK điện thoại và đồng hồ). Sau đó làm cách 2 ở bước 7.2.
+
+Hoặc tự build trên Mac:
 
 ```bash
 cd projects/zentask
@@ -467,7 +472,9 @@ Cách 2, không cần cáp: gửi file APK sang điện thoại (Google Drive, T
 App trên đồng hồ chạy độc lập: tự sync với server, không cần app trên điện thoại đang mở.
 Nó hiện task hôm nay (bấm ô để hoàn thành) và habit hôm nay (bấm để check-in).
 
-### 8.1 Build (trên Mac)
+### 8.1 Lấy file APK
+
+Tải `ZenTask-<phiên bản>-wear.apk` từ https://github.com/vuhpquang/zentask/releases/latest về Mac, hoặc tự build:
 
 ```bash
 cd projects/zentask && source scripts/lib/env.sh

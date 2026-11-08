@@ -83,6 +83,17 @@ rm -f "$ZIP"
 ditto -c -k --keepParent "$APP" "$ZIP"
 echo "    signed by release certificate, arm64, $ZIP sha256 $(shasum -a 256 "$ZIP" | awk '{print $1}')"
 
+# Android phone + Wear OS APKs ride along on the same GitHub release (download on the phone to install,
+# setup-guide §7–8). Only where an Android SDK is installed; the Mac release doesn't depend on it.
+APKS=()
+if [[ -n "${ANDROID_HOME:-}" || -f local.properties ]]; then
+    step "Building Android APKs"
+    ./gradlew -q :android:assembleRelease :wear:assembleRelease || die "Android build failed"
+    cp apps/android/build/outputs/apk/release/android-release.apk "build/ZenTask-$VERSION-android.apk"
+    cp apps/wear/build/outputs/apk/release/wear-release.apk "build/ZenTask-$VERSION-wear.apk"
+    APKS=("build/ZenTask-$VERSION-android.apk" "build/ZenTask-$VERSION-wear.apk")
+fi
+
 if [[ "$DRY_RUN" == "1" ]]; then
     step "Dry run — stopping before commit; version bump reverted. Artifacts are in build/."
     exit 0
@@ -98,9 +109,9 @@ if [[ "$PUBLISH" == "1" ]]; then
     step "Pushing and creating GitHub release $TAG"
     git push -q origin "$BRANCH" "$TAG"
     if [[ -n "$NOTES_FILE" ]]; then
-        gh release create "$TAG" "$ZIP" -R "$REPO" --title "ZenTask $VERSION" --notes-file "$NOTES_FILE" --latest
+        gh release create "$TAG" "$ZIP" ${APKS[@]+"${APKS[@]}"} -R "$REPO" --title "ZenTask $VERSION" --notes-file "$NOTES_FILE" --latest
     else
-        gh release create "$TAG" "$ZIP" -R "$REPO" --title "ZenTask $VERSION" --generate-notes --latest
+        gh release create "$TAG" "$ZIP" ${APKS[@]+"${APKS[@]}"} -R "$REPO" --title "ZenTask $VERSION" --generate-notes --latest
     fi
 fi
 
