@@ -24,6 +24,10 @@ class TickTickCsvRealFileTest {
         assertEquals(16, s.tasks.count { it.kind == "CHECKLIST" })
         assertEquals(mapOf(2 to 469, 0 to 286, 1 to 67, -1 to 2), s.tasks.groupingBy { it.status ?: 0 }.eachCount())
         assertEquals(38, s.tasks.count { it.parentId != null })
+        val items = s.tasks.flatMap { it.items.orEmpty() }
+        val bad = items.filter { it.title.orEmpty().startsWith("▫") || it.title.orEmpty().startsWith("▪") || it.title.isNullOrBlank() }
+        assertEquals(emptyList(), bad.map { it.title }, "checklist titles keep no box characters")
+        println("first items: " + items.take(3).map { it.title })
 
         val store = ZenStore(createSqlDriver(null))
         TickTickSync(store).importCsv(s)

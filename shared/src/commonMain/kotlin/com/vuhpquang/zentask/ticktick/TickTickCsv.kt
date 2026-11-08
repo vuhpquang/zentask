@@ -10,6 +10,7 @@ object TickTickCsv {
     private const val INBOX_LIST = "Inbox"
     private const val CSV_INBOX = "csv_inbox"
     private const val DEFAULT_COLUMN = "Not Sectioned"
+    private val LINE_BREAK = Regex("\r\n|\r|\n")
     private val TRIGGER = Regex("""-?P(?:\d+W)?(?:\d+D)?(?:T(?:\d+H)?(?:\d+M)?(?:\d+S)?)?""")
 
     fun parse(text: String): TickTickSnapshot {
@@ -69,7 +70,7 @@ object TickTickCsv {
                 parentId = r["parentId"]?.takeIf { it.isNotEmpty() }?.let { idBySeq[it] },
                 columnId = columns["$list|$column"]?.id,
                 title = r["Title"],
-                content = if (checklist) "" else r["Content"],
+                content = if (checklist) "" else r["Content"]?.replace(LINE_BREAK, "\n"),
                 desc = desc,
                 kind = if (checklist) "CHECKLIST" else r["Kind"]?.ifEmpty { null },
                 priority = r["Priority"]?.toIntOrNull(),
@@ -103,10 +104,10 @@ object TickTickCsv {
     private fun checklist(taskId: String, content: String): Pair<String, List<TtItem>> {
         val items = mutableListOf<TtItem>()
         val desc = mutableListOf<String>()
-        content.split('\n').forEach { line ->
+        content.split(LINE_BREAK).forEach { line ->
             val open = line.startsWith("▫")
             if (open || line.startsWith("▪")) {
-                val title = line.drop(1).trim()
+                val title = line.trimStart('▫', '▪', ' ', '\t').trim()
                 if (title.isNotEmpty()) {
                     items += TtItem(id = "${taskId}_${items.size}", title = title, status = if (open) 0 else 1, sortOrder = items.size.toLong())
                 }

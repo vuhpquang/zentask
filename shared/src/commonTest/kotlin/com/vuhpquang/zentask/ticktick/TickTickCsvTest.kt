@@ -84,6 +84,13 @@ class TickTickCsvTest {
     }
 
     @Test
+    fun checklistLinesSplitOnAnyLineBreak() {
+        val csv = SAMPLE_CSV.replace("\"▫\n▫Charge watch\n▪Stretch, \"\"twice\"\"\n\"", "\"▫\r▫Charge watch\r\n▪▪Stretch\r\"")
+        val items = TickTickMapper.map(TickTickCsv.parse(csv)).map { it.entity }.filterIsInstance<com.vuhpquang.zentask.model.ChecklistItem>()
+        assertEquals(listOf("Charge watch", "Stretch"), items.sortedBy { it.sortOrder }.map { it.title })
+    }
+
+    @Test
     fun rejectsTextWithoutHeader() {
         assertFailsWith<IllegalArgumentException> { TickTickCsv.parse("hello,world\n1,2\n") }
     }
