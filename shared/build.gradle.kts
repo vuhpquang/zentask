@@ -63,6 +63,7 @@ kotlin {
             dependencies {
                 api(libs.kotlinx.serialization.json)
                 api(libs.kotlinx.coroutines.core)
+                api(libs.kotlinx.datetime)
                 api(libs.sqldelight.coroutines)
                 api(libs.ktor.client.core)
             }
