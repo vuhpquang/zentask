@@ -35,6 +35,10 @@ step "Preflight"
 git rev-parse -q --verify "refs/tags/$TAG" >/dev/null && die "tag $TAG already exists"
 if [[ "$PUBLISH" == "1" && "$DRY_RUN" != "1" ]]; then
     gh auth status >/dev/null 2>&1 || die "gh is not logged in"
+    # A push rejected after tagging would strand the local tag, so require main == origin/main up front.
+    git fetch -q origin "$BRANCH" --tags
+    [[ "$(git rev-parse HEAD)" == "$(git rev-parse "origin/$BRANCH")" ]] \
+        || die "$BRANCH is not in sync with origin/$BRANCH (pull or push first)"
 fi
 security find-identity -p codesigning | grep -q "\"$SIGN_IDENTITY\"" \
     || die "signing identity '$SIGN_IDENTITY' not in keychain (import ~/.config/zentask-signing/zentask-signing.p12)"
@@ -102,9 +106,11 @@ fi
 
 if [[ "${INSTALL:-0}" == "1" ]]; then
     step "Installing to /Applications"
+    # Match the installed copy by path: a Debug build (.dev bundle id) has the same process name.
+    INSTALLED_BIN="/Applications/ZenTask.app/Contents/MacOS/ZenTask"
     osascript -e "quit app id \"$BUNDLE_ID\"" >/dev/null 2>&1 || true
-    for _ in $(seq 1 20); do pgrep -xq ZenTask || break; sleep 0.5; done
-    pgrep -xq ZenTask && die "ZenTask is still running; quit it and run: ditto $APP /Applications/ZenTask.app"
+    for _ in $(seq 1 20); do pgrep -fq "$INSTALLED_BIN" || break; sleep 0.5; done
+    pgrep -fq "$INSTALLED_BIN" && die "installed ZenTask is still running; quit it and run: ditto $APP /Applications/ZenTask.app"
     rm -rf /Applications/ZenTask.app
     ditto "$APP" /Applications/ZenTask.app
     xattr -dr com.apple.quarantine /Applications/ZenTask.app 2>/dev/null || true
