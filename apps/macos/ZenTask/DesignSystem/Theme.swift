@@ -44,6 +44,7 @@ enum Theme {
         static let cardRadius: CGFloat = 12
         static let cardPadding: CGFloat = 14
         static let maxWidth: CGFloat = 640
+        static let datePopoverWidth: CGFloat = 300
     }
 
     enum Calendar {
@@ -64,6 +65,10 @@ enum Theme {
         static let monthItems = 4
         static let headerHeight: CGFloat = 44
         static let snapMinutes = 15
+        static let sideBarWidth: CGFloat = 260
+        static let miniDay: CGFloat = 24
+        static let miniDot: CGFloat = 4
+        static let lunarSize: CGFloat = 8
     }
 
     enum Opacity {
@@ -72,6 +77,12 @@ enum Theme {
         static let pill: Double = 0.18
         static let card: Double = 0.5
         static let chipFill: Double = 0.14
+        /// Archived habits and countdowns.
+        static let archived: Double = 0.7
+        /// A partly logged day in the habit month map.
+        static let partial: Double = 0.28
+        /// Circle behind a habit's icon.
+        static let iconFill: Double = 0.22
     }
 
     enum Row {
@@ -131,6 +142,12 @@ enum Theme {
         static let monthDot: CGFloat = 36
         static let weekdayChip: CGFloat = 38
         static let sheetWidth: CGFloat = 440
+        static let dotSpacing: CGFloat = 3
+        static let ring: CGFloat = 1.5
+        static let ringStrong: CGFloat = 2
+        static let progressRing: CGFloat = 3
+        /// Trophy tint: amber, readable on light and dark (yellow isn't on white).
+        static let gold = Color(red: 0.85, green: 0.47, blue: 0.02)
         /// Tint behind the top of the detail pane.
         static let wash: Double = 0.12
         static let gradient = LinearGradient(colors: [Color(red: 0.36, green: 0.37, blue: 0.91), Color(red: 0.55, green: 0.36, blue: 0.96)], startPoint: .leading, endPoint: .trailing)

@@ -75,6 +75,12 @@ enum Snapshots {
             both(AnyView(CalendarView()).environment(model).environment(tasks).environment(cal).environment(PanelCalendar(core: core)), size: windowSize, name: "calendar-\(mode.rawValue.lowercased())", dir: dir)
         }
         both(AnyView(CalendarSettings().frame(width: Theme.Size.settingsWidth)).environment(model).environment(cal), size: CGSize(width: 540, height: 420), name: "settings-calendars", dir: dir)
+        cal.mode = .week
+        wait { await cal.reload() }
+        UserDefaults.standard.set(true, forKey: "calendar.showSideBar")
+        both(AnyView(CalendarView()).environment(model).environment(tasks).environment(cal).environment(PanelCalendar(core: core)), size: CGSize(width: 1400, height: 760), name: "calendar-sidebar", dir: dir)
+        UserDefaults.standard.removeObject(forKey: "calendar.showSideBar")
+        both(AnyView(CalendarViewOptionsSheet()).environment(cal), size: CGSize(width: 460, height: 420), name: "sheet-calendar-options", dir: dir)
     }
 
     /// Habits and countdowns with sample data (in-memory core only).

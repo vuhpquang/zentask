@@ -35,7 +35,7 @@ struct CountdownsView: View {
                         grid(countdowns.active)
                         if !countdowns.archived.isEmpty {
                             DisclosureGroup("Archived (\(countdowns.archived.count))", isExpanded: $countdowns.showArchived) {
-                                grid(countdowns.archived).opacity(Theme.Opacity.card + 0.2).padding(.top, Theme.Space.s)
+                                grid(countdowns.archived).opacity(Theme.Opacity.archived).padding(.top, Theme.Space.s)
                             }
                             .font(.headline)
                         }

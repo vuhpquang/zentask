@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 @preconcurrency import ZenTaskShared
 
@@ -74,6 +75,8 @@ struct TaskDetailView: View {
                 .textFieldStyle(.plain)
                 .focused($focus, equals: .title)
                 .onSubmit { commit(.title) }
+            if task.pinnedAt != nil { Image(systemName: "pin.fill").foregroundStyle(.orange).help("Pinned") }
+            if task.trashedAt == nil { TaskMoreMenu(task: task) { focus = .subtask } }
         }
     }
 
@@ -111,7 +114,10 @@ struct TaskDetailView: View {
                 }
 
                 if let rule = task.repeatRule {
-                    Chip(text: tasks.core.describeRepeat(rule: rule), symbol: "repeat", tint: .accentColor, filled: true)
+                    Button { editingDate = true } label: {
+                        Chip(text: tasks.core.describeRepeat(rule: rule), symbol: "repeat", tint: .accentColor, filled: true)
+                    }
+                    .buttonStyle(.plain)
                 }
             }
             HStack(spacing: Theme.Space.s) {
@@ -294,45 +300,173 @@ struct TaskDetailView: View {
     }
 }
 
-/// Date popover: a calendar, an optional time, and Clear.
+/// Date popover: quick picks (today, tomorrow, next week, tonight), a month, an optional time, reminders,
+/// repeat, then Clear or OK.
 private struct DueEditor: View {
     @Environment(TasksModel.self) private var tasks
     @Environment(\.dismiss) private var dismiss
     let task: ZTask
     @State private var date = Date()
     @State private var hasTime = false
+    @State private var reminders: [String] = []
+    @State private var rule: String?
+
+    private var cal: Calendar { Calendar.current }
 
     var body: some View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
+            HStack(spacing: Theme.Space.s) {
+                quick("sun.max", "Today") { set(day: 0) }
+                quick("sunrise", "Tomorrow") { set(day: 1) }
+                quick("calendar.badge.plus", "Next Monday") { set(day: daysToNextMonday) }
+                quick("moon.stars", "Tonight at 20:00") { set(day: 0, hour: 20) }
+            }
             DatePicker("Date", selection: $date, displayedComponents: [.date])
                 .datePickerStyle(.graphical)
                 .labelsHidden()
-            Toggle("Time", isOn: $hasTime)
-            if hasTime {
-                DatePicker("Time", selection: $date, displayedComponents: [.hourAndMinute]).labelsHidden()
+            Divider()
+            HStack {
+                Label("Time", systemImage: "clock")
+                Spacer()
+                if hasTime {
+                    DatePicker("Time", selection: $date, displayedComponents: [.hourAndMinute]).labelsHidden().fixedSize()
+                }
+                Toggle("Time", isOn: $hasTime.animation(Theme.List.foldAnimation)).labelsHidden().toggleStyle(.switch).controlSize(.small)
+            }
+            row("Reminder", symbol: "bell", value: reminders.isEmpty ? "None" : reminders.map(ReminderText.describe).joined(separator: ", ")) {
+                Button("None") { reminders = [] }
+                Divider()
+                ForEach(Self.reminderChoices(allDay: !hasTime), id: \.0) { trigger, title in
+                    Toggle(title, isOn: Binding(get: { reminders.contains(trigger) }, set: { on in
+                        if on { reminders.append(trigger) } else { reminders.removeAll { $0 == trigger } }
+                    }))
+                }
+            }
+            row("Repeat", symbol: "repeat", value: rule.map { tasks.core.describeRepeat(rule: $0) } ?? "None") {
+                Button("None") { rule = nil }
+                Divider()
+                ForEach(repeatChoices, id: \.0) { r, title in
+                    Button { rule = r } label: { if rule == r { Label(title, systemImage: "checkmark") } else { Text(title) } }
+                }
             }
             HStack {
                 Button("Clear") {
                     tasks.core.actions.setDue(id: task.id, due: nil, allDay: false)
+                    tasks.core.actions.setReminders(id: task.id, triggers: [])
+                    tasks.core.actions.setRepeat(id: task.id, rule: nil, from: nil)
                     dismiss()
                 }
-                Spacer()
-                Button("Done") { save(); dismiss() }
+                .frame(maxWidth: .infinity)
+                Button("OK") { save(); dismiss() }
                     .keyboardShortcut(.defaultAction)
+                    .buttonStyle(.borderedProminent)
+                    .frame(maxWidth: .infinity)
             }
+            .controlSize(.large)
         }
         .padding(Theme.Space.l)
-        .frame(width: 280)
+        .frame(width: Theme.Detail.datePopoverWidth)
         .onAppear {
             if let ms = task.startDate ?? task.dueDate { date = Date(timeIntervalSince1970: Double(ms.int64Value) / 1000) }
             hasTime = !task.isAllDay && (task.dueDate != nil || task.startDate != nil)
+            reminders = task.reminders
+            rule = task.repeatRule
         }
     }
 
+    private var daysToNextMonday: Int {
+        let weekday = cal.component(.weekday, from: .now) // 1 = Sunday
+        return (9 - weekday) % 7 == 0 ? 7 : (9 - weekday) % 7
+    }
+
+    private func set(day offset: Int, hour: Int? = nil) {
+        let base = cal.date(byAdding: .day, value: offset, to: cal.startOfDay(for: .now)) ?? .now
+        if let hour {
+            date = cal.date(bySettingHour: hour, minute: 0, second: 0, of: base) ?? base
+            hasTime = true
+        } else {
+            date = hasTime ? (cal.date(bySettingHour: cal.component(.hour, from: date), minute: cal.component(.minute, from: date), second: 0, of: base) ?? base) : base
+        }
+    }
+
+    private func quick(_ symbol: String, _ title: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol).font(.title3).frame(maxWidth: .infinity, minHeight: Theme.Detail.chipHeight)
+        }
+        .buttonStyle(.bordered)
+        .help(title)
+        .accessibilityLabel(title)
+    }
+
+    private func row<M: View>(_ title: String, symbol: String, value: String, @ViewBuilder menu: () -> M) -> some View {
+        HStack {
+            Label(title, systemImage: symbol)
+            Spacer()
+            Menu { menu() } label: { Text(value).lineLimit(1) }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+        }
+    }
+
+    static func reminderChoices(allDay: Bool) -> [(String, String)] {
+        allDay
+            ? [("TRIGGER:PT9H", "On the day (9:00)"), ("TRIGGER:-PT15H", "1 day early (9:00)"), ("TRIGGER:-P2DT15H", "2 days early (9:00)"), ("TRIGGER:-P6DT15H", "1 week early (9:00)")]
+            : [("TRIGGER:PT0S", "On time"), ("TRIGGER:-PT5M", "5 minutes early"), ("TRIGGER:-PT30M", "30 minutes early"), ("TRIGGER:-PT1H", "1 hour early"), ("TRIGGER:-P1D", "1 day early")]
+    }
+
+    private var repeatChoices: [(String, String)] {
+        let codes = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"]
+        let wd = cal.component(.weekday, from: date)
+        let weekday = date.formatted(.dateTime.weekday(.wide))
+        let day = cal.component(.day, from: date)
+        return [
+            ("RRULE:FREQ=DAILY;INTERVAL=1", "Daily"),
+            ("RRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=MO,TU,WE,TH,FR", "Every weekday (Mon–Fri)"),
+            ("RRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=\(codes[wd - 1])", "Weekly on \(weekday)"),
+            ("RRULE:FREQ=MONTHLY;INTERVAL=1;BYMONTHDAY=\(day)", "Monthly on day \(day)"),
+            ("RRULE:FREQ=YEARLY;INTERVAL=1", "Yearly on \(date.formatted(.dateTime.day().month(.wide)))"),
+        ]
+    }
+
     private func save() {
-        let cal = Calendar.current
         let value = hasTime ? date : cal.startOfDay(for: date)
-        tasks.core.actions.setDue(id: task.id, due: KotlinLong(value: Int64(value.timeIntervalSince1970 * 1000)), allDay: !hasTime)
+        let actions = tasks.core.actions
+        actions.setDue(id: task.id, due: KotlinLong(value: Int64(value.timeIntervalSince1970 * 1000)), allDay: !hasTime)
+        if reminders != task.reminders { actions.setReminders(id: task.id, triggers: reminders) }
+        if rule != task.repeatRule { actions.setRepeat(id: task.id, rule: rule, from: task.repeatFrom ?? "due") }
+    }
+}
+
+/// "…" in the task detail: the actions TickTick keeps there.
+private struct TaskMoreMenu: View {
+    @Environment(TasksModel.self) private var tasks
+    let task: ZTask
+    let addSubtask: () -> Void
+
+    var body: some View {
+        Menu {
+            if task.parentId == nil { Button("Add subtask", systemImage: "list.bullet.indent", action: addSubtask) }
+            if task.pinnedAt == nil {
+                Button("Pin", systemImage: "pin") { tasks.core.actions.pin(id: task.id) }
+            } else {
+                Button("Unpin", systemImage: "pin.slash") { tasks.core.actions.unpin(id: task.id) }
+            }
+            if task.status == 0 { Button("Won't do", systemImage: "xmark.circle") { tasks.core.actions.wontDo(id: task.id) } }
+            Divider()
+            Button("Duplicate", systemImage: "plus.square.on.square") { tasks.selection = tasks.core.actions.duplicate(id: task.id).id }
+            Button("Copy link", systemImage: "link") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString("zentask://task/\(task.id)", forType: .string)
+            }
+            Divider()
+            Button("Move to Trash", systemImage: "trash", role: .destructive) { tasks.core.actions.trash(id: task.id) }
+        } label: {
+            Image(systemName: "ellipsis.circle").font(.title2)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("More")
     }
 }
 

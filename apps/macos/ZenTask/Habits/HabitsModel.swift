@@ -111,14 +111,22 @@ final class HabitsModel {
 
     func isFuture(_ day: Date) -> Bool { stamp(day) > today }
 
-    /// Done days in the shown month and the share of its scheduled days so far (0…1).
+    /// Done days in the shown month and the share of its scheduled days so far (0…1). Days before the habit
+    /// existed don't count; every-N-days habits only count their own days.
     func monthStats(_ row: HabitRow) -> (done: Int, rate: Double) {
         let draft = HabitDraft(habit: row.habit)
-        let days = monthGrid().flatMap { $0 }.compactMap { $0 }.filter { !isFuture($0) }
+        let created = row.habit.createdAt > 0 ? calendar.startOfDay(for: Date(timeIntervalSince1970: Double(row.habit.createdAt) / 1000)) : .distantPast
+        let anchor = row.habit.targetStartDate.map { date($0.int32Value) } ?? created
+        let days = monthGrid().flatMap { $0 }.compactMap { $0 }.filter { !isFuture($0) && $0 >= created }
         let done = days.filter { isDone(row, $0) }.count
         let due: Double
         switch draft.frequency {
-        case .daily: due = Double(days.count)
+        case .daily:
+            if draft.interval > 1, anchor != .distantPast {
+                due = Double(days.filter { (calendar.dateComponents([.day], from: anchor, to: $0).day ?? 0) % draft.interval == 0 }.count)
+            } else {
+                due = Double(days.count)
+            }
         case .weekdays(let set): due = Double(days.filter { set.contains(calendar.component(.weekday, from: $0)) }.count)
         case .timesAWeek(let n): due = (Double(days.count) / 7 * Double(n)).rounded(.up)
         }
@@ -182,6 +190,8 @@ struct HabitDraft: Equatable {
     var step: Double = 1
     var unit = ""
     var frequency: Frequency = .daily
+    /// "Every N days" (from INTERVAL); the editor keeps such rules as they are.
+    private(set) var interval = 1
     /// What the habit had when the editor opened: kept unless the user changes that part
     /// (TickTick icon names and rules the editor can't show, like every 2 days, survive a rename).
     private var originalRule: String?
@@ -208,6 +218,7 @@ struct HabitDraft: Equatable {
             let kv = p.split(separator: "=", maxSplits: 1)
             return kv.count == 2 ? (kv[0].uppercased(), String(kv[1])) : nil
         }, uniquingKeysWith: { a, _ in a })
+        interval = parts["INTERVAL"].flatMap(Int.init).map { max(1, $0) } ?? 1
         if let n = parts["TT_TIMES"].flatMap(Int.init), n > 0 {
             frequency = .timesAWeek(n)
         } else if parts["FREQ"] == "WEEKLY", let days = parts["BYDAY"] {

@@ -54,9 +54,25 @@ final class CalendarModel {
         hourHeight = min(Theme.Calendar.maxHourHeight, max(Theme.Calendar.minHourHeight, hourHeight * factor))
     }
 
+    /// What to show and how to colour it (synced Preference `calendar.view`).
+    private(set) var viewOptions: CalendarViewOptions
+
     init(core: ZenTaskCore, calendar: Calendar = CalendarModel.mondayFirst()) {
         self.core = core
         self.calendar = calendar
+        viewOptions = core.calendarView()
+    }
+
+    func setViewOptions(_ o: CalendarViewOptions) {
+        core.setCalendarView(options: o)
+        viewOptions = o
+        _Concurrency.Task { await reload() }
+    }
+
+    /// The Vietnamese lunar date for a day ("30", "1/10"), when lunar dates are on.
+    func lunar(_ date: Date) -> String? {
+        guard viewOptions.showLunar else { return nil }
+        return core.lunarLabel(dayMillis: Int64(calendar.startOfDay(for: date).timeIntervalSince1970 * 1000))
     }
 
     /// Weeks start on Monday (Vietnamese convention; spec P5 ruling).
@@ -115,6 +131,7 @@ final class CalendarModel {
     /// Recomputes the shown days. A newer request (mode/date change) wins; every caller returns only
     /// once the newest result is in.
     func reload() async {
+        viewOptions = core.calendarView()
         generation += 1
         let mine = generation
         let (first, count) = range

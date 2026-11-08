@@ -87,7 +87,7 @@ private struct HabitListPane: View {
                         .padding(.top, Theme.Space.m)
                         if habits.showArchived {
                             ForEach(habits.archived, id: \.habit.id) { row in
-                                HabitRowView(row: row).opacity(Theme.Opacity.card + 0.2)
+                                HabitRowView(row: row).opacity(Theme.Opacity.archived)
                             }
                         }
                     }
@@ -155,7 +155,7 @@ private struct HabitRowView: View {
                 .lineLimit(1)
             }
             Spacer(minLength: Theme.Space.s)
-            HStack(spacing: Theme.Space.xxs + 1) {
+            HStack(spacing: Theme.Habits.dotSpacing) {
                 ForEach(habits.lastDays(), id: \.self) { day in
                     DayDot(row: row, day: day)
                 }
@@ -221,13 +221,13 @@ struct CheckCircle: View {
 
     var body: some View {
         ZStack {
-            Circle().strokeBorder(emphasised ? AnyShapeStyle(color) : AnyShapeStyle(.tertiary), lineWidth: emphasised ? 2 : 1.5)
+            Circle().strokeBorder(emphasised ? AnyShapeStyle(color) : AnyShapeStyle(.tertiary), lineWidth: emphasised ? Theme.Habits.ringStrong : Theme.Habits.ring)
             if progress > 0 && !done {
                 Circle()
                     .trim(from: 0, to: progress)
-                    .stroke(color, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                    .stroke(color, style: StrokeStyle(lineWidth: Theme.Habits.progressRing, lineCap: .round))
                     .rotationEffect(.degrees(-90))
-                    .padding(1.5)
+                    .padding(Theme.Habits.ring)
             }
             if done {
                 Circle().fill(color)
@@ -284,7 +284,7 @@ private struct HabitDetail: View {
                 CheckInCard(row: row, color: color).id(row.habit.id)
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Theme.Space.m), count: 4), spacing: Theme.Space.m) {
                     StatCard(title: "Current streak", value: "\(row.stats.currentStreak)", unit: row.stats.unit, symbol: "flame.fill", tint: .orange)
-                    StatCard(title: "Longest streak", value: "\(row.stats.longestStreak)", unit: row.stats.unit, symbol: "trophy.fill", tint: .yellow)
+                    StatCard(title: "Longest streak", value: "\(row.stats.longestStreak)", unit: row.stats.unit, symbol: "trophy.fill", tint: Theme.Habits.gold)
                     StatCard(title: "Check-ins", value: "\(row.stats.totalDays)", unit: "days", symbol: "checkmark.seal.fill", tint: color)
                     let month = habits.monthStats(row)
                     StatCard(title: "This month", value: "\(Int((month.rate * 100).rounded()))%", unit: "\(month.done) days", symbol: "chart.bar.fill", tint: .purple)
@@ -318,6 +318,7 @@ private struct CheckInCard: View {
     let row: HabitRow
     let color: Color
     @State private var amount = ""
+    @State private var amountInvalid = false
 
     var body: some View {
         let today = habits.date(habits.today)
@@ -330,10 +331,14 @@ private struct CheckInCard: View {
                     Text(row.doneToday ? "Goal reached today" : "Today").foregroundStyle(.secondary)
                 }
                 Spacer()
-                TextField("Amount", text: $amount)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: Theme.Habits.amountField)
-                    .onSubmit(addTyped)
+                VStack(alignment: .trailing, spacing: Theme.Space.xxs) {
+                    TextField("Amount", text: $amount)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: Theme.Habits.amountField)
+                        .onSubmit(addTyped)
+                        .onChange(of: amount) { _, _ in amountInvalid = false }
+                    if amountInvalid { Text("Enter a number above 0").font(.caption).foregroundStyle(.red) }
+                }
                 Button {
                     if amount.isEmpty { habits.tap(row, on: today) } else { addTyped() }
                 } label: {
@@ -374,7 +379,10 @@ private struct CheckInCard: View {
     }
 
     private func addTyped() {
-        let value = Double(amount.replacingOccurrences(of: ",", with: ".")) ?? 0
+        guard let value = Double(amount.replacingOccurrences(of: ",", with: ".")), value > 0 else {
+            amountInvalid = true
+            return
+        }
         habits.add(row, amount: value, on: habits.date(habits.today))
         amount = ""
     }
@@ -448,8 +456,8 @@ private struct MonthMap: View {
                 .font(.callout.weight(done || isToday ? .semibold : .regular).monospacedDigit())
                 .foregroundStyle(done ? AnyShapeStyle(.white) : future ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.primary))
                 .frame(width: Theme.Habits.monthDot, height: Theme.Habits.monthDot)
-                .background(Circle().fill(done ? AnyShapeStyle(color) : partial ? AnyShapeStyle(color.opacity(Theme.Opacity.pill + 0.1)) : AnyShapeStyle(.clear)))
-                .overlay(Circle().strokeBorder(color, lineWidth: isToday && !done ? 2 : 0))
+                .background(Circle().fill(done ? AnyShapeStyle(color) : partial ? AnyShapeStyle(color.opacity(Theme.Opacity.partial)) : AnyShapeStyle(.clear)))
+                .overlay(Circle().strokeBorder(color, lineWidth: isToday && !done ? Theme.Habits.ringStrong : 0))
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
@@ -480,7 +488,7 @@ struct HabitIcon: View {
     var body: some View {
         let color = HabitLook.color(habit)
         ZStack {
-            Circle().fill(color.opacity(Theme.Opacity.pill + 0.04))
+            Circle().fill(color.opacity(Theme.Opacity.iconFill))
             if let emoji = HabitLook.emoji(habit.icon) {
                 Text(emoji).font(.system(size: size * 0.5))
             } else {

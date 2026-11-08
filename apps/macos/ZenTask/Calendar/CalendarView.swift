@@ -7,10 +7,19 @@ struct CalendarView: View {
     @Environment(TasksModel.self) private var tasks
     @State private var monitors: [Any] = []
     @AppStorage("calendar.showPanel") private var showPanel = true
+    @AppStorage("calendar.showSideBar") private var showSideBar = false
+    @State private var addingTask = false
+    @State private var showingOptions = false
 
     var body: some View {
         @Bindable var cal = cal
         HStack(spacing: 0) {
+            if showSideBar {
+                CalendarSideBar()
+                    .frame(width: Theme.Calendar.sideBarWidth)
+                    .transition(.move(edge: .leading).combined(with: .opacity))
+                Divider()
+            }
             VStack(spacing: 0) {
                 toolbar
                 Divider()
@@ -59,8 +68,19 @@ struct CalendarView: View {
     private var toolbar: some View {
         @Bindable var cal = cal
         return HStack(spacing: Theme.Space.m) {
+            Button {
+                withAnimation(Theme.List.foldAnimation) { showSideBar.toggle() }
+            } label: {
+                Image(systemName: "sidebar.left").symbolVariant(showSideBar ? .fill : .none)
+            }
+            .buttonStyle(.borderless)
+            .font(.title3)
+            .help(showSideBar ? "Hide the month and filters" : "Show the month and filters")
             Text(cal.title).font(.title2.weight(.semibold)).lineLimit(1)
             Spacer()
+            Button { addingTask = true } label: { Image(systemName: "plus") }
+                .help("New task on this day")
+                .popover(isPresented: $addingTask) { NewCalendarTask().environment(cal).environment(tasks) }
             Button("Today") { cal.today() }
                 .keyboardShortcut("t", modifiers: .command)
             HStack(spacing: Theme.Space.xxs) {
@@ -88,12 +108,24 @@ struct CalendarView: View {
             .menuStyle(.button)
             .fixedSize()
             .help("View: D Day · W Week · M Month · Y Year · A Agenda (or 1–5)")
-            Button {
-                withAnimation(Theme.List.foldAnimation) { showPanel.toggle() }
+            Menu {
+                Button("View options…", systemImage: "slider.horizontal.3") { showingOptions = true }
+                Toggle("Arrange tasks", systemImage: "sidebar.right", isOn: Binding(get: { showPanel }, set: { v in
+                    withAnimation(Theme.List.foldAnimation) { showPanel = v }
+                }))
+                Toggle("Month and filters", systemImage: "sidebar.left", isOn: Binding(get: { showSideBar }, set: { v in
+                    withAnimation(Theme.List.foldAnimation) { showSideBar = v }
+                }))
+                Divider()
+                SettingsLink { Label("Calendar accounts…", systemImage: "person.crop.circle") }
             } label: {
-                Image(systemName: "sidebar.right").symbolVariant(showPanel ? .fill : .none)
+                Image(systemName: "ellipsis")
             }
-            .help(showPanel ? "Hide the task panel" : "Show the task panel to arrange tasks")
+            .menuStyle(.button)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("View options, task panel, calendars")
+            .sheet(isPresented: $showingOptions) { CalendarViewOptionsSheet().environment(cal) }
         }
         .controlSize(.large)
         .padding(.horizontal, Theme.Space.l)
@@ -150,6 +182,9 @@ struct WeekGrid: View {
                         .padding(.horizontal, Theme.Space.s)
                         .padding(.vertical, Theme.Space.xxs)
                         .background(isToday ? AnyShapeStyle(.tint) : AnyShapeStyle(.clear), in: Capsule())
+                    if let lunar = cal.lunar(date) {
+                        Text(lunar).font(.caption).foregroundStyle(.secondary)
+                    }
                 }
                 .frame(maxWidth: .infinity)
             }
@@ -287,12 +322,16 @@ private struct MonthCell: View {
         let date = cal.date(of: day)
         let items = Array(day.allDay) + day.timed.map(\.entry)
         VStack(alignment: .leading, spacing: Theme.Space.xxs) {
-            Text(date.formatted(.dateTime.day()))
-                .font(.callout.weight(.semibold))
-                .foregroundStyle(cal.calendar.isDateInToday(date) ? Color.white : (inMonth ? Color.primary : Color.secondary))
-                .padding(.horizontal, Theme.Space.s)
-                .padding(.vertical, Theme.Space.xxs)
-                .background(cal.calendar.isDateInToday(date) ? AnyShapeStyle(.tint) : AnyShapeStyle(.clear), in: Capsule())
+            HStack {
+                Text(date.formatted(.dateTime.day()))
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(cal.calendar.isDateInToday(date) ? Color.white : (inMonth ? Color.primary : Color.secondary))
+                    .padding(.horizontal, Theme.Space.s)
+                    .padding(.vertical, Theme.Space.xxs)
+                    .background(cal.calendar.isDateInToday(date) ? AnyShapeStyle(.tint) : AnyShapeStyle(.clear), in: Capsule())
+                Spacer(minLength: 0)
+                if let lunar = cal.lunar(date) { Text(lunar).font(.caption).foregroundStyle(.secondary) }
+            }
             ForEach(items.prefix(Theme.Calendar.monthItems), id: \.id) { EntryChip(entry: $0, compact: true) }
             if items.count > Theme.Calendar.monthItems {
                 Text("\(items.count - Theme.Calendar.monthItems) more").font(.caption).foregroundStyle(.secondary)
@@ -317,7 +356,10 @@ private struct MonthCell: View {
 
 /// Events take their calendar's colour; tasks their priority colour (grey for none).
 func entryColor(_ entry: CalendarEntry) -> Color {
-    if entry.kind == "task" { return entry.priority == 0 ? Color.gray : Theme.PriorityColor.color(Int32(entry.priority)) }
+    if entry.kind == "task" {
+        if let list = Color(hex: entry.color) { return list } // coloured by list
+        return entry.priority == 0 ? Color.secondary : Theme.PriorityColor.color(Int32(entry.priority))
+    }
     return Color(hex: entry.color) ?? .accentColor
 }
 
@@ -458,6 +500,10 @@ struct EntryDetail: View {
                     Button("Remove date") { tasks.core.actions.setDue(id: entry.id, due: nil, allDay: false) }
                 }
                 .controlSize(.large)
+            } else if entry.kind == "habit" {
+                Button(entry.done ? "Undo check-in" : "Check in") { tasks.core.toggleHabitEntry(entryId: entry.id) }
+                    .controlSize(.large)
+                Label("A habit · open it in Habits (⌘3)", systemImage: "target").font(.caption).foregroundStyle(.secondary)
             } else if entry.kind == "countdown" {
                 Label("A countdown · edit it in Countdown (⌘4)", systemImage: "hourglass").font(.caption).foregroundStyle(.secondary)
             } else {

@@ -136,4 +136,39 @@ final class HabitsModelTests: XCTestCase {
         XCTAssertEqual(m.rows.first?.habit.repeatRule, "RRULE:FREQ=WEEKLY;TT_TIMES=3")
         XCTAssertEqual(m.rows.first?.habit.icon, "🏃")
     }
+
+    func testMonthRateSkipsDaysBeforeCreationAndOffDays() async throws {
+        let m = model()
+        m.month = .now
+        let h = m.core.habitActions.create(name: "Run", icon: nil, color: nil, type: "BOOLEAN", goal: 1, step: 1, unit: "",
+                                           repeatRule: "RRULE:FREQ=DAILY;INTERVAL=2")
+        await m.reload()
+        let today = m.date(m.today)
+        m.tap(try XCTUnwrap(m.rows.first), on: today)
+        await m.reload()
+        let stats = m.monthStats(try XCTUnwrap(m.rows.first { $0.habit.id == h.id }))
+        XCTAssertEqual(stats.done, 1)
+        XCTAssertEqual(stats.rate, 1, "created today: today is the only due day so far")
+    }
+
+    func testCalendarViewOptionsAndHabitCheckInFromTheCalendar() async throws {
+        let cal = CalendarModel(core: ZenTaskCore.companion.open(dbPath: nil))
+        cal.mode = .day
+        cal.anchor = .now
+        let h = cal.core.habitActions.create(name: "Gym", icon: nil, color: nil, type: "BOOLEAN", goal: 1, step: 1, unit: "",
+                                             repeatRule: "RRULE:FREQ=DAILY;INTERVAL=1")
+        await cal.reload()
+        let entry = try XCTUnwrap(cal.days.first?.allDay.first { $0.kind == "habit" })
+        XCTAssertTrue(entry.id.hasPrefix(h.id + "@"))
+        cal.core.toggleHabitEntry(entryId: entry.id)
+        await cal.reload()
+        XCTAssertEqual(cal.days.first?.allDay.first { $0.kind == "habit" }?.done, true)
+        cal.setViewOptions(cal.viewOptions.with(showHabits: false))
+        await cal.reload()
+        XCTAssertNil(cal.days.first?.allDay.first { $0.kind == "habit" })
+        XCTAssertFalse(cal.core.calendarView().showHabits, "saved")
+        XCTAssertNotNil(cal.lunar(.now))
+        cal.setViewOptions(cal.viewOptions.with(showLunar: false))
+        XCTAssertNil(cal.lunar(.now))
+    }
 }
