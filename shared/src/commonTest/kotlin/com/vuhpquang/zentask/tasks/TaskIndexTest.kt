@@ -128,4 +128,30 @@ class TaskIndexTest {
         val i = index(t("late", "2026-11-08T20:00"), t("early-low", "2026-11-08T08:00", priority = 1), t("early-high", "2026-11-08T08:00", priority = 5))
         assertEquals(listOf("early-high", "early-low", "late"), ids(i, TaskFilter.Smart(SmartList.TODAY)))
     }
+
+    @Test
+    fun sectionsHaveStableKeysColoursAndOrder() {
+        val coloured = listOf(Project(id = "inbox", name = "Inbox", isInbox = true), Project(id = "work", name = "Works", color = "#EC4899", sortOrder = 1))
+        val i = TaskIndex(
+            listOf(
+                t("a", priority = 5, project = "work"), t("b", priority = 1, project = "work"), t("c", priority = 3),
+                t("d", status = TaskStatus.COMPLETED, project = "work"),
+            ),
+            coloured, emptyList(), emptyList(), emptyList(),
+        )
+        val byList = i.sections(TaskFilter.InProject("work"), now, zone, com.vuhpquang.zentask.lists.ViewOptions(group = "list", sort = "priority"))
+        assertEquals(listOf("list:work", "done"), byList.map { it.key })
+        assertEquals("#EC4899", byList.first().color)
+        assertEquals(listOf("a", "b"), byList.first().rows.map { it.task.id })
+        val desc = i.sections(TaskFilter.InProject("work"), now, zone, com.vuhpquang.zentask.lists.ViewOptions(group = "list", sort = "priority", order = "desc"))
+        assertEquals(listOf("b", "a"), desc.first().rows.map { it.task.id })
+        val hidden = i.sections(TaskFilter.InProject("work"), now, zone, com.vuhpquang.zentask.lists.ViewOptions(hideCompleted = true))
+        assertTrue(hidden.none { it.isCompleted })
+        val all = i.sections(TaskFilter.Smart(SmartList.ALL), now, zone, com.vuhpquang.zentask.lists.ViewOptions(group = "priority"))
+        assertEquals(listOf("prio:5", "prio:3", "prio:1"), all.map { it.key })
+        val keys = i.sections(TaskFilter.Smart(SmartList.INBOX), now, zone).map { it.key }
+        assertEquals(keys.toSet().size, keys.size)
+        assertTrue(keys.all { it.isNotEmpty() })
+        assertEquals(com.vuhpquang.zentask.lists.ViewOptions(sort = "date"), com.vuhpquang.zentask.lists.ViewOptions.parse("""{"sort":"date"}"""))
+    }
 }

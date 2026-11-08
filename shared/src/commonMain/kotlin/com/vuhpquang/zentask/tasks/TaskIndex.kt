@@ -44,8 +44,19 @@ data class TaskRow(
     val overdue: Boolean,
 )
 
-/** [columnId]: the list section (column) this group shows, when it is one. */
-data class TaskSection(val title: String, val rows: List<TaskRow>, val isCompleted: Boolean = false, val columnId: String? = null)
+/**
+ * [columnId]: the list section (column) this group shows, when it is one. [key]: stable id of the group
+ * (`date:Today`, `col:<id>`, `list:<id>`, `prio:5`, `tag:#x`, `done`, `all`) for remembering it collapsed.
+ * [color]: the list's colour when grouped by list.
+ */
+data class TaskSection(
+    val title: String,
+    val rows: List<TaskRow>,
+    val isCompleted: Boolean = false,
+    val columnId: String? = null,
+    val key: String = "",
+    val color: String? = null,
+)
 
 val Task.isDone: Boolean get() = status == TaskStatus.COMPLETED || status == 1
 val Task.isOpen: Boolean get() = status == TaskStatus.OPEN
@@ -107,12 +118,20 @@ class TaskIndex(
 
     fun sections(filter: TaskFilter, now: Instant, zone: TimeZone, options: ViewOptions = ViewOptions()): List<TaskSection> {
         val today = now.toLocalDateTime(zone).date
-        if (options.sort.isNotEmpty() || options.group.isNotEmpty()) return customSections(filter, now, zone, options, today)
+        val sections = if (options.sort.isNotEmpty() || options.group.isNotEmpty() || options.order == "desc") {
+            customSections(filter, now, zone, options, today)
+        } else {
+            defaultSections(filter, now, zone, today)
+        }
+        return if (options.hideCompleted) sections.filter { !it.isCompleted } else sections
+    }
+
+    private fun defaultSections(filter: TaskFilter, now: Instant, zone: TimeZone, today: LocalDate): List<TaskSection> {
         val rows = rows(filter, now, zone)
         return when (filter) {
             is TaskFilter.InProject -> projectSections(filter.id, rows)
             is TaskFilter.Smart -> when (filter.list) {
-                SmartList.COMPLETED, SmartList.WONT_DO, SmartList.TRASH -> listOf(TaskSection("", rows)).filter { it.rows.isNotEmpty() }
+                SmartList.COMPLETED, SmartList.WONT_DO, SmartList.TRASH -> listOf(TaskSection("", rows, key = "all")).filter { it.rows.isNotEmpty() }
                 else -> dateSections(rows.filter { !it.task.isDone }, today, zone) + completed(rows)
             }
             is TaskFilter.WithTag -> dateSections(rows.filter { !it.task.isDone }, today, zone) + completed(rows)
@@ -130,22 +149,22 @@ class TaskIndex(
             "title" -> open.sortedBy { it.task.title.lowercase() }
             "manual" -> open.sortedBy { it.task.sortOrder }
             else -> open // the default order is by date
-        }
+        }.let { if (o.order == "desc") it.reversed() else it }
         // No group chosen: a list keeps its sections, smart lists group by date.
         val group = o.group.ifEmpty { if (filter is TaskFilter.InProject) "column" else "date" }
         val groups: List<TaskSection> = when (group) {
             "priority" -> listOf(5 to "High", 3 to "Medium", 1 to "Low", 0 to "None")
-                .map { (p, title) -> TaskSection(title, sorted.filter { it.task.priority == p }) }
+                .map { (p, title) -> TaskSection(title, sorted.filter { it.task.priority == p }, key = "prio:$p") }
             "list" -> sorted.groupBy { it.task.projectId }.entries
                 .sortedWith(compareBy({ projectById[it.key]?.sortOrder ?: Long.MAX_VALUE }, { projectById[it.key]?.name.orEmpty() }))
-                .map { (id, list) -> TaskSection(projectById[id]?.name ?: "Inbox", list) }
+                .map { (id, list) -> TaskSection(projectById[id]?.name ?: "Inbox", list, key = "list:$id", color = projectById[id]?.color) }
             "tag" -> {
                 val byTag = LinkedHashMap<String, MutableList<TaskRow>>()
                 sorted.forEach { r -> byTag.getOrPut(r.task.tags.firstOrNull()?.let { "#$it" } ?: "No tag") { mutableListOf() } += r }
-                byTag.entries.sortedBy { if (it.key == "No tag") "\uFFFF" else it.key }.map { TaskSection(it.key, it.value) }
+                byTag.entries.sortedBy { if (it.key == "No tag") "\uFFFF" else it.key }.map { TaskSection(it.key, it.value, key = "tag:${it.key}") }
             }
-            "column" -> if (filter is TaskFilter.InProject) return projectSections(filter.id, sorted, rows) else listOf(TaskSection("", sorted))
-            "none" -> listOf(TaskSection("", sorted))
+            "column" -> if (filter is TaskFilter.InProject) return projectSections(filter.id, sorted, rows) else listOf(TaskSection("", sorted, key = "all"))
+            "none" -> listOf(TaskSection("", sorted, key = "all"))
             else -> dateSections(sorted, today, zone)
         }
         val done = if (filter is TaskFilter.Smart && filter.list in setOf(SmartList.TODAY, SmartList.TOMORROW, SmartList.NEXT_7_DAYS, SmartList.ALL) || filter is TaskFilter.Custom) emptyList() else completed(rows)
@@ -272,18 +291,18 @@ class TaskIndex(
         val open = rows.filter { !it.task.isDone }
         val columns = columnsByProject[projectId].orEmpty().sortedBy { it.sortOrder }
         val sections = if (columns.isEmpty()) {
-            listOf(TaskSection("", open))
+            listOf(TaskSection("", open, key = "all"))
         } else {
             val ids = columns.mapTo(HashSet()) { it.id }
-            columns.map { c -> TaskSection(c.name, open.filter { it.task.columnId == c.id }, columnId = c.id) } +
-                TaskSection("No section", open.filter { it.task.columnId == null || it.task.columnId !in ids })
+            columns.map { c -> TaskSection(c.name, open.filter { it.task.columnId == c.id }, columnId = c.id, key = "col:${c.id}") } +
+                TaskSection("No section", open.filter { it.task.columnId == null || it.task.columnId !in ids }, key = "col:none")
         }
         // Empty sections stay visible in a list with sections, so tasks can be added or dropped there.
         return sections.filter { it.rows.isNotEmpty() || it.columnId != null } + completed(all)
     }
 
     private fun completed(rows: List<TaskRow>): List<TaskSection> =
-        rows.filter { it.task.isDone }.takeIf { it.isNotEmpty() }?.let { listOf(TaskSection("Completed", it, isCompleted = true)) }.orEmpty()
+        rows.filter { it.task.isDone }.takeIf { it.isNotEmpty() }?.let { listOf(TaskSection("Completed", it, isCompleted = true, key = "done")) }.orEmpty()
 
     private fun dateSections(rows: List<TaskRow>, today: LocalDate, zone: TimeZone): List<TaskSection> {
         val tomorrow = today.plus(1, DateTimeUnit.DAY)
@@ -301,7 +320,7 @@ class TaskIndex(
             }
             groups.getOrPut(title) { mutableListOf() } += row
         }
-        return groups.map { (title, list) -> TaskSection(title, list) }
+        return groups.map { (title, list) -> TaskSection(title, list, key = "date:$title") }
     }
 
     companion object {

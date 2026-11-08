@@ -47,6 +47,12 @@ data class ViewOptions(
     val sort: String = "",
     val group: String = "",
     val showCompleted: Boolean = false,
+    /** "" (the sort's natural order) or "desc" (reversed). */
+    val order: String = "",
+    /** Leave the Completed group out. */
+    val hideCompleted: Boolean = false,
+    /** Rows show the title only (no notes line). */
+    val hideDetails: Boolean = false,
 ) {
     fun encode(): String = ZenJson.encodeToString(serializer(), this)
 
