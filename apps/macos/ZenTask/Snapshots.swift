@@ -42,6 +42,8 @@ enum Snapshots {
             for (name, view) in [("sheet-list", AnyView(ListEditor(project: nil))), ("sheet-filter", AnyView(FilterEditor(filter: nil)))] {
                 both(view.environment(model).environment(tasks), size: CGSize(width: 480, height: 620), name: name, dir: dir)
             }
+            both(AnyView(MatrixView(openTask: { _ in })).environment(model).environment(tasks), size: windowSize, name: "matrix", dir: dir)
+            both(AnyView(SearchOverlay(open: { _, _ in }, close: {})).environment(tasks), size: CGSize(width: 600, height: 340), name: "search", dir: dir)
             tasks.sidebar = .smart(.all)
             wait { await tasks.settle() }
             if let checklist = tasks.sections.flatMap(\.rows).first(where: { $0.checklistTotal > 0 }) ?? tasks.sections.first?.rows.first {

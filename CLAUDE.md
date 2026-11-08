@@ -56,8 +56,9 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
   - `habits/` — `HabitSchedule` (TickTick rule formats: daily, BYDAY, `TT_TIMES=n` a week), `HabitStats`
     (day or week streaks), `HabitActions` (check-in id `chk_<habitId>_<yyyyMMdd>`, toggle or accumulate),
     `CountdownQueries`/`CountdownActions` (yearly repeats, 29 Feb → 28), `HabitBoard` (rows/cards for the UIs and MCP).
-  - `calendar/` — `CalendarQueries` (Day/Week/Month content: visible events + dated tasks, all-day row,
-    timed entries clipped per day with overlap columns). Calendar records are server-owned; which
+  - `calendar/` — `CalendarQueries` (Day/Week/Month content: visible events + dated tasks + countdowns + habits,
+    all-day row, timed entries clipped per day with overlap columns; filtered by `CalendarViewOptions`, the
+    synced Preference `calendar.view`), `Lunar` (Vietnamese lunar dates, UTC+7). Calendar records are server-owned; which
     calendars show is the Preference `calendar.hidden`.
   - `ZenTaskCore` — the Swift-facing entry point (typed helpers; Kotlin `Task` is `ZenTaskShared.Task` in Swift).
 - `server/` — Ktor/JVM, depends on `shared` (same models, merge and protocol).
@@ -85,7 +86,11 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
   `CalendarModel` + `CalendarView` (Week/Day grid, Month, Unscheduled panel); Settings → Calendars.
   `Habits/` (rail ⌘3): `HabitsModel` + `HabitsView` (list with a 7-day strip | detail with check-in, stats,
   month map) + `HabitEditor`. `Countdowns/` (rail ⌘4): `CountdownsModel` + `CountdownsView` (card grid, editor).
-  Countdowns with "show in calendar" appear as all-day entries.
+  Countdowns with "show in calendar" appear as all-day entries. Habits area = week progress rings + habits by
+  `HabitSection` as cards (or rows) | detail. `Matrix/` (rail ⌘5): Eisenhower quadrants from `TaskIndex.matrix`,
+  drag between quadrants sets priority. `Search/SearchOverlay` (rail search, ⌘K): tasks/notes, lists, smart lists,
+  tags, accent-insensitive. `Calendar/CalendarChrome.swift`: left bar (mini month with lunar dates, show checkboxes),
+  View options sheet, "+" new task.
   Task list chrome (`Tasks/ListChrome.swift`): `ListHeader` (☰ sidebar, list picker popover, `SortMenu` group/sort/
   order, "…" hide completed/details), `GroupHeaderRow` (collapsible groups, keyed by `TaskSection.key`, remembered in
   UserDefaults `tasks.collapsed`), `GroupBar` (list colour). `Calendar/CalendarPanels.swift`: `CalendarPanel` beside

@@ -19,6 +19,16 @@ struct CountdownsView: View {
             }
             .padding(.horizontal, Theme.Space.xl)
             .padding(.top, Theme.Space.l)
+            .padding(.bottom, Theme.Space.s)
+            Picker("Show", selection: $countdowns.typeFilter) {
+                Text("All").tag("")
+                ForEach(CountdownDraft.types, id: \.id) { t in Text(t.title).tag(t.id) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, Theme.Space.xl)
             .padding(.bottom, Theme.Space.m)
             if countdowns.cards.isEmpty {
                 ContentUnavailableView {
@@ -32,6 +42,9 @@ struct CountdownsView: View {
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: Theme.Space.l) {
+                        if countdowns.active.isEmpty && countdowns.archived.isEmpty {
+                            Text("Nothing of this type yet").foregroundStyle(.secondary).frame(maxWidth: .infinity).padding(.top, Theme.Space.xxl)
+                        }
                         grid(countdowns.active)
                         if !countdowns.archived.isEmpty {
                             DisclosureGroup("Archived (\(countdowns.archived.count))", isExpanded: $countdowns.showArchived) {

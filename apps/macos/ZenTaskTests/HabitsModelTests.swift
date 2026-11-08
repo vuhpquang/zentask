@@ -171,4 +171,25 @@ final class HabitsModelTests: XCTestCase {
         cal.setViewOptions(cal.viewOptions.with(showLunar: false))
         XCTAssertNil(cal.lunar(.now))
     }
+
+    func testSearchFoldsVietnameseAccents() {
+        XCTAssertEqual(SearchOverlay.fold("Đồng Hồ"), "dong ho")
+        XCTAssertTrue(SearchOverlay.fold("Chụp hình đồ kỉ niệm").contains(SearchOverlay.fold("do ki niem")))
+    }
+
+    func testHabitsWithoutSectionsFormOneUntitledGroupAndWeekIsMondayFirst() async throws {
+        let m = model()
+        var d = HabitDraft()
+        d.name = "Read"
+        m.save(d, original: nil)
+        await m.reload()
+        XCTAssertEqual(m.groups.count, 1)
+        XCTAssertNil(m.groups.first?.title)
+        XCTAssertEqual(m.week.count, 7)
+        XCTAssertEqual(m.calendar.component(.weekday, from: m.weekDays()[0]), 2, "Monday")
+        XCTAssertEqual(m.weekDays().map(m.stamp), m.week.map(\.stamp))
+        m.toggleFold("all")
+        XCTAssertTrue(m.isFolded("all"))
+        m.toggleFold("all")
+    }
 }

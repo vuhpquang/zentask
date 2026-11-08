@@ -19,6 +19,11 @@ final class HabitsModel {
 
     private(set) var rows: [HabitRow] = []
     private(set) var today: Int32 = 0
+    /// This week's progress (Monday to Sunday).
+    private(set) var week: [HabitDay] = []
+    private(set) var sections: [HabitSection] = []
+    /// Folded section keys, remembered on this Mac.
+    private(set) var folded: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "habits.folded") ?? [])
     var selection: String?
     var sheet: HabitSheet?
     var confirmDelete: Habit?
@@ -56,21 +61,53 @@ final class HabitsModel {
 
     func reload() async {
         let core = self.core
-        let (rows, today) = await _Concurrency.Task.detached(priority: .userInitiated) { (core.habitRows(), core.todayStamp()) }.value
+        let (rows, today, week, sections) = await _Concurrency.Task.detached(priority: .userInitiated) {
+            (core.habitRows(), core.todayStamp(), core.habitWeek(), core.habitSections())
+        }.value
         self.rows = rows
         self.today = today
+        self.week = week
+        self.sections = sections
         if selection == nil || !rows.contains(where: { $0.habit.id == selection }) {
             selection = active.first?.habit.id
         }
     }
 
     var active: [HabitRow] { rows.filter { !$0.archived } }
+
+    struct Group {
+        let key: String
+        /// nil when there are no sections at all (one untitled group).
+        let title: String?
+        let rows: [HabitRow]
+    }
+
+    /// Active habits by section (TickTick's habit sections), in section order; ones without a section last.
+    var groups: [Group] {
+        let live = active
+        guard !sections.isEmpty else { return live.isEmpty ? [] : [Group(key: "all", title: nil, rows: live)] }
+        let known = Set(sections.map(\.id))
+        var out = sections.compactMap { s -> Group? in
+            let r = live.filter { $0.habit.sectionId == s.id }
+            return r.isEmpty ? nil : Group(key: s.id, title: s.name, rows: r)
+        }
+        let rest = live.filter { $0.habit.sectionId.map { !known.contains($0) } ?? true }
+        if !rest.isEmpty { out.append(Group(key: "others", title: "Others", rows: rest)) }
+        return out
+    }
+
+    func isFolded(_ key: String) -> Bool { folded.contains(key) }
+
+    func toggleFold(_ key: String) {
+        if folded.contains(key) { folded.remove(key) } else { folded.insert(key) }
+        UserDefaults.standard.set(Array(folded).sorted(), forKey: "habits.folded")
+    }
     var archived: [HabitRow] { rows.filter(\.archived) }
     var selected: HabitRow? { rows.first { $0.habit.id == selection } }
 
     /// ↑/↓ in the list: the next or previous visible habit.
     func moveSelection(_ by: Int) {
-        let ids = (active + (showArchived ? archived : [])).map(\.habit.id)
+        let ids = (groups.filter { !isFolded($0.key) }.flatMap(\.rows) + (showArchived ? archived : [])).map(\.habit.id)
         guard !ids.isEmpty else { return }
         let i = selection.flatMap { ids.firstIndex(of: $0) } ?? -by
         selection = ids[max(0, min(ids.count - 1, i + by))]
@@ -85,6 +122,13 @@ final class HabitsModel {
 
     func date(_ stamp: Int32) -> Date {
         calendar.date(from: DateComponents(year: Int(stamp / 10_000), month: Int(stamp / 100 % 100), day: Int(stamp % 100))) ?? .now
+    }
+
+    /// Monday to Sunday of the current week.
+    func weekDays() -> [Date] {
+        let today = date(self.today == 0 ? stamp(.now) : self.today)
+        let start = calendar.dateInterval(of: .weekOfYear, for: today)?.start ?? today
+        return (0..<7).compactMap { calendar.date(byAdding: .day, value: $0, to: start) }
     }
 
     /// The last [count] days ending today, oldest first.

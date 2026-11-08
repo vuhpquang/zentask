@@ -20,6 +20,8 @@ final class CountdownsModel {
     var sheet: CountdownSheet?
     var confirmDelete: Countdown?
     var showArchived = false
+    /// Type filter: "" = all, or COUNTDOWN / BIRTHDAY / ANNIVERSARY / HOLIDAY.
+    var typeFilter = ""
 
     private var started = false
     private var pending: _Concurrency.Task<Void, Never>?
@@ -53,8 +55,9 @@ final class CountdownsModel {
         cards = await _Concurrency.Task.detached(priority: .userInitiated) { core.countdownCards() }.value
     }
 
-    var active: [CountdownCard] { cards.filter { $0.countdown.archivedAt == nil } }
-    var archived: [CountdownCard] { cards.filter { $0.countdown.archivedAt != nil } }
+    private var shown: [CountdownCard] { typeFilter.isEmpty ? cards : cards.filter { $0.countdown.type == typeFilter } }
+    var active: [CountdownCard] { shown.filter { $0.countdown.archivedAt == nil } }
+    var archived: [CountdownCard] { shown.filter { $0.countdown.archivedAt != nil } }
 
     /// [original] = the countdown as the editor opened it (nil = new): only what the editor changed is written.
     func save(_ draft: CountdownDraft, original: Countdown?) {

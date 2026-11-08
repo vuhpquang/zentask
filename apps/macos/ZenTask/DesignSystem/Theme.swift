@@ -81,6 +81,10 @@ enum Theme {
         static let archived: Double = 0.7
         /// A partly logged day in the habit month map.
         static let partial: Double = 0.28
+        /// Dims the window behind the search overlay.
+        static let scrim: Double = 0.25
+        /// Tint behind an Eisenhower quadrant.
+        static let matrixFill: Double = 0.06
         /// Circle behind a habit's icon.
         static let iconFill: Double = 0.22
     }
@@ -114,6 +118,15 @@ enum Theme {
         static let foldAnimation: Animation = .snappy(duration: 0.28)
     }
 
+    /** Search overlay. */
+    enum Search {
+        static let width: CGFloat = 560
+        static let emptyHeight: CGFloat = 220
+        static let resultsHeight: CGFloat = 420
+        static let maxTasks = 50
+        static let topInset: CGFloat = 90
+    }
+
     /** Side panels (calendar beside the tasks, task list beside the calendar). */
     enum Panel {
         static let calendarWidth: CGFloat = 340
@@ -126,7 +139,7 @@ enum Theme {
 
     /** Habits area (P6). */
     enum Habits {
-        static let listMin: CGFloat = 420
+        static let listMin: CGFloat = 440
         static let listIdeal: CGFloat = 460
         static let headerButton: CGFloat = 32
         static let rowIcon: CGFloat = 40
@@ -143,6 +156,10 @@ enum Theme {
         static let weekdayChip: CGFloat = 38
         static let sheetWidth: CGFloat = 440
         static let dotSpacing: CGFloat = 3
+        static let detailWidth: CGFloat = 460
+        static let cardMin: CGFloat = 250
+        static let weekRing: CGFloat = 3
+        static let weekRingSize: CGFloat = 26
         static let ring: CGFloat = 1.5
         static let ringStrong: CGFloat = 2
         static let progressRing: CGFloat = 3

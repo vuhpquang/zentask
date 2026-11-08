@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Main areas of the app, switched from the rail.
 enum RailTab: Hashable, CaseIterable {
-    case tasks, calendar, habits, countdown, search
+    case tasks, calendar, habits, countdown, matrix, search
 
     var title: String {
         switch self {
@@ -10,6 +10,7 @@ enum RailTab: Hashable, CaseIterable {
         case .calendar: "Calendar"
         case .habits: "Habits"
         case .countdown: "Countdown"
+        case .matrix: "Eisenhower Matrix"
         case .search: "Search"
         }
     }
@@ -20,12 +21,13 @@ enum RailTab: Hashable, CaseIterable {
         case .calendar: "calendar"
         case .habits: "target"
         case .countdown: "hourglass"
+        case .matrix: "square.grid.2x2"
         case .search: "magnifyingglass"
         }
     }
 
     /// Areas built so far; the others show as dimmed until their phase ships.
-    var isAvailable: Bool { self != .search }
+    var isAvailable: Bool { true }
 
     var shortcut: KeyEquivalent {
         switch self {
@@ -33,7 +35,8 @@ enum RailTab: Hashable, CaseIterable {
         case .calendar: "2"
         case .habits: "3"
         case .countdown: "4"
-        case .search: "5"
+        case .matrix: "5"
+        case .search: "k"
         }
     }
 }
@@ -43,12 +46,14 @@ enum RailTab: Hashable, CaseIterable {
 struct AppRail: View {
     @Environment(AppModel.self) private var app
     @Binding var tab: RailTab
+    /// Search opens over the current area instead of replacing it.
+    var search: () -> Void = {}
 
     var body: some View {
         VStack(spacing: Theme.Space.s) {
             ForEach(RailTab.allCases, id: \.self) { item in
                 RailButton(symbol: item.symbol, title: item.isAvailable ? item.title : "\(item.title) (coming soon)", selected: tab == item) {
-                    tab = item
+                    if item == .search { search() } else { tab = item }
                 }
                 .disabled(!item.isAvailable)
                 .keyboardShortcut(item.shortcut, modifiers: .command)

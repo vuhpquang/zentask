@@ -65,19 +65,42 @@ struct TaskCommands: Commands {
 
 /// Rail + the selected area.
 struct MainWindow: View {
+    @Environment(TasksModel.self) private var tasks
     @State private var tab: RailTab = .tasks
+    @State private var searching = false
 
     var body: some View {
         HStack(spacing: 0) {
-            AppRail(tab: $tab)
+            AppRail(tab: $tab, search: { withAnimation(Theme.List.foldAnimation) { searching = true } })
                 .ignoresSafeArea(.container, edges: .top) // only the rail reaches under the traffic lights
             Divider().ignoresSafeArea(.container, edges: .top)
             switch tab {
             case .calendar: CalendarView()
             case .habits: HabitsView()
             case .countdown: CountdownsView()
+            case .matrix: MatrixView(openTask: { id in open(nil, id) })
             default: TasksView()
             }
         }
+        .overlay(alignment: .top) {
+            if searching {
+                ZStack(alignment: .top) {
+                    Color.black.opacity(Theme.Opacity.scrim).ignoresSafeArea()
+                        .onTapGesture { withAnimation(Theme.List.foldAnimation) { searching = false } }
+                    SearchOverlay(open: { item, id in open(item, id) }, close: { withAnimation(Theme.List.foldAnimation) { searching = false } })
+                        .padding(.top, Theme.Search.topInset)
+                }
+                .transition(.opacity)
+            }
+        }
+    }
+
+    /// Shows a list (and a task in it) in the Tasks area.
+    private func open(_ item: SidebarItem?, _ taskId: String?) {
+        tab = .tasks
+        if let item { tasks.sidebar = item } else if let id = taskId, let t = tasks.index?.task(id: id) {
+            tasks.sidebar = t.isDone ? .smart(.completed) : .project(t.projectId)
+        }
+        if let taskId { tasks.selection = taskId }
     }
 }

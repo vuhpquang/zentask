@@ -1,26 +1,30 @@
 import SwiftUI
 @preconcurrency import ZenTaskShared
 
-/// The Habits area (rail ⌘3): habit list with a 7-day strip | detail with check-in, stats and a month map.
+/// The Habits area (rail ⌘3): the week's progress rings, habits by section as cards (or rows), and the
+/// selected habit's check-in, stats and month map on the right.
 struct HabitsView: View {
     @Environment(HabitsModel.self) private var habits
 
     var body: some View {
-        NavigationSplitView {
-            HabitListPane()
-                .navigationSplitViewColumnWidth(min: Theme.Habits.listMin, ideal: Theme.Habits.listIdeal)
-        } detail: {
-            if let row = habits.selected {
-                HabitDetail(row: row)
-            } else {
-                ContentUnavailableView {
-                    Label("No habit selected", systemImage: "target")
-                } description: {
-                    Text("Pick a habit, or create one to start a streak")
-                } actions: {
-                    Button("New habit") { habits.sheet = .new }.buttonStyle(.borderedProminent)
+        HStack(spacing: 0) {
+            HabitBoardPane()
+                .frame(minWidth: Theme.Habits.listMin, maxWidth: .infinity)
+            Divider()
+            Group {
+                if let row = habits.selected {
+                    HabitDetail(row: row)
+                } else {
+                    ContentUnavailableView {
+                        Label("No habit selected", systemImage: "target")
+                    } description: {
+                        Text("Pick a habit, or create one to start a streak")
+                    } actions: {
+                        Button("New habit") { habits.sheet = .new }.buttonStyle(.borderedProminent)
+                    }
                 }
             }
+            .frame(width: Theme.Habits.detailWidth)
         }
         .onAppear { habits.start() }
         .sheet(item: Binding(get: { habits.sheet }, set: { habits.sheet = $0 })) { sheet in
@@ -41,17 +45,23 @@ struct HabitsView: View {
     }
 }
 
-// MARK: - List
+// MARK: - Board
 
-private struct HabitListPane: View {
+private struct HabitBoardPane: View {
     @Environment(HabitsModel.self) private var habits
+    @AppStorage("habits.grid") private var grid = true
 
     var body: some View {
-        @Bindable var habits = habits
         VStack(spacing: 0) {
-            HStack(alignment: .firstTextBaseline) {
+            HStack(alignment: .firstTextBaseline, spacing: Theme.Space.s) {
                 Text("Habits").font(.title2.weight(.bold))
                 Spacer()
+                Button { grid.toggle() } label: {
+                    Image(systemName: grid ? "list.bullet" : "square.grid.2x2").font(.title3)
+                        .frame(width: Theme.Habits.headerButton, height: Theme.Habits.headerButton)
+                }
+                .buttonStyle(.borderless)
+                .help(grid ? "Show as a list" : "Show as cards")
                 Button { habits.sheet = .new } label: {
                     Image(systemName: "plus").font(.title3).frame(width: Theme.Habits.headerButton, height: Theme.Habits.headerButton)
                 }
@@ -60,39 +70,38 @@ private struct HabitListPane: View {
             }
             .padding(.horizontal, Theme.Space.l)
             .padding(.top, Theme.Space.m)
-            TodaySummary()
+            WeekRings()
                 .padding(.horizontal, Theme.Space.l)
-                .padding(.vertical, Theme.Space.s)
+                .padding(.vertical, Theme.Space.m)
             ScrollView {
-                LazyVStack(spacing: Theme.Space.xxs) {
-                    ForEach(habits.active, id: \.habit.id) { row in
-                        HabitRowView(row: row)
+                LazyVStack(alignment: .leading, spacing: Theme.Space.s) {
+                    ForEach(habits.groups, id: \.key) { group in
+                        if let title = group.title {
+                            GroupHeaderRow(title: title, count: group.rows.count, collapsed: habits.isFolded(group.key)) {
+                                habits.toggleFold(group.key)
+                            }
+                            .padding(.horizontal, Theme.Space.s)
+                        }
+                        if !habits.isFolded(group.key) {
+                            if grid {
+                                LazyVGrid(columns: [GridItem(.adaptive(minimum: Theme.Habits.cardMin), spacing: Theme.Space.m)], spacing: Theme.Space.m) {
+                                    ForEach(group.rows, id: \.habit.id) { HabitCard(row: $0) }
+                                }
+                            } else {
+                                ForEach(group.rows, id: \.habit.id) { HabitRowView(row: $0) }
+                            }
+                        }
                     }
                     if !habits.archived.isEmpty {
-                        Button {
-                            withAnimation(.snappy) { habits.showArchived.toggle() }
-                        } label: {
-                            HStack {
-                                Image(systemName: "chevron.right").rotationEffect(.degrees(habits.showArchived ? 90 : 0))
-                                Text("Archived (\(habits.archived.count))")
-                                Spacer()
-                            }
-                            .font(.callout.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, Theme.Space.m)
-                            .padding(.vertical, Theme.Space.s)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.top, Theme.Space.m)
+                        GroupHeaderRow(title: "Archived", count: habits.archived.count, collapsed: !habits.showArchived) { habits.showArchived.toggle() }
+                            .padding(.horizontal, Theme.Space.s)
+                            .padding(.top, Theme.Space.m)
                         if habits.showArchived {
-                            ForEach(habits.archived, id: \.habit.id) { row in
-                                HabitRowView(row: row).opacity(Theme.Opacity.archived)
-                            }
+                            ForEach(habits.archived, id: \.habit.id) { HabitRowView(row: $0).opacity(Theme.Opacity.archived) }
                         }
                     }
                 }
-                .padding(.horizontal, Theme.Space.s)
+                .padding(.horizontal, Theme.Space.l)
                 .padding(.bottom, Theme.Space.l)
             }
             .overlay {
@@ -108,29 +117,95 @@ private struct HabitListPane: View {
     }
 }
 
-/// "3 of 5 done today" with a colourful progress bar.
-private struct TodaySummary: View {
+/// Monday to Sunday: each day's share of due habits done, as a ring; today stands out.
+private struct WeekRings: View {
     @Environment(HabitsModel.self) private var habits
 
     var body: some View {
-        let due = habits.active.filter(\.dueToday)
-        let done = due.filter(\.doneToday).count
-        if !due.isEmpty {
-            VStack(alignment: .leading, spacing: Theme.Space.xs) {
-                Text(done == due.count ? "All done today" : "\(done) of \(due.count) done today")
-                    .font(.callout.weight(.medium))
-                    .foregroundStyle(.secondary)
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(.quaternary)
-                        Capsule().fill(Theme.Habits.gradient)
-                            .frame(width: geo.size.width * CGFloat(done) / CGFloat(due.count))
+        HStack(spacing: 0) {
+            ForEach(habits.week, id: \.stamp) { day in
+                let date = habits.date(day.stamp)
+                let isToday = day.stamp == habits.today
+                let progress = day.due > 0 ? Double(day.done) / Double(day.due) : 0
+                VStack(spacing: Theme.Space.xxs) {
+                    Text(date.formatted(.dateTime.weekday(.abbreviated))).font(.caption).foregroundStyle(.secondary)
+                    Text("\(habits.calendar.component(.day, from: date))")
+                        .font(.callout.weight(isToday ? .bold : .medium).monospacedDigit())
+                        .foregroundStyle(isToday ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
+                    ZStack {
+                        Circle().stroke(.quaternary, lineWidth: Theme.Habits.weekRing)
+                        Circle().trim(from: 0, to: progress)
+                            .stroke(Theme.Habits.gradient, style: StrokeStyle(lineWidth: Theme.Habits.weekRing, lineCap: .round))
+                            .rotationEffect(.degrees(-90))
+                        if day.due > 0 && day.done == day.due {
+                            Image(systemName: "checkmark").font(.caption2.weight(.bold)).foregroundStyle(.tint)
+                        }
                     }
+                    .frame(width: Theme.Habits.weekRingSize, height: Theme.Habits.weekRingSize)
                 }
-                .frame(height: Theme.Habits.progressHeight)
+                .frame(maxWidth: .infinity)
+                .help(day.due == 0 ? "No habits due" : "\(day.done) of \(day.due) done")
+                .opacity(day.stamp > habits.today ? Theme.Opacity.archived : 1)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+}
+
+/// A habit card: icon, name, total days and streak, then this week's seven days to click.
+private struct HabitCard: View {
+    @Environment(HabitsModel.self) private var habits
+    let row: HabitRow
+
+    var body: some View {
+        let selected = habits.selection == row.habit.id
+        let color = HabitLook.color(row.habit)
+        VStack(alignment: .leading, spacing: Theme.Space.m) {
+            HStack(spacing: Theme.Space.m) {
+                HabitIcon(habit: row.habit, size: Theme.Habits.rowIcon)
+                VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                    Text(row.habit.name).font(.body.weight(.semibold)).lineLimit(1)
+                    HStack(spacing: Theme.Space.s) {
+                        Label("\(row.stats.totalDays) days", systemImage: "bolt.fill").foregroundStyle(.blue)
+                        Label("\(row.stats.currentStreak) \(row.stats.unit)", systemImage: "flame.fill").foregroundStyle(.orange)
+                    }
+                    .font(.caption)
+                    .labelStyle(.titleAndIcon)
+                }
+                Spacer(minLength: 0)
+            }
+            HStack(spacing: 0) {
+                ForEach(habits.weekDays(), id: \.self) { day in
+                    let stamp = habits.stamp(day)
+                    Button { habits.tap(row, on: day) } label: {
+                        CheckCircle(done: habits.isDone(row, day), progress: progress(day), color: color, size: Theme.Habits.dot, emphasised: stamp == habits.today)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(habits.isFuture(day))
+                    .opacity(habits.isFuture(day) ? Theme.Opacity.archived : 1)
+                    .frame(maxWidth: .infinity)
+                    .help(day.formatted(.dateTime.weekday(.wide).day().month()))
+                }
+            }
+        }
+        .padding(Theme.Detail.cardPadding)
+        .background(
+            RoundedRectangle(cornerRadius: Theme.Detail.cardRadius, style: .continuous)
+                .fill(selected ? AnyShapeStyle(color.opacity(Theme.Opacity.chip)) : AnyShapeStyle(.background.secondary))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: Theme.Detail.cardRadius, style: .continuous)
+                .strokeBorder(selected ? color : .clear, lineWidth: Theme.Habits.ringStrong)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: Theme.Detail.cardRadius, style: .continuous))
+        .onTapGesture { habits.selection = row.habit.id }
+        .contextMenu { HabitMenu(habit: row.habit) }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(row.habit.name)
+    }
+
+    private func progress(_ day: Date) -> Double {
+        guard row.habit.type == Habit.companion.TYPE_REAL, row.habit.goal > 0 else { return 0 }
+        return min(1, habits.value(row, day) / row.habit.goal)
     }
 }
 
