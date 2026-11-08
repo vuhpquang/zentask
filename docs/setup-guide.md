@@ -6,7 +6,7 @@ Các bước dưới đây cần tài khoản hoặc quyền mà chỉ anh có. 
 |---|---|---|
 | 1 | DNS `zentask-api.vuhpquang.com` qua Cloudflare Tunnel | P0 (deploy server) |
 | 2 | Mật khẩu server + file `.env` trên vps1 | P1 (auth + sync) |
-| 3 | Google Cloud OAuth client cho Google Calendar | P5 (calendar) |
+| 3 | Google Cloud OAuth client cho Google Calendar, publish app (bước 3.6) | P5 (calendar) |
 | 4 | (Tuỳ chọn) Link iCal bí mật của lịch công ty | P5, chỉ khi bước 3 bị công ty chặn |
 | 5 | Cookie TickTick | P2 (hướng dẫn chi tiết sẽ thêm khi tới P2) |
 
@@ -141,7 +141,7 @@ chmod 600 /root/zentask/.env
 
 ## 3. Google Cloud OAuth (Google Calendar, chỉ đọc)
 
-ZenTask server xin quyền **chỉ đọc lịch** (`calendar.readonly`) cho tài khoản Google cá nhân và tài khoản công ty. App để ở chế độ **Testing**, chỉ những email anh thêm vào mới dùng được, nên không cần Google xét duyệt.
+ZenTask server xin quyền **chỉ đọc lịch** (`calendar.readonly`) cho tài khoản Google cá nhân và tài khoản công ty. App được **publish ở chế độ In production nhưng không gửi xét duyệt** (bước 3.6): token không hết hạn sau 7 ngày, Google chỉ hiện một màn hình cảnh báo "chưa xác minh" lúc kết nối. Không cần nộp hồ sơ xét duyệt.
 
 ### 3.1 Tạo project
 
@@ -168,9 +168,9 @@ ZenTask server xin quyền **chỉ đọc lịch** (`calendar.readonly`) cho tà
    - email Google cá nhân
    - email công ty (`...@mservice.com.vn`)
    - **Save**
-8. Để **Publishing status = Testing**. Không bấm "Publish app".
+8. Tạm để **Publishing status = Testing**. Bước 3.6 sẽ chuyển sang In production.
 
-> Ở chế độ Testing, Google bắt đăng nhập lại sau mỗi **7 ngày** với scope nhạy cảm (refresh token hết hạn). ZenTask sẽ báo "Kết nối lại Google" khi đến lúc. Muốn bỏ giới hạn này thì phải publish app và qua xét duyệt của Google. Với app cá nhân thì không đáng.
+> Vì sao phải publish: ở chế độ Testing, refresh token của scope nhạy cảm hết hạn sau **7 ngày**, nghĩa là cứ mỗi tuần phải kết nối lại Google. Ở chế độ In production thì không có giới hạn này.
 
 ### 3.4 Tạo OAuth client
 
@@ -196,7 +196,24 @@ GOOGLE_CLIENT_SECRET=<client secret>
 
 Khi tới P5, deploy lại server rồi vào **ZenTask → Settings → Calendar → Connect Google** cho từng tài khoản.
 
-### 3.6 Nếu tài khoản công ty bị chặn
+### 3.6 Publish app (bỏ giới hạn 7 ngày)
+
+App cá nhân dưới 100 người dùng được phép chạy ở chế độ **In production mà không qua xét duyệt**. Cái giá duy nhất là màn hình cảnh báo "Google chưa xác minh ứng dụng này" mỗi lần kết nối một tài khoản.
+
+1. Menu ☰ → **APIs & Services → OAuth consent screen** (hoặc **Google Auth Platform → Audience**).
+2. Ở mục **Publishing status: Testing**, bấm **Publish app** → **Confirm**.
+3. Trạng thái chuyển thành **In production**. Google có thể hiện banner kiểu *"Your app requires verification"* hoặc nút **Prepare for verification**: **bỏ qua, không nộp hồ sơ**. App vẫn chạy bình thường với tối đa 100 người dùng.
+4. Danh sách **Test users** không còn tác dụng, để nguyên cũng được.
+
+Khi kết nối Google từ ZenTask (ở P5), Google sẽ hiện **"Google hasn't verified this app"**:
+- Bấm **Advanced** (Nâng cao) → **Go to ZenTask (unsafe)** (Chuyển tới ZenTask (không an toàn)).
+- Tick quyền **See and download any calendar you can access** → **Continue**.
+
+Đây là app của chính anh, chỉ xin quyền đọc lịch, nên cảnh báo này an toàn để bỏ qua.
+
+> Nếu đã kết nối Google **trong lúc app còn ở Testing** thì token cũ vẫn hết hạn sau 7 ngày. Kết nối lại một lần sau khi publish là xong.
+
+### 3.7 Nếu tài khoản công ty bị chặn
 
 Nếu lúc kết nối email công ty, Google báo *"Access blocked: … has not been approved by your organization"* hoặc *"admin_policy_enforced"*, nghĩa là admin Google Workspace của công ty chặn app bên ngoài. Hai cách:
 - Nhờ IT thêm OAuth Client ID của ZenTask vào danh sách cho phép (Admin console → Security → API controls → App access control). Thường khó được duyệt.

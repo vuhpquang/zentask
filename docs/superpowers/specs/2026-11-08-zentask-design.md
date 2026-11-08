@@ -127,7 +127,7 @@ Smart list mặc định (tính, không lưu): All, Today, Tomorrow, Next 7 Days
 - Server làm OAuth (web flow): client mở trình duyệt tới `GET /v1/calendar/google/connect` → Google consent (scope `calendar.readonly`) → callback về server → lưu refresh token. Hỗ trợ nhiều tài khoản.
 - Server sync event định kỳ (10 phút) bằng `syncToken` incremental của Google Calendar API, cửa sổ thời gian: 90 ngày trước → 365 ngày sau. Event về client qua cùng kênh `/v1/sync` như entity read-only.
 - Rủi ro: tài khoản công ty (Google Workspace) có thể chặn OAuth app chưa verify. Dự phòng: thêm lịch bằng **link iCal bí mật** (provider ICAL), server poll định kỳ.
-- Việc thủ công của chủ dự án (chi tiết trong `docs/setup-guide.md`): tạo Google Cloud project + OAuth client (Web), thêm redirect URI của server, để app ở chế độ Testing và thêm 2 email vào test users.
+- Việc thủ công của chủ dự án (chi tiết trong `docs/setup-guide.md`): tạo Google Cloud project + OAuth client (Web), thêm redirect URI của server, publish app sang **In production không xét duyệt** (để refresh token không hết hạn sau 7 ngày như chế độ Testing; đổi lại có màn hình cảnh báo "unverified app" khi kết nối, giới hạn 100 user).
 
 ## 10. Import & Sync TickTick
 
