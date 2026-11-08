@@ -41,6 +41,11 @@ class ServerDb(file: Path, private val now: () -> Long = System::currentTimeMill
             )
             st.execute("CREATE INDEX IF NOT EXISTS records_version ON records(version)")
             st.execute(
+                """CREATE TABLE IF NOT EXISTS mcp_audit (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, device_id TEXT NOT NULL,
+                    tool TEXT NOT NULL, args TEXT NOT NULL, changes TEXT NOT NULL)""",
+            )
+            st.execute(
                 """CREATE TABLE IF NOT EXISTS devices (
                     id TEXT PRIMARY KEY, name TEXT NOT NULL, token_hash TEXT NOT NULL UNIQUE,
                     created_at INTEGER NOT NULL, last_seen_at INTEGER NOT NULL, revoked_at INTEGER)""",
@@ -115,6 +120,22 @@ class ServerDb(file: Path, private val now: () -> Long = System::currentTimeMill
         fields = ZenJson.parseToJsonElement(getString("fields")).jsonObject,
         clocks = ZenJson.decodeFromString(CLOCKS, getString("clocks")),
     )
+
+    /** Records one MCP write: which device, which tool, its arguments and the before/after of changed tasks. */
+    @Synchronized
+    fun audit(deviceId: String, tool: String, args: String, changes: String) {
+        conn.prepareStatement("INSERT INTO mcp_audit(at, device_id, tool, args, changes) VALUES (?, ?, ?, ?, ?)").use {
+            it.setLong(1, now()); it.setString(2, deviceId); it.setString(3, tool); it.setString(4, args); it.setString(5, changes)
+            it.executeUpdate()
+        }
+    }
+
+    /** Audit tools in insertion order (tests, support). */
+    @Synchronized
+    fun auditTools(): List<String> =
+        conn.prepareStatement("SELECT tool FROM mcp_audit ORDER BY id").use { st ->
+            st.executeQuery().use { rs -> buildList { while (rs.next()) add(rs.getString(1)) } }
+        }
 
     @Synchronized
     fun createDevice(name: String, tokenHash: String): String {

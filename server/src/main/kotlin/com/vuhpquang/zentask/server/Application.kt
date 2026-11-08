@@ -7,6 +7,9 @@ import com.vuhpquang.zentask.server.auth.LoginLimiter
 import com.vuhpquang.zentask.server.auth.PasswordCheck
 import com.vuhpquang.zentask.server.auth.Tokens
 import com.vuhpquang.zentask.server.auth.deviceBearer
+import com.vuhpquang.zentask.server.mcp.McpRateLimiter
+import com.vuhpquang.zentask.server.mcp.McpReplica
+import com.vuhpquang.zentask.server.mcp.mcpRoutes
 import com.vuhpquang.zentask.server.store.ServerDb
 import com.vuhpquang.zentask.server.sync.syncRoutes
 import com.vuhpquang.zentask.sync.ApiError
@@ -55,6 +58,9 @@ fun Application.module(config: ServerConfig = ServerConfig.fromEnv(), now: () ->
     monitor.subscribe(ApplicationStopped) { db.close() }
     val password = PasswordCheck(config.password)
     val limiter = LoginLimiter(now)
+    val replica = McpReplica(db, config.dataDir.resolve("mcp.db"), now)
+    val mcpLimiter = McpRateLimiter(now)
+    monitor.subscribe(ApplicationStopped) { replica.close() }
 
     install(ContentNegotiation) { json(ZenJson) }
     install(Authentication) { deviceBearer(db) }
@@ -79,6 +85,10 @@ fun Application.module(config: ServerConfig = ServerConfig.fromEnv(), now: () ->
         publicPage("/", "index.html")
         publicPage("/privacy", "privacy.html")
         publicPage("/terms", "terms.html")
+
+        authenticate(DEVICE_AUTH) {
+            mcpRoutes(db, replica, mcpLimiter)
+        }
 
         route("/v1") {
             post("/auth/login") {
