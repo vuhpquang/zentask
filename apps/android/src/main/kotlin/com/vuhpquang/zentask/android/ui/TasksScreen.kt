@@ -49,6 +49,7 @@ import androidx.compose.material.icons.outlined.Circle
 import androidx.compose.material.icons.outlined.FilterAlt
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.outlined.NotificationsNone
@@ -226,7 +227,11 @@ fun TasksScreen(app: ZenApp, openSettings: () -> Unit, openSearch: () -> Unit) {
                 TopAppBar(
                     title = { Text(title(index, pick), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                     navigationIcon = { IconButton(onClick = { scope.launch { drawer.open() } }) { Icon(Icons.Filled.Menu, "Lists") } },
-                    actions = { IconButton(onClick = openSearch) { Icon(Icons.Filled.Search, "Search") } },
+                    actions = {
+                        IconButton(onClick = openSearch) { Icon(Icons.Filled.Search, "Search") }
+                        val project = (pick as? ListPick.InProject)?.let { p -> index?.projects?.firstOrNull { it.id == p.id } }
+                        if (project != null && project.id != Project.INBOX_ID) ListMenu(app, project) { pickKey = ListPick.Smart(SmartList.INBOX).key }
+                    },
                 )
             },
             floatingActionButton = {
@@ -241,6 +246,65 @@ fun TasksScreen(app: ZenApp, openSettings: () -> Unit, openSearch: () -> Unit) {
         }
     }
     if (adding) QuickAddSheet(app, index, pick) { adding = false }
+}
+
+private val LIST_COLORS = listOf("#5B5FE9", "#8B5CF6", "#EC4899", "#EF4444", "#F59E0B", "#10B981", "#06B6D4", "#64748B")
+
+/** "…" for a list: rename and recolour, or move it to Trash (its tasks go with it and come back with it). */
+@Composable
+private fun ListMenu(app: ZenApp, project: Project, left: () -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    var editing by remember { mutableStateOf(false) }
+    var trashing by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { open = true }) { Icon(Icons.Filled.MoreVert, "List options") }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(text = { Text("Edit list") }, onClick = { open = false; editing = true })
+            DropdownMenuItem(text = { Text("Move to Trash") }, onClick = { open = false; trashing = true })
+        }
+    }
+    if (editing) {
+        ListDialog("Edit list", project.name, project.color ?: LIST_COLORS.first(), confirm = "Save", close = { editing = false }) { name, color ->
+            if (name != project.name) app.core.listActions.rename(project.id, name)
+            if (color != project.color) app.core.listActions.setColor(project.id, color)
+        }
+    }
+    if (trashing) {
+        AlertDialog(
+            onDismissRequest = { trashing = false },
+            title = { Text("Move \"${project.name}\" to Trash?") },
+            text = { Text("Its tasks move to Trash with it. Restore the list from Trash on the Mac to bring them back.") },
+            confirmButton = { TextButton(onClick = { trashing = false; app.core.listActions.trash(project.id); left() }) { Text("Move to Trash") } },
+            dismissButton = { TextButton(onClick = { trashing = false }) { Text("Cancel") } },
+        )
+    }
+}
+
+@Composable
+private fun ListDialog(heading: String, initialName: String, initialColor: String, confirm: String, close: () -> Unit, save: (String, String) -> Unit) {
+    var name by remember { mutableStateOf(initialName) }
+    var color by remember { mutableStateOf(initialColor) }
+    AlertDialog(
+        onDismissRequest = close,
+        title = { Text(heading) },
+        text = {
+            Column {
+                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                Row(Modifier.padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for (c in LIST_COLORS) {
+                        val selected = c.equals(color, ignoreCase = true)
+                        Box(
+                            Modifier.size(26.dp).background(ZenColors.hex(c) ?: Color.Gray, androidx.compose.foundation.shape.CircleShape)
+                                .clickable { color = c },
+                            contentAlignment = Alignment.Center,
+                        ) { if (selected) Icon(Icons.Filled.Check, "Selected", tint = Color.White, modifier = Modifier.size(16.dp)) }
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { save(name.trim(), color); close() }, enabled = name.isNotBlank()) { Text(confirm) } },
+        dismissButton = { TextButton(onClick = close) { Text("Cancel") } },
+    )
 }
 
 private fun title(index: TaskIndex?, pick: ListPick): String = when (pick) {
@@ -261,7 +325,17 @@ private fun ListDrawer(app: ZenApp, index: TaskIndex?, current: ListPick, onPick
                 val p = ListPick.Smart(list)
                 DrawerRow(smartTitle(list), smartIcon(list), null, count(p), current == p) { onPick(p) }
             }
-            DrawerHeading("Lists")
+            var creating by remember { mutableStateOf(false) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f)) { DrawerHeading("Lists") }
+                IconButton(onClick = { creating = true }, modifier = Modifier.padding(end = 12.dp)) { Icon(Icons.Filled.Add, "New list") }
+            }
+            if (creating) {
+                ListDialog("New list", initialName = "", initialColor = LIST_COLORS.first(), confirm = "Create", close = { creating = false }) { name, color ->
+                    val created = app.core.listActions.createList(name, color)
+                    onPick(ListPick.InProject(created.id))
+                }
+            }
             for (project in liveLists(index)) {
                 val p = ListPick.InProject(project.id)
                 DrawerRow(project.name, Icons.AutoMirrored.Filled.List, ZenColors.hex(project.color), count(p), current == p) { onPick(p) }
