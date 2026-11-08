@@ -148,10 +148,14 @@ Phần này chạy trên Mac, sau khi `scripts/deploy.sh` của P1 báo thành c
 read -s "ZT_PW?Mật khẩu ZenTask: "; echo
 curl -s https://zentask-api.vuhpquang.com/v1/auth/login \
   -H 'Content-Type: application/json' \
-  -d "{\"password\":\"$ZT_PW\",\"deviceName\":\"curl-test\"}"
+  -d "{\"password\":\"$ZT_PW\",\"deviceName\":\"curl-test\"}" \
+  -w '\nHTTP %{http_code}\n'
 ```
 
-- Đúng mật khẩu: trả về `{"token":"…","deviceId":"…"}`. Ghi lại `token` và `deviceId` để dùng ở bước sau.
+Dòng cuối luôn in mã HTTP:
+
+- `HTTP 404` và không có nội dung: server trên vps1 vẫn là bản cũ (P0), chưa có đăng nhập. Chạy `scripts/deploy.sh` của P1 trước. Kiểm tra bằng `curl -s https://zentask-api.vuhpquang.com/health`: phiên bản phải lớn hơn `0.1.1`.
+- Đúng mật khẩu (`HTTP 200`): trả về `{"token":"…","deviceId":"…"}`. Ghi lại `token` và `deviceId` để dùng ở bước sau.
 - `{"error":"unauthorized"}`: sai mật khẩu, so lại với `.env` trên vps1.
 - `{"error":"too_many_attempts"}`: đã sai 5 lần trong 15 phút. Đợi 15 phút rồi thử lại.
 
