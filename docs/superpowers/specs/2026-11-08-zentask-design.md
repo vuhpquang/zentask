@@ -211,7 +211,7 @@ Bố cục học theo TickTick (theo ảnh chủ dự án gửi), dark mode là 
 | **P4** List | Folder, list, column, smart list mặc định + filter tuỳ chỉnh, nhóm/sắp xếp, kéo thả | Sidebar + list view như TickTick |
 | **P5** Calendar | Google OAuth + iCal fallback ở server, Day/Week/Month view, task + event, kéo thả đặt giờ | Week view như ảnh mẫu |
 | **P6** Habit + Countdown | Habit list, check-in, streak/thống kê, countdown list, countdown trên calendar | Thay được TickTick hoàn toàn trên Mac |
-| **P7** Android + Galaxy Watch | Compose app, Wear app (today tasks, check habit) | P7a (2026-11-08): Android app — task list/drawer/quick add/detail, Calendar tuần, Habits, Countdown, Focus, Settings + sync. P7b: nhắc nhở (exact alarm, nút Done), widget Today, Focus chạy nền. Còn: Wear app |
+| **P7** Android + Galaxy Watch | Compose app, Wear app (today tasks, check habit) | P7a (2026-11-08): Android app — task list/drawer/quick add/detail, Calendar tuần, Habits, Countdown, Focus, Settings + sync. P7b: nhắc nhở (exact alarm, nút Done), widget Today, Focus chạy nền. P7c: Wear app độc lập (task hôm nay, check-in habit, tự sync) |
 | **P8** Windows | Compose Desktop | — |
 
 ## 14. Để lại cho người build quyết định

@@ -461,3 +461,36 @@ Cách 2, không cần cáp: gửi file APK sang điện thoại (Google Drive, T
    trì hoãn nhắc nhở khi đang tiết kiệm pin.
 3. Widget: giữ ngón tay trên màn hình chính → Widget → tìm "ZenTask" → kéo widget **Today** ra màn hình.
    Bấm ô vuông để hoàn thành task, bấm tên task để mở app.
+
+## 8. Cài ZenTask lên Galaxy Watch (Wear OS 5 trở lên)
+
+App trên đồng hồ chạy độc lập: tự sync với server, không cần app trên điện thoại đang mở.
+Nó hiện task hôm nay (bấm ô để hoàn thành) và habit hôm nay (bấm để check-in).
+
+### 8.1 Build (trên Mac)
+
+```bash
+cd projects/zentask && source scripts/lib/env.sh
+./gradlew :wear:assembleRelease
+# → apps/wear/build/outputs/apk/release/wear-release.apk
+```
+
+### 8.2 Bật gỡ lỗi qua Wi-Fi trên đồng hồ
+
+1. Đồng hồ: Cài đặt → Thông tin đồng hồ → Thông tin phần mềm → bấm 7 lần vào "Phiên bản phần mềm".
+2. Cài đặt → Tuỳ chọn nhà phát triển → bật **Gỡ lỗi ADB** và **Gỡ lỗi qua Wi-Fi** (đồng hồ và Mac cùng mạng Wi-Fi).
+3. Trong "Gỡ lỗi qua Wi-Fi" → **Ghép nối thiết bị mới**: đồng hồ hiện địa chỉ `IP:cổng` và mã 6 số.
+
+### 8.3 Cài (trên Mac)
+
+```bash
+ADB=~/Library/Android/sdk/platform-tools/adb
+$ADB pair <IP>:<cổng ghép nối>        # nhập mã 6 số
+$ADB connect <IP>:<cổng gỡ lỗi>       # cổng hiện ở màn hình "Gỡ lỗi qua Wi-Fi" (khác cổng ghép nối)
+$ADB -s <IP>:<cổng gỡ lỗi> install -r apps/wear/build/outputs/apk/release/wear-release.apk
+```
+
+### 8.4 Đăng nhập
+
+Mở ZenTask trên đồng hồ → kéo xuống cuối → nhập mật khẩu server → Sign in. Đồng hồ là một thiết bị riêng
+(xem/thu hồi như bước 6.4). Xong thì tắt "Gỡ lỗi ADB" cho đỡ tốn pin.
