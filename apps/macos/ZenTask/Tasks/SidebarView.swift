@@ -62,6 +62,7 @@ struct SidebarView: View {
                         }
                         .badge(tasks.count(.tag(tag.name)))
                         .tag(SidebarItem.tag(tag.name))
+                        .dropDestination(for: String.self) { ids, _ in tasks.drop(ids, onto: .tag(tag.name)) }
                     }
                 }
             }
@@ -95,6 +96,7 @@ struct SidebarView: View {
             .font(.body)
             .badge(tasks.count(item))
             .tag(item)
+            .dropDestination(for: String.self) { ids, _ in tasks.drop(ids, onto: item) }
     }
 
     private func projectRow(_ project: Project) -> some View {
@@ -106,6 +108,7 @@ struct SidebarView: View {
         .badge(tasks.count(.project(project.id)))
         .tag(SidebarItem.project(project.id))
         .contextMenu { ListMenu(project: project) }
+        .dropDestination(for: String.self) { ids, _ in tasks.drop(ids, onto: .project(project.id)) }
     }
 }
 

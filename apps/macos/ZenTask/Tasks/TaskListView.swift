@@ -40,6 +40,8 @@ struct TaskListView: View {
                         } header: {
                             if !section.title.isEmpty {
                                 Text(section.title)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .dropDestination(for: String.self) { ids, _ in tasks.drop(ids, intoColumn: section.columnId) }
                                     .contextMenu {
                                         if let columnId = section.columnId {
                                             Button("Rename section…") { tasks.sheet = .renameSection(columnId, section.title) }
@@ -115,14 +117,24 @@ struct TaskListView: View {
     @ViewBuilder
     private func rows(_ section: TaskSection) -> some View {
         ForEach(section.rows, id: \.task.id) { row in
-            TaskRowView(task: row.task, row: row, showProject: showsProject)
-                .tag(row.task.id)
-            ForEach(row.subtasks, id: \.id) { sub in
-                TaskRowView(task: sub, row: nil, showProject: false)
-                    .padding(.leading, Theme.Row.indent)
-                    .tag(sub.id)
+            VStack(spacing: 0) {
+                TaskRowView(task: row.task, row: row, showProject: showsProject)
+                ForEach(row.subtasks, id: \.id) { sub in
+                    TaskRowView(task: sub, row: nil, showProject: false)
+                        .padding(.leading, Theme.Row.indent)
+                        .onTapGesture { tasks.selection = sub.id }
+                }
             }
+            .tag(row.task.id)
+            .draggable(row.task.id)
         }
+        .onMove(perform: canReorder(section) ? { from, to in tasks.move(in: section, from: from, to: to) } : nil)
+    }
+
+    /// Manual reordering makes sense inside a list's own sections (not date or priority groups).
+    private func canReorder(_ section: TaskSection) -> Bool {
+        guard case .project = tasks.sidebar, !section.isCompleted else { return false }
+        return tasks.options.group.isEmpty || tasks.options.group == "column" || tasks.options.group == "none"
     }
 
     private var showsProject: Bool {

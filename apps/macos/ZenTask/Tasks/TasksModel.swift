@@ -190,6 +190,62 @@ final class TasksModel {
         if task.isDone || task.status == -1 { core.actions.uncomplete(id: task.id) } else { core.actions.complete(id: task.id) }
     }
 
+    // MARK: Drag and drop
+
+    /// Drops dragged task ids onto a sidebar item: a list moves them, Today/Tomorrow dates them,
+    /// a tag tags them. Ids that no longer exist (or are in Trash) are ignored. Returns whether anything changed.
+    @discardableResult
+    func drop(_ ids: [String], onto item: SidebarItem) -> Bool {
+        let live = ids.compactMap { index?.task(id: $0) }.filter { $0.trashedAt == nil && !$0.deleted }
+        guard !live.isEmpty else { return false }
+        let actions = core.actions
+        for task in live {
+            switch item {
+            case .project(let id): actions.move(id: task.id, projectId: id)
+            case .smart(.inbox): actions.move(id: task.id, projectId: "inbox")
+            case .smart(.today), .smart(.tomorrow):
+                let day = Calendar.current.startOfDay(for: item == .smart(.today) ? .now : Calendar.current.date(byAdding: .day, value: 1, to: .now)!)
+                actions.setDue(id: task.id, due: KotlinLong(value: Int64(day.timeIntervalSince1970 * 1000)), allDay: true)
+            case .tag(let name): actions.setTags(id: task.id, tags: task.tags + [name])
+            default: return false
+            }
+        }
+        return true
+    }
+
+    /// Drops tasks onto a section header: they move into that section of the current list.
+    @discardableResult
+    func drop(_ ids: [String], intoColumn columnId: String?) -> Bool {
+        let live = ids.compactMap { index?.task(id: $0) }.filter { $0.trashedAt == nil }
+        guard case .project(let projectId) = sidebar, !live.isEmpty else { return false }
+        let rows = sections.first { $0.columnId == columnId }?.rows ?? []
+        var after = rows.last?.task.id
+        for task in live {
+            if task.projectId != projectId { core.actions.move(id: task.id, projectId: projectId) }
+            core.listActions.reorderTask(id: task.id, after: after, before: nil, columnId: columnId)
+            after = task.id
+        }
+        return true
+    }
+
+    /// Reorders rows inside one section (List.onMove): places the moved task between its new neighbours.
+    func move(in section: TaskSection, from source: IndexSet, to destination: Int) {
+        var ids = section.rows.map(\.task.id)
+        let moving = source.map { ids[$0] }
+        ids.move(fromOffsets: source, toOffset: destination)
+        for id in moving {
+            guard let i = ids.firstIndex(of: id) else { continue }
+            core.listActions.reorderTask(id: id, after: i > 0 ? ids[i - 1] : nil, before: i + 1 < ids.count ? ids[i + 1] : nil, columnId: section.columnId)
+        }
+        if options.sort != "manual" && !isProjectDefaultManual { setSort("manual") }
+    }
+
+    /// Lists sort by hand-made order by default; a manual move elsewhere switches that list to manual.
+    private var isProjectDefaultManual: Bool {
+        if case .project = sidebar { return options.sort.isEmpty }
+        return false
+    }
+
     func trashSelected() {
         guard let task = selectedTask else { return }
         if task.trashedAt != nil { return }

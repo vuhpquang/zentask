@@ -85,4 +85,43 @@ final class TasksModelTests: XCTestCase {
         XCTAssertEqual(m.archivedProjects.map(\.name), ["Old"])
         XCTAssertFalse(m.listProjects.contains { $0.id == list.id })
     }
+
+    func testDropOntoListsDatesAndTagsAndIgnoresStaleIds() async {
+        let m = await model()
+        let list = m.core.listActions.createList(name: "Trip", color: nil, groupId: nil)
+        m.sidebar = .smart(.inbox)
+        m.quickAdd("Passport")
+        await m.reload()
+        let id = try! XCTUnwrap(m.selection)
+        XCTAssertTrue(m.drop([id], onto: .project(list.id)))
+        XCTAssertTrue(m.drop([id], onto: .smart(.tomorrow)))
+        XCTAssertTrue(m.drop([id], onto: .tag("travel")))
+        await m.reload()
+        let t = try! XCTUnwrap(m.index?.task(id: id))
+        XCTAssertEqual(t.projectId, list.id)
+        XCTAssertEqual(t.tags, ["travel"])
+        XCTAssertTrue(Calendar.current.isDateInTomorrow(Date(timeIntervalSince1970: Double(t.dueDate!.int64Value) / 1000)))
+        XCTAssertFalse(m.drop(["not-a-task"], onto: .project(list.id)), "stale or foreign payloads are ignored")
+        m.core.actions.trash(id: id)
+        await m.reload()
+        XCTAssertFalse(m.drop([id], onto: .smart(.inbox)), "trashed tasks don't move")
+    }
+
+    func testReorderAndDropIntoSection() async {
+        let m = await model()
+        let list = m.core.listActions.createList(name: "Board", color: nil, groupId: nil)
+        let doing = m.core.listActions.createColumn(projectId: list.id, name: "Doing")
+        m.sidebar = .project(list.id)
+        for title in ["A", "B", "C"] { m.quickAdd(title) }
+        await m.reload(); await m.settle()
+        let noSection = try! XCTUnwrap(m.sections.first { $0.columnId == nil && !$0.isCompleted })
+        XCTAssertEqual(noSection.rows.map(\.task.title), ["A", "B", "C"])
+        m.move(in: noSection, from: IndexSet(integer: 2), to: 0)
+        await m.reload(); await m.settle()
+        XCTAssertEqual(m.sections.first { $0.columnId == nil }?.rows.map(\.task.title), ["C", "A", "B"])
+        let b = m.sections.first { $0.columnId == nil }!.rows.last!.task.id
+        XCTAssertTrue(m.drop([b], intoColumn: doing.id))
+        await m.reload(); await m.settle()
+        XCTAssertEqual(m.sections.first { $0.columnId == doing.id }?.rows.map(\.task.title), ["B"])
+    }
 }
