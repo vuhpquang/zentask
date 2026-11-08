@@ -181,9 +181,18 @@ struct WeekGrid: View {
         }
     }
 
+    @AppStorage("calendar.weekNumbers") private var weekNumbers = false
+
     private var header: some View {
         HStack(spacing: 0) {
-            Color.clear.frame(width: Theme.Calendar.timeGutter)
+            Group {
+                if weekNumbers, let first = cal.days.first {
+                    Text("W\(cal.calendar.component(.weekOfYear, from: cal.date(of: first)))").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                } else {
+                    Color.clear
+                }
+            }
+            .frame(width: Theme.Calendar.timeGutter)
             ForEach(Array(cal.days.enumerated()), id: \.offset) { _, day in
                 let date = cal.date(of: day)
                 let isToday = cal.calendar.isDateInToday(date)
@@ -408,6 +417,7 @@ private struct NowLine: View {
 
 struct MonthGrid: View {
     @Environment(CalendarModel.self) private var cal
+    @AppStorage("calendar.weekNumbers") private var weekNumbers = false
 
     var body: some View {
         let month = cal.mode == .multiWeek ? -1 : cal.calendar.component(.month, from: cal.anchor)
@@ -425,6 +435,11 @@ struct MonthGrid: View {
                 VStack(spacing: 0) {
                     ForEach(0..<rows, id: \.self) { r in
                         HStack(spacing: 0) {
+                            if weekNumbers, cal.days.indices.contains(r * 7) {
+                                Text("\(cal.calendar.component(.weekOfYear, from: cal.date(of: cal.days[r * 7])))")
+                                    .font(.caption2.weight(.semibold)).foregroundStyle(.tertiary)
+                                    .frame(width: Theme.Calendar.weekNumber)
+                            }
                             ForEach(0..<7, id: \.self) { c in
                                 let i = r * 7 + c
                                 if i < cal.days.count {

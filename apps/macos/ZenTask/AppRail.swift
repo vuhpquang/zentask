@@ -31,6 +31,11 @@ enum RailTab: Hashable, CaseIterable {
     /// Areas built so far; the others show as dimmed until their phase ships.
     var isAvailable: Bool { true }
 
+    /// Settings → General can hide every area except Tasks and Search.
+    var canHide: Bool { self != .tasks && self != .search }
+    var featureKey: String { "features.\(self)" }
+    var isShown: Bool { !canHide || (UserDefaults.standard.object(forKey: featureKey) as? Bool ?? true) }
+
     var shortcut: KeyEquivalent {
         switch self {
         case .tasks: "1"
@@ -48,6 +53,12 @@ enum RailTab: Hashable, CaseIterable {
 /// large targets (44 pt) so every area is one click away.
 struct AppRail: View {
     @Environment(AppModel.self) private var app
+    /// Re-render when an area is shown or hidden in Settings.
+    @AppStorage("features.calendar") private var f1 = true
+    @AppStorage("features.habits") private var f2 = true
+    @AppStorage("features.countdown") private var f3 = true
+    @AppStorage("features.matrix") private var f4 = true
+    @AppStorage("features.focus") private var f5 = true
     @Environment(\.themeColors) private var themeColors
     @Binding var tab: RailTab
     /// Search opens over the current area instead of replacing it.
@@ -55,7 +66,7 @@ struct AppRail: View {
 
     var body: some View {
         VStack(spacing: Theme.Space.s) {
-            ForEach(RailTab.allCases, id: \.self) { item in
+            ForEach(RailTab.allCases.filter { $0.isShown || $0 == tab }, id: \.self) { item in
                 RailButton(symbol: item.symbol, title: item.isAvailable ? item.title : "\(item.title) (coming soon)", selected: tab == item) {
                     if item == .search { search() } else { tab = item }
                 }

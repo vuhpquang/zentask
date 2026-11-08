@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import SwiftUI
 import Observation
@@ -293,16 +294,31 @@ final class TasksModel {
     private var quickAddProjects: [Project] { projects.filter { !$0.closed } }
 
     func quickAdd(_ text: String, ignored: Set<Int> = []) {
-        let skip = Set(ignored.map { KotlinInt(int: Int32($0)) })
+        let skip = Set(withoutDates(text, ignored).map { KotlinInt(int: Int32($0)) })
         guard let task = core.quickAdd(text: text, filter: sidebar.filter, projects: quickAddProjects, ignored: skip) else { return }
         selection = task.id
     }
 
     func parse(_ text: String, ignored: Set<Int> = []) -> QuickAdd {
-        core.parseQuickAdd(text: text, projects: quickAddProjects, ignored: Set(ignored.map { KotlinInt(int: Int32($0)) }))
+        core.parseQuickAdd(text: text, projects: quickAddProjects, ignored: Set(withoutDates(text, ignored).map { KotlinInt(int: Int32($0)) }))
+    }
+
+    /// With date recognition off (Settings → General), every date word is kept as text.
+    private func withoutDates(_ text: String, _ ignored: Set<Int>) -> Set<Int> {
+        guard UserDefaults.standard.object(forKey: "quickadd.dates") as? Bool == false else { return ignored }
+        let first = core.parseQuickAdd(text: text, projects: quickAddProjects, ignored: Set(ignored.map { KotlinInt(int: Int32($0)) }))
+        return ignored.union(first.tokens.filter { $0.kind == .date }.map { Int($0.start) })
+    }
+
+    /// The sound chosen in Settings → General for completing a task ("" = none).
+    static func playCompletionSound() {
+        let name = UserDefaults.standard.string(forKey: "sound.complete") ?? "Pop"
+        guard !name.isEmpty else { return }
+        NSSound(named: NSSound.Name(name))?.play()
     }
 
     func toggleComplete(_ task: ZTask) {
+        if !(task.isDone || task.status == -1) { Self.playCompletionSound() }
         if task.isDone || task.status == -1 { core.actions.uncomplete(id: task.id) } else { core.actions.complete(id: task.id) }
     }
 

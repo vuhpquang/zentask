@@ -27,6 +27,8 @@ struct ZenTaskApp: App {
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
             tasks.reminders = Reminders(core: model.core)
             model.start()
+            IntentBridge.tasks = tasks
+            IntentBridge.focus = _focus.wrappedValue
             HotKeys.shared.start(handlers: [
                 .quickAdd: { tasks.start(); QuickAddWindow.shared.show(tasks: tasks) },
                 .toggleWindow: { toggleMainWindow() },
@@ -93,6 +95,10 @@ struct MainWindow: View {
             }
         }
         .environment(\.searchOpen, searching)
+        .onAppear {
+            IntentBridge.openArea = { tab = $0 }
+            IntentBridge.openSmart = { tasks.sidebar = .smart($0) }
+        }
         .environment(\.openTask) { id in open(nil, id) }
         .environment(\.startFocus) { id in
             tab = .focus

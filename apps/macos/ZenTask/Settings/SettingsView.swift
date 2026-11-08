@@ -6,6 +6,8 @@ import UniformTypeIdentifiers
 struct SettingsView: View {
     var body: some View {
         TabView {
+            GeneralSettings()
+                .tabItem { Label("General", systemImage: "gearshape") }
             AccountSettings()
                 .tabItem { Label("Account", systemImage: "person.crop.circle") }
             TickTickSettings()
@@ -14,6 +16,8 @@ struct SettingsView: View {
                 .tabItem { Label("Smart lists", systemImage: "line.3.horizontal.decrease.circle") }
             CalendarSettings()
                 .tabItem { Label("Calendars", systemImage: "calendar") }
+            DateTimeSettings()
+                .tabItem { Label("Date & Time", systemImage: "clock") }
             AppearanceSettings()
                 .tabItem { Label("Appearance", systemImage: "paintpalette") }
             HotkeySettings()

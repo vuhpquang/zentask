@@ -67,6 +67,7 @@ enum Theme {
         static let headerHeight: CGFloat = 44
         static let snapMinutes = 15
         static let sideBarWidth: CGFloat = 260
+        static let weekNumber: CGFloat = 26
         /// Length of a dropped task's block (matches CalendarQueries.TASK_MINUTES).
         static let taskMinutes = 30
         static let ghostMin: CGFloat = 20

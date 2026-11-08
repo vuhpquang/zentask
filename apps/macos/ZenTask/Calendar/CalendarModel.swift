@@ -120,10 +120,12 @@ final class CalendarModel {
     /// Lunar labels per local midnight (pure maths, but called for every cell on every render).
     @ObservationIgnored private var lunarCache: [Int64: String] = [:]
 
-    /// Weeks start on Monday (Vietnamese convention; spec P5 ruling).
+    /// Weeks start on Monday by default (Vietnamese convention; spec P5 ruling), or the day chosen in
+    /// Settings → Date & Time (`calendar.weekStart`: 1 Sunday, 2 Monday, 7 Saturday).
     static func mondayFirst() -> Calendar {
         var c = Calendar(identifier: .gregorian)
-        c.firstWeekday = 2
+        let chosen = UserDefaults.standard.integer(forKey: "calendar.weekStart")
+        c.firstWeekday = [1, 2, 7].contains(chosen) ? chosen : 2
         c.timeZone = .autoupdatingCurrent
         return c
     }
