@@ -302,4 +302,40 @@ class McpToolsTest {
         assertEquals("2026-11-09T09:00", t["due"]!!.jsonPrimitive.content)
         assertTrue(client.tool(token, "create_task", """{"title":"x","due":"2026-11-09","timezone":"PST"}""").second)
     }
+
+    @Test
+    fun listToolsFlow() = testApplication {
+        server()
+        val token = client.loginToken()
+        assertFalse(client.tool(token, "create_folder", """{"name":"Personal"}""").second)
+        val list = obj(client.tool(token, "create_list", """{"name":"Trip","color":"#2E9E88","folder":"Personal"}""").first)
+        assertEquals("Personal", list["folder"]!!.jsonPrimitive.content)
+        assertFalse(client.tool(token, "create_section", """{"list":"Trip","name":"Packing"}""").second)
+        val t = obj(client.tool(token, "create_task", """{"title":"Passport","list":"Trip"}""").first)["id"]!!.jsonPrimitive.content
+        assertFalse(client.tool(token, "move_task_to_section", """{"task_id":"$t","section":"Packing"}""").second)
+        assertTrue(client.tool(token, "move_task_to_section", """{"task_id":"$t","section":"Nope"}""").second)
+        val updated = obj(client.tool(token, "update_list", """{"list":"Trip","new_name":"Japan trip","archived":true}""").first)
+        assertEquals("Japan trip", updated["name"]!!.jsonPrimitive.content)
+        assertTrue(updated["archived"]!!.jsonPrimitive.boolean)
+        assertTrue(client.tool(token, "update_list", """{"list":"inbox","new_name":"x"}""").second, "the Inbox can't be renamed")
+        assertFalse(client.tool(token, "trash_list", """{"list":"Japan trip"}""").second)
+        assertEquals(1, obj(client.tool(token, "search_tasks", """{"status":"trashed"}""").first)["count"]!!.jsonPrimitive.int)
+        assertFalse(client.tool(token, "restore_list", """{"list":"Japan trip"}""").second)
+        assertEquals(0, obj(client.tool(token, "search_tasks", """{"status":"trashed"}""").first)["count"]!!.jsonPrimitive.int)
+    }
+
+    @Test
+    fun smartListTools() = testApplication {
+        server()
+        val token = client.loginToken()
+        client.tool(token, "create_task", """{"title":"Hot","priority":"high"}""")
+        client.tool(token, "create_task", """{"title":"Cold"}""")
+        val (made, err) = client.tool(token, "create_smart_list", """{"name":"Urgent","priorities":["high"]}""")
+        assertFalse(err, made)
+        val lists = ZenJson.parseToJsonElement(client.tool(token, "list_smart_lists").first).jsonArray
+        assertEquals("Urgent", lists.single().jsonObject["name"]!!.jsonPrimitive.content)
+        assertEquals(1, lists.single().jsonObject["open"]!!.jsonPrimitive.int)
+        val found = obj(client.tool(token, "search_tasks", """{"smart_list":"Urgent"}""").first)
+        assertEquals(listOf("Hot"), found["tasks"]!!.jsonArray.map { it.jsonObject["title"]!!.jsonPrimitive.content })
+    }
 }

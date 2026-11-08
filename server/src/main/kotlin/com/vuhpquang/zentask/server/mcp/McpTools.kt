@@ -1,6 +1,9 @@
 package com.vuhpquang.zentask.server.mcp
 
+import com.vuhpquang.zentask.lists.FilterRule
+import com.vuhpquang.zentask.lists.SortOrder
 import com.vuhpquang.zentask.model.EntityTypes
+import com.vuhpquang.zentask.model.Filter
 import com.vuhpquang.zentask.model.Project
 import com.vuhpquang.zentask.model.Task
 import com.vuhpquang.zentask.model.TaskStatus
@@ -62,7 +65,7 @@ object McpTools {
                 "Find tasks. Defaults to open tasks. Combine filters freely. Returns at most `limit` tasks (default 50).",
                 schema(
                     "query" to str("Text to find in titles and notes (case and accent insensitive)"),
-                    "smart_list" to enumStr("A built-in list", "today", "tomorrow", "next_7_days", "inbox", "all"),
+                    "smart_list" to str("today, tomorrow, next_7_days, inbox, all — or the name of a custom smart list"),
                     "list" to str("List name or id"),
                     "tag" to str("Tag name"),
                     "status" to enumStr("Which tasks (default open)", "open", "completed", "wont_do", "trashed", "any"),
@@ -164,6 +167,131 @@ object McpTools {
                 newTitle?.let { ctx.actions.renameItem(id, it) }
                 ToolResult("Updated item $id", changed = listOf(item.taskId))
             },
+            Tool(
+                "create_list", "Create a list, optionally in a folder.",
+                schema("name" to str("Name"), "color" to str("#RRGGBB"), "folder" to str("Folder name"), required = listOf("name")), writes = true,
+            ) { a, ctx, _ ->
+                val name = title(a.req("name"))
+                val color = a.str("color")?.let(::color)
+                val folder = a.str("folder")?.let { folder(ctx, it).id }
+                val p = ctx.lists.createList(name, color, folder)
+                ToolResult(json(listJson(ctx, ctx.store.get(EntityTypes.project, p.id)!!)))
+            },
+            Tool(
+                "update_list", "Rename, recolour, move to a folder (\"\" = none), archive or unarchive a list.",
+                schema(
+                    "list" to str("List name or id"), "new_name" to str("New name"), "color" to str("#RRGGBB"),
+                    "folder" to str("Folder name, or empty for none"), "archived" to bool("Archive (true) or unarchive (false)"),
+                    required = listOf("list"),
+                ),
+                writes = true,
+            ) { a, ctx, _ ->
+                val p = project(ctx, a.req("list"), includeArchived = true)
+                val newName = a.str("new_name")?.let(::title)
+                val color = a.str("color")?.let(::color)
+                val folder = a.str("folder")?.let { if (it.isBlank()) "" else folder(ctx, it).id }
+                val archived = a.bool("archived")
+                if (p.id == Project.INBOX_ID && (newName != null || archived == true)) throw ToolError("The Inbox can't be renamed or archived")
+                newName?.let { ctx.lists.rename(p.id, it) }
+                color?.let { ctx.lists.setColor(p.id, it) }
+                folder?.let { ctx.lists.move(p.id, it.ifEmpty { null }) }
+                archived?.let { if (it) ctx.lists.archive(p.id) else ctx.lists.unarchive(p.id) }
+                ToolResult(json(listJson(ctx, ctx.store.get(EntityTypes.project, p.id)!!)))
+            },
+            Tool(
+                "trash_list", "Move a list and its tasks to Trash (restorable with restore_list). Lists are never deleted permanently through MCP.",
+                schema("list" to str("List name or id"), required = listOf("list")), writes = true,
+            ) { a, ctx, _ ->
+                val p = project(ctx, a.req("list"), includeArchived = true)
+                if (p.id == Project.INBOX_ID) throw ToolError("The Inbox can't be moved to Trash")
+                val ids = ctx.store.idsWhere(EntityTypes.task, "projectId", p.id)
+                ctx.lists.trash(p.id)
+                ToolResult("Moved to Trash: ${p.name} (${ids.size} tasks)", changed = ids)
+            },
+            Tool(
+                "restore_list", "Bring a list (and the tasks trashed with it) back from Trash.",
+                schema("list" to str("List name or id"), required = listOf("list")), writes = true,
+            ) { a, ctx, _ ->
+                val key = a.req("list")
+                val p = ctx.index.projects.firstOrNull { (it.id == key || it.name.equals(key, ignoreCase = true)) && it.trashedAt != null && !it.deleted }
+                    ?: throw ToolError("No list named $key in Trash")
+                val ids = ctx.store.idsWhere(EntityTypes.task, "projectId", p.id)
+                ctx.lists.restore(p.id)
+                ToolResult("Restored: ${p.name}", changed = ids)
+            },
+            Tool(
+                "create_folder", "Create a folder for lists.",
+                schema("name" to str("Name"), required = listOf("name")), writes = true,
+            ) { a, ctx, _ ->
+                val g = ctx.lists.createFolder(title(a.req("name")))
+                ToolResult("Created folder ${g.name} (${g.id})")
+            },
+            Tool(
+                "create_section", "Add a section (column) to a list.",
+                schema("list" to str("List name or id"), "name" to str("Section name"), required = listOf("list", "name")), writes = true,
+            ) { a, ctx, _ ->
+                val p = project(ctx, a.req("list"))
+                val c = ctx.lists.createColumn(p.id, title(a.req("name")))
+                ToolResult("Added section ${c.name} (${c.id}) to ${p.name}")
+            },
+            Tool(
+                "move_task_to_section", "Move a task into a section of its list (or another list's section).",
+                schema("task_id" to str("Task id"), "section" to str("Section name or id"), "list" to str("List name or id (default: the task's list)"), required = listOf("task_id", "section")),
+                writes = true,
+            ) { a, ctx, zone ->
+                val t = task(ctx, a.req("task_id"))
+                val p = a.str("list")?.let { project(ctx, it) }
+                val projectId = p?.id ?: t.projectId
+                val key = a.req("section")
+                val column = ctx.index.columns(projectId).firstOrNull { it.id == key || it.name.equals(key, ignoreCase = true) }
+                    ?: throw ToolError("No section named $key in that list")
+                if (projectId != t.projectId) ctx.actions.move(t.id, projectId)
+                val last = ctx.store.idsWhere(EntityTypes.task, "columnId", column.id).filter { it != t.id }.lastOrNull()
+                ctx.lists.reorderTask(t.id, after = last, before = null, columnId = column.id)
+                ToolResult(json(brief(ctx.store.get(EntityTypes.task, t.id)!!, ctx, zone)), changed = listOf(t.id))
+            },
+            Tool("list_smart_lists", "Custom smart lists with their rules and open-task counts.", schema(), writes = false) { _, ctx, zone ->
+                val counts = ctx.index.counts(Clock.System.now(), zone)
+                ToolResult(
+                    json(
+                        buildJsonArray {
+                            ctx.index.filters.forEach { f ->
+                                add(
+                                    buildJsonObject {
+                                        put("id", f.id); put("name", f.name)
+                                        put("rule", ZenJson.parseToJsonElement(f.rule))
+                                        put("open", counts[TaskFilter.Custom(f.id)] ?: 0)
+                                    },
+                                )
+                            }
+                        },
+                    ),
+                )
+            },
+            Tool(
+                "create_smart_list",
+                "Create a custom smart list. Fields combine with AND, values inside one field with OR.",
+                schema(
+                    "name" to str("Name"), "lists" to strArray("List names or ids"), "tags" to strArray("Tag names"),
+                    "priorities" to strArray("high, medium, low, none"),
+                    "due" to enumStr("Date range", "any", "today", "tomorrow", "next7", "overdue", "nodate"),
+                    "keyword" to str("Text the task must contain"),
+                    required = listOf("name"),
+                ),
+                writes = true,
+            ) { a, ctx, _ ->
+                val rule = FilterRule(
+                    lists = a.strings("lists").map { project(ctx, it).id },
+                    tags = a.strings("tags").map(::tagName),
+                    priorities = a.strings("priorities").map(::priority),
+                    due = a.str("due")?.takeIf { it != "any" },
+                    keyword = a.str("keyword"),
+                )
+                val last = ctx.store.list(EntityTypes.filter).maxOfOrNull { it.sortOrder }
+                val f = Filter(id = kotlin.uuid.Uuid.random().toString(), name = title(a.req("name")), rule = rule.encode(), sortOrder = SortOrder.between(last, null)!!)
+                ctx.store.put(EntityTypes.filter, f)
+                ToolResult("Created smart list ${f.name} (${f.id})")
+            },
             Tool("list_lists", "All lists with their folder and open-task count.", schema(), writes = false) { _, ctx, zone ->
                 val counts = ctx.index.counts(Clock.System.now(), zone)
                 val groups = ctx.store.list(EntityTypes.projectGroup).associate { it.id to it.name }
@@ -264,9 +392,12 @@ object McpTools {
                     "next_7_days" -> SmartList.NEXT_7_DAYS
                     "inbox" -> SmartList.INBOX
                     "all" -> SmartList.ALL
-                    else -> throw ToolError("Unknown smart_list $smart")
+                    else -> null
                 }
-                ctx.index.rows(TaskFilter.Smart(list), now, zone).flatMap { listOf(it.task) + it.subtasks }
+                val filter = list?.let { TaskFilter.Smart(it) }
+                    ?: ctx.index.filters.firstOrNull { it.name.equals(smart, ignoreCase = true) || it.id == smart }?.let { TaskFilter.Custom(it.id) }
+                    ?: throw ToolError("Unknown smart_list $smart. Use list_smart_lists to see custom ones.")
+                ctx.index.rows(filter, now, zone).flatMap { listOf(it.task) + it.subtasks }
             }
         }
         tasks = tasks.filter {
@@ -351,8 +482,8 @@ object McpTools {
     private fun task(ctx: McpReplica.Context, id: String): Task =
         ctx.store.get(EntityTypes.task, id)?.takeIf { !it.deleted } ?: throw ToolError("No task with id $id. Use search_tasks to find ids.")
 
-    private fun project(ctx: McpReplica.Context, nameOrId: String): Project {
-        val live = ctx.index.projects.filter { it.trashedAt == null && !it.deleted }
+    private fun project(ctx: McpReplica.Context, nameOrId: String, includeArchived: Boolean = false): Project {
+        val live = ctx.index.projects.filter { it.trashedAt == null && !it.deleted && (includeArchived || !it.closed) }
         live.firstOrNull { it.id == nameOrId }?.let { return it }
         val key = QuickAddParser.fold(nameOrId.lowercase()).trim()
         if (key == "inbox") return live.firstOrNull { it.id == Project.INBOX_ID } ?: Project(id = Project.INBOX_ID, name = "Inbox", isInbox = true)
@@ -384,6 +515,22 @@ object McpTools {
     private fun notes(s: String): String {
         if (s.length > MAX_NOTES) throw ToolError("Notes are longer than $MAX_NOTES characters")
         return s
+    }
+
+    private fun folder(ctx: McpReplica.Context, nameOrId: String) =
+        ctx.store.list(EntityTypes.projectGroup).firstOrNull { it.id == nameOrId || it.name.equals(nameOrId.trim(), ignoreCase = true) }
+            ?: throw ToolError("No folder named $nameOrId. Create it with create_folder.")
+
+    private fun color(c: String): String {
+        if (!Regex("^#[0-9A-Fa-f]{6}$").matches(c)) throw ToolError("Colour must look like #2E9E88")
+        return c
+    }
+
+    private fun listJson(ctx: McpReplica.Context, p: Project) = buildJsonObject {
+        put("id", p.id); put("name", p.name)
+        p.color?.let { put("color", it) }
+        p.groupId?.let { g -> ctx.store.get(EntityTypes.projectGroup, g)?.let { put("folder", it.name) } }
+        put("archived", p.closed)
     }
 
     private fun tagged(ctx: McpReplica.Context, name: String): List<String> {

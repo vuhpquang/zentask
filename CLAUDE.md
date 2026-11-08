@@ -50,6 +50,9 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
     smart lists/sections/counts), `TaskActions` (create/complete incl. recurring copies/trash/edit/checklist —
     always via `store.update`), `Recurrence` (RRULE subset), `QuickAddParser` (EN/VI), `TagActions`,
     `ReminderPlanner`. Pure: clock and zone are parameters.
+  - `lists/` — `ListActions` (lists/folders/sections, trash+restore by shared timestamp, Inbox protected,
+    `SortOrder` gaps of 2^32 with renumber on exhaustion), `FilterRule` (custom smart lists, JSON in
+    `Filter.rule`), `ViewOptions` (per-list sort/group, synced as Preference `view.<key>`).
   - `ZenTaskCore` — the Swift-facing entry point (typed helpers; Kotlin `Task` is `ZenTaskShared.Task` in Swift).
 - `server/` — Ktor/JVM, depends on `shared` (same models, merge and protocol).
   `Application.module(config, now)`; `ServerConfig.fromEnv()` (`ZENTASK_PASSWORD` required, `HOST`
@@ -65,7 +68,9 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
   (service = bundle id). Settings (⌘,) = Account + TickTick tabs. Tokens in `DesignSystem/Theme.swift`.
   Main window = `Tasks/TasksView` (sidebar | list | detail) driven by `TasksModel`, which reloads the
   `TaskIndex` off the main thread on `core.recordChanges` (80 ms debounce). `Services/Reminders` schedules
-  local notifications from `core.plannedReminders`.
+  local notifications from `core.plannedReminders`. The window is `MainWindow` = `AppRail` (always-visible
+  icon rail, ⌘1–5) + the area. List management: `Tasks/ListSheets.swift` (sheets), sidebar context menus,
+  drag and drop with task-id String payloads validated in `TasksModel.drop`.
   In Swift, write `_Concurrency.Task { }` in files that import ZenTaskShared (Kotlin `Task` shadows it).
   UI snapshots: `ZENTASK_SNAPSHOT=/tmp/shots build/DerivedData/Build/Products/Debug/ZenTask.app/Contents/MacOS/ZenTask`.
 - `scripts/` — `lib/env.sh` (sourced by all), build, release, deploy, signing, icon.
