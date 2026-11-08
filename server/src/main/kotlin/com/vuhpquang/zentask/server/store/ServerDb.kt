@@ -133,6 +133,13 @@ class ServerDb(file: Path, private val now: () -> Long = System::currentTimeMill
         }
     }
 
+    /** (tool, changes JSON) in insertion order (tests, support). */
+    @Synchronized
+    fun auditRows(): List<Pair<String, String>> =
+        conn.prepareStatement("SELECT tool, changes FROM mcp_audit ORDER BY id").use { st ->
+            st.executeQuery().use { rs -> buildList { while (rs.next()) add(rs.getString(1) to rs.getString(2)) } }
+        }
+
     /** Audit tools in insertion order (tests, support). */
     @Synchronized
     fun auditTools(): List<String> =

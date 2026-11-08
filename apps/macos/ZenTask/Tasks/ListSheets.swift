@@ -102,7 +102,7 @@ struct ListEditor: View {
         .frame(width: Theme.Size.sheetWidth)
         .onAppear {
             name = project?.name ?? ""
-            color = project?.color ?? Palette.colors[0]
+            color = project == nil ? Palette.colors[0] : project?.color
             folder = project?.groupId
         }
     }
@@ -111,7 +111,7 @@ struct ListEditor: View {
         let actions = tasks.core.listActions
         let clean = name.trimmingCharacters(in: .whitespaces)
         if let project {
-            if clean != project.name { actions.rename(id: project.id, name: clean) }
+            if clean != project.name { try? actions.rename(id: project.id, name: clean) }
             if color != project.color { actions.setColor(id: project.id, color: color) }
             if folder != project.groupId { actions.move(id: project.id, groupId: folder) }
         } else {
@@ -164,8 +164,8 @@ struct FilterEditor: View {
             .frame(height: Theme.Size.filterFormHeight)
             HStack {
                 if filter != nil {
-                    Button("Delete", role: .destructive) {
-                        if let filter { tasks.core.deleteFilter(id: filter.id); tasks.sidebar = .smart(.today) }
+                    Button("Delete…", role: .destructive) {
+                        tasks.confirmDeleteFilter = filter
                         dismiss()
                     }
                 }

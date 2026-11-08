@@ -91,4 +91,16 @@ class FiltersTest {
         assertEquals(ViewOptions(), ViewOptions.parse("garbage"))
         assertEquals("view.project:work", ViewOptions.key("project:work"))
     }
+
+    @Test
+    fun projectSortKeepsSectionsAndDateSortSorts() {
+        val cols = listOf(com.vuhpquang.zentask.model.Column(id = "c1", projectId = "work", name = "Todo"))
+        val withCol = tasks.map { if (it.id == "c") it.copy(columnId = "c1") else it }
+        val index = TaskIndex(withCol, projects, emptyList(), cols, emptyList())
+        val byPrio = index.sections(TaskFilter.InProject("work"), now, zone, ViewOptions(sort = "priority"))
+        assertEquals(listOf("Todo", "No section", "Completed"), byPrio.map { it.title }, "a list keeps its sections")
+        assertEquals(listOf("d", "a"), byPrio[1].rows.map { it.task.id })
+        val byDate = index.sections(TaskFilter.InProject("work"), now, zone, ViewOptions(sort = "date", group = "none"))
+        assertEquals(listOf("d", "a", "c"), byDate.first().rows.map { it.task.id }, "dated first, oldest first")
+    }
 }

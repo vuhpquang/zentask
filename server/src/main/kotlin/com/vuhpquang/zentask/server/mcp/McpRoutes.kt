@@ -135,14 +135,14 @@ private suspend fun callTool(db: ServerDb, replica: McpReplica, limiter: McpRate
         ?: return toolResult(id, ToolResult("Unknown timezone \"$zoneName\". Use an IANA name like Asia/Ho_Chi_Minh.", isError = true))
     val outcome = try { replica.transact { ctx ->
         replica.zone = zone
-        val beforeIds = (listOf("id", "task_id", "parent_id").mapNotNull { (args[it] as? JsonPrimitive)?.contentOrNull })
+        val beforeIds = McpTools.touched(args, ctx)
         val before = if (tool.writes) McpTools.snapshot(ctx, beforeIds) else null
         try {
             val r = tool.run(args, ctx, zone)
             if (tool.writes && !r.isError) {
                 val changes = buildJsonObject {
                     put("before", before ?: JsonObject(emptyMap()))
-                    put("after", McpTools.snapshot(ctx, r.changed))
+                    put("after", McpTools.snapshot(ctx, r.changed + beforeIds))
                 }
                 db.audit(device, tool.name, McpTools.json(args), McpTools.json(changes))
             }

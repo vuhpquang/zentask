@@ -13,6 +13,8 @@ struct TaskDetailView: View {
     @State private var newSubtask = ""
     @State private var newTag = ""
     @State private var editingDate = false
+    @State private var pickingPriority = false
+    @State private var pickingList = false
     @FocusState private var focus: Field?
 
     private enum Field { case title, notes, item, subtask, tag }
@@ -22,14 +24,14 @@ struct TaskDetailView: View {
             VStack(alignment: .leading, spacing: Theme.Space.l) {
                 if task.trashedAt != nil { trashBanner }
                 header
-                properties
-                Divider()
-                notesEditor
-                if task.kind == "CHECKLIST" || !tasks.items(of: task).isEmpty { checklist }
-                subtasksSection
+                chips
+                card { notesEditor }
+                if task.kind == "CHECKLIST" || !tasks.items(of: task).isEmpty { card { checklist } }
+                card { subtasksSection }
                 footer
             }
             .padding(Theme.Space.xl)
+            .frame(maxWidth: Theme.Detail.maxWidth, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .onAppear { draft = DetailDraft(title: task.title, notes: currentNotes) }
@@ -54,13 +56,15 @@ struct TaskDetailView: View {
             Button("Restore") { tasks.core.actions.restore(id: task.id) }
             Button("Delete permanently…", role: .destructive) { confirmDelete = true }
         }
-        .padding(Theme.Space.m)
-        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: Theme.Radius.tile, style: .continuous))
+        .controlSize(.large)
+        .padding(Theme.Detail.cardPadding)
+        .background(Color.orange.opacity(Theme.Opacity.chipFill), in: RoundedRectangle(cornerRadius: Theme.Detail.cardRadius, style: .continuous))
     }
 
     private var header: some View {
-        HStack(alignment: .firstTextBaseline, spacing: Theme.Space.s) {
+        HStack(alignment: .firstTextBaseline, spacing: Theme.Space.m) {
             CheckButton(task: task) { tasks.toggleComplete(task) }
+                .font(.title2)
             TextField("Title", text: $draft.title, axis: .vertical)
                 .font(.title2.weight(.semibold))
                 .textFieldStyle(.plain)
@@ -69,88 +73,117 @@ struct TaskDetailView: View {
         }
     }
 
-    private var properties: some View {
-        Grid(alignment: .leadingFirstTextBaseline, horizontalSpacing: Theme.Space.m, verticalSpacing: Theme.Space.s) {
-            GridRow {
-                Text("Date").foregroundStyle(.secondary)
+    /// Date, priority, list, repeat and tags as coloured chips: each one is a button or menu.
+    private var chips: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
+            HStack(spacing: Theme.Space.s) {
                 Button { editingDate = true } label: {
-                    Label(dateLabel, systemImage: "calendar")
+                    Chip(text: dateLabel, symbol: "calendar", tint: dateTint, filled: tasks.day(of: task) != nil)
                 }
-                .buttonStyle(.borderless)
+                .buttonStyle(.plain)
                 .popover(isPresented: $editingDate) { DueEditor(task: task) }
-            }
-            GridRow {
-                Text("Priority").foregroundStyle(.secondary)
-                Menu {
-                    ForEach(PriorityOption.all, id: \.value) { p in
-                        Button(p.title) { tasks.core.actions.setPriority(id: task.id, priority: p.value) }
-                    }
-                } label: {
-                    Label(PriorityOption.title(task.priority), systemImage: "flag.fill")
-                        .foregroundStyle(Theme.PriorityColor.color(task.priority))
+
+                Button { pickingPriority = true } label: {
+                    Chip(text: PriorityOption.title(task.priority), symbol: "flag.fill", tint: Theme.PriorityColor.color(task.priority), filled: task.priority > 0)
                 }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
-            }
-            GridRow {
-                Text("List").foregroundStyle(.secondary)
-                Menu(tasks.projectName(task.projectId)) {
-                    Button("Inbox") { tasks.core.actions.move(id: task.id, projectId: "inbox") }
-                    ForEach(tasks.listProjects, id: \.id) { p in
-                        Button(p.name) { tasks.core.actions.move(id: task.id, projectId: p.id) }
+                .buttonStyle(.plain)
+                .popover(isPresented: $pickingPriority) {
+                    PickerList(items: PriorityOption.all.map { ($0.title, "flag.fill", Theme.PriorityColor.color($0.value), $0.value == task.priority) }) { i in
+                        tasks.core.actions.setPriority(id: task.id, priority: PriorityOption.all[i].value)
+                        pickingPriority = false
                     }
                 }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
+
+                Button { pickingList = true } label: {
+                    Chip(text: tasks.projectName(task.projectId), symbol: "list.bullet", tint: listTint, filled: true)
+                }
+                .buttonStyle(.plain)
+                .popover(isPresented: $pickingList) {
+                    let targets = [("inbox", "Inbox", Color.accentColor)] + tasks.listProjects.map { ($0.id, $0.name, Color(hex: $0.color) ?? .accentColor) }
+                    PickerList(items: targets.map { ($0.1, "list.bullet", $0.2, $0.0 == task.projectId) }) { i in
+                        tasks.core.actions.move(id: task.id, projectId: targets[i].0)
+                        pickingList = false
+                    }
+                }
+
+                if let rule = task.repeatRule {
+                    Chip(text: tasks.core.describeRepeat(rule: rule), symbol: "repeat", tint: .accentColor, filled: true)
+                }
             }
-            GridRow(alignment: .center) {
-                Text("Tags").foregroundStyle(.secondary)
+            HStack(spacing: Theme.Space.s) {
+                ForEach(task.tags, id: \.self) { tag in
+                    Button {
+                        tasks.core.actions.setTags(id: task.id, tags: task.tags.filter { $0 != tag })
+                    } label: {
+                        Chip(text: "#" + tag, symbol: nil, tint: Color(hex: tasks.tagColor(tag)) ?? .accentColor, filled: true)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Remove tag")
+                }
                 HStack(spacing: Theme.Space.xs) {
-                    ForEach(task.tags, id: \.self) { tag in
-                        Button {
-                            tasks.core.actions.setTags(id: task.id, tags: task.tags.filter { $0 != tag })
-                        } label: {
-                            TagPill(name: tag, color: tasks.tagColor(tag))
-                        }
-                        .buttonStyle(.plain)
-                        .help("Remove tag")
-                    }
+                    Image(systemName: "number").foregroundStyle(.secondary)
                     TextField("Add tag", text: $newTag)
                         .textFieldStyle(.plain)
-                        .frame(maxWidth: 120)
+                        .frame(width: Theme.Size.tagField)
                         .focused($focus, equals: .tag)
                         .onSubmit { commit(.tag) }
                 }
-            }
-            if let rule = task.repeatRule {
-                GridRow {
-                    Text("Repeat").foregroundStyle(.secondary)
-                    Label(tasks.core.describeRepeat(rule: rule), systemImage: "repeat")
-                }
+                .padding(.horizontal, Theme.Space.m)
+                .frame(height: Theme.Detail.chipHeight)
+                .overlay(Capsule().strokeBorder(.quaternary))
             }
             if !task.reminders.isEmpty {
-                GridRow {
-                    Text("Reminders").foregroundStyle(.secondary)
-                    Text(task.reminders.map(ReminderText.describe).joined(separator: ", "))
-                }
+                Label(task.reminders.map(ReminderText.describe).joined(separator: ", "), systemImage: "bell")
+                    .foregroundStyle(.secondary)
             }
         }
     }
 
+    private var dateTint: Color {
+        guard tasks.day(of: task) != nil else { return .secondary }
+        if let day = tasks.day(of: task), !task.isDone, day < Calendar.current.startOfDay(for: .now) { return .red }
+        return .accentColor
+    }
+
+    private var listTint: Color {
+        Color(hex: tasks.projects.first { $0.id == task.projectId }?.color) ?? .accentColor
+    }
+
+    private func card<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        content()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(Theme.Detail.cardPadding)
+            .background(.quaternary.opacity(Theme.Opacity.card), in: RoundedRectangle(cornerRadius: Theme.Detail.cardRadius, style: .continuous))
+    }
+
     private var notesEditor: some View {
-        TextField("Notes", text: $draft.notes, axis: .vertical)
-            .textFieldStyle(.plain)
-            .lineLimit(3...)
-            .focused($focus, equals: .notes)
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
+            Label("Notes", systemImage: "text.alignleft").font(.headline).foregroundStyle(.secondary)
+            TextField("Write notes…", text: $draft.notes, axis: .vertical)
+                .textFieldStyle(.plain)
+                .lineLimit(3...)
+                .focused($focus, equals: .notes)
+        }
     }
 
     private var checklist: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.xs) {
-            Text("Checklist").font(.headline)
-            ForEach(tasks.items(of: task), id: \.id) { item in
-                HStack(spacing: Theme.Space.s) {
+        let items = tasks.items(of: task)
+        let done = items.filter { $0.status != 0 }.count
+        return VStack(alignment: .leading, spacing: Theme.Space.s) {
+            HStack {
+                Label("Checklist", systemImage: "checklist").font(.headline).foregroundStyle(.secondary)
+                Spacer()
+                if !items.isEmpty { Text("\(done)/\(items.count)").font(.callout).foregroundStyle(.secondary).monospacedDigit() }
+            }
+            if !items.isEmpty {
+                ProgressView(value: Double(done), total: Double(items.count)).tint(.accentColor)
+            }
+            ForEach(items, id: \.id) { item in
+                HStack(spacing: Theme.Space.m) {
                     Button { tasks.core.actions.toggleItem(itemId: item.id) } label: {
                         Image(systemName: item.status == 0 ? "circle" : "checkmark.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(item.status == 0 ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tint))
                     }
                     .buttonStyle(.plain)
                     Text(item.title)
@@ -159,31 +192,43 @@ struct TaskDetailView: View {
                     Spacer()
                     Button { tasks.core.actions.deleteItem(itemId: item.id) } label: { Image(systemName: "xmark") }
                         .buttonStyle(.borderless)
+                        .foregroundStyle(.tertiary)
                         .help("Delete item")
                 }
+                .padding(.vertical, Theme.Space.xxs)
             }
-            TextField("Add item", text: $newItem)
-                .textFieldStyle(.plain)
-                .focused($focus, equals: .item)
-                .onSubmit { commit(.item); focus = .item }
+            HStack(spacing: Theme.Space.m) {
+                Image(systemName: "plus").foregroundStyle(.secondary)
+                TextField("Add item", text: $newItem)
+                    .textFieldStyle(.plain)
+                    .focused($focus, equals: .item)
+                    .onSubmit { commit(.item); focus = .item }
+            }
         }
     }
 
     private var subtasksSection: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.xs) {
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
             let subs = tasks.subtasks(of: task)
-            if !subs.isEmpty { Text("Subtasks").font(.headline) }
+            Label("Subtasks", systemImage: "list.bullet.indent").font(.headline).foregroundStyle(.secondary)
             ForEach(subs, id: \.id) { sub in
-                HStack(spacing: Theme.Space.s) {
+                HStack(spacing: Theme.Space.m) {
                     CheckButton(task: sub) { tasks.toggleComplete(sub) }
-                    Text(sub.title).strikethrough(sub.isDone)
+                    Text(sub.title).strikethrough(sub.isDone).foregroundStyle(sub.isDone ? .secondary : .primary)
+                    Spacer()
                 }
+                .padding(.vertical, Theme.Space.xxs)
+                .contentShape(Rectangle())
+                .onTapGesture { tasks.selection = sub.id }
             }
             if task.parentId == nil {
-                TextField("Add subtask", text: $newSubtask)
-                    .textFieldStyle(.plain)
-                    .focused($focus, equals: .subtask)
-                    .onSubmit { commit(.subtask); focus = .subtask }
+                HStack(spacing: Theme.Space.m) {
+                    Image(systemName: "plus").foregroundStyle(.secondary)
+                    TextField("Add subtask", text: $newSubtask)
+                        .textFieldStyle(.plain)
+                        .focused($focus, equals: .subtask)
+                        .onSubmit { commit(.subtask); focus = .subtask }
+                }
             }
         }
     }
@@ -305,5 +350,56 @@ enum ReminderText {
         }
         if parts.isEmpty { return "On time" }
         return parts.joined(separator: " ") + (before ? " before" : " after")
+    }
+}
+
+/// A rounded, tinted property chip (date, priority, list, tag).
+struct Chip: View {
+    let text: String
+    let symbol: String?
+    let tint: Color
+    let filled: Bool
+
+    var body: some View {
+        HStack(spacing: Theme.Space.xs) {
+            if let symbol { Image(systemName: symbol).foregroundStyle(tint) }
+            Text(text).foregroundStyle(filled ? .primary : .secondary).lineLimit(1)
+        }
+        .font(.callout.weight(.medium))
+        .padding(.horizontal, Theme.Space.m)
+        .frame(height: Theme.Detail.chipHeight)
+        .background(filled ? AnyShapeStyle(tint.opacity(Theme.Opacity.chipFill)) : AnyShapeStyle(.clear), in: Capsule())
+        .overlay(Capsule().strokeBorder(filled ? AnyShapeStyle(.clear) : AnyShapeStyle(.quaternary)))
+        .contentShape(Capsule())
+    }
+}
+
+/// A popover list of choices with large rows (priority, list).
+struct PickerList: View {
+    let items: [(title: String, symbol: String, tint: Color, selected: Bool)]
+    let choose: (Int) -> Void
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+                ForEach(Array(items.enumerated()), id: \.offset) { i, item in
+                    Button { choose(i) } label: {
+                        HStack(spacing: Theme.Space.m) {
+                            Image(systemName: item.symbol).foregroundStyle(item.tint).frame(width: Theme.Space.l)
+                            Text(item.title).lineLimit(1)
+                            Spacer()
+                            if item.selected { Image(systemName: "checkmark").foregroundStyle(.tint) }
+                        }
+                        .padding(.horizontal, Theme.Space.m)
+                        .frame(height: Theme.Size.minRow)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(Theme.Space.s)
+        }
+        .frame(width: Theme.Size.pickerWidth)
+        .frame(maxHeight: Theme.Size.pickerMaxHeight)
     }
 }

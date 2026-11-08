@@ -53,6 +53,8 @@ final class TasksModel {
     var confirmDelete: ZTask?
     /// The list a "Delete permanently" confirmation is open for.
     var confirmDeleteList: Project?
+    /// The smart list a delete confirmation is open for.
+    var confirmDeleteFilter: Filter?
     var sheet: ListSheet?
     private(set) var options = ViewOptions(sort: "", group: "", showCompleted: false)
 
@@ -201,7 +203,9 @@ final class TasksModel {
         let actions = core.actions
         for task in live {
             switch item {
-            case .project(let id): actions.move(id: task.id, projectId: id)
+            case .project(let id):
+                if task.projectId == id { continue } // dropped on its own list: keep its section
+                actions.move(id: task.id, projectId: id)
             case .smart(.inbox): actions.move(id: task.id, projectId: "inbox")
             case .smart(.today), .smart(.tomorrow):
                 let day = Calendar.current.startOfDay(for: item == .smart(.today) ? .now : Calendar.current.date(byAdding: .day, value: 1, to: .now)!)
@@ -222,7 +226,7 @@ final class TasksModel {
         var after = rows.last?.task.id
         for task in live {
             if task.projectId != projectId { core.actions.move(id: task.id, projectId: projectId) }
-            core.listActions.reorderTask(id: task.id, after: after, before: nil, columnId: columnId)
+            core.listActions.reorderTask(id: task.id, after: after, before: nil, columnId: columnId, setColumn: true)
             after = task.id
         }
         return true
@@ -235,7 +239,12 @@ final class TasksModel {
         ids.move(fromOffsets: source, toOffset: destination)
         for id in moving {
             guard let i = ids.firstIndex(of: id) else { continue }
-            core.listActions.reorderTask(id: id, after: i > 0 ? ids[i - 1] : nil, before: i + 1 < ids.count ? ids[i + 1] : nil, columnId: section.columnId)
+            // Only a list's own sections set the column; any other grouping keeps the task's section.
+            let columnSection = section.columnId != nil || (options.group.isEmpty || options.group == "column")
+            core.listActions.reorderTask(
+                id: id, after: i > 0 ? ids[i - 1] : nil, before: i + 1 < ids.count ? ids[i + 1] : nil,
+                columnId: section.columnId, setColumn: columnSection
+            )
         }
         if options.sort != "manual" && !isProjectDefaultManual { setSort("manual") }
     }

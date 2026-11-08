@@ -123,12 +123,15 @@ class TaskIndex(
         val rows = rows(filter, now, zone)
         val open = rows.filter { !it.task.isDone }
         val sorted = when (o.sort) {
+            "date" -> open.sortedWith(compareBy<TaskRow>({ day(it.task, zone) == null }, { day(it.task, zone) }, { !it.task.isAllDay }, { it.task.startDate ?: it.task.dueDate }, { -it.task.priority }, { it.task.sortOrder }))
             "priority" -> open.sortedWith(compareBy<TaskRow>({ -it.task.priority }, { day(it.task, zone) == null }, { day(it.task, zone) }, { it.task.startDate ?: it.task.dueDate }))
             "title" -> open.sortedBy { it.task.title.lowercase() }
             "manual" -> open.sortedBy { it.task.sortOrder }
             else -> open // the default order is by date
         }
-        val groups: List<TaskSection> = when (o.group) {
+        // No group chosen: a list keeps its sections, smart lists group by date.
+        val group = o.group.ifEmpty { if (filter is TaskFilter.InProject) "column" else "date" }
+        val groups: List<TaskSection> = when (group) {
             "priority" -> listOf(5 to "High", 3 to "Medium", 1 to "Low", 0 to "None")
                 .map { (p, title) -> TaskSection(title, sorted.filter { it.task.priority == p }) }
             "list" -> sorted.groupBy { it.task.projectId }.entries
@@ -139,7 +142,7 @@ class TaskIndex(
                 sorted.forEach { r -> byTag.getOrPut(r.task.tags.firstOrNull()?.let { "#$it" } ?: "No tag") { mutableListOf() } += r }
                 byTag.entries.sortedBy { if (it.key == "No tag") "\uFFFF" else it.key }.map { TaskSection(it.key, it.value) }
             }
-            "column" -> if (filter is TaskFilter.InProject) projectSections(filter.id, sorted) else listOf(TaskSection("", sorted))
+            "column" -> if (filter is TaskFilter.InProject) return projectSections(filter.id, sorted, rows) else listOf(TaskSection("", sorted))
             "none" -> listOf(TaskSection("", sorted))
             else -> dateSections(sorted, today, zone)
         }
@@ -245,7 +248,7 @@ class TaskIndex(
             .map { it.first }
     }
 
-    private fun projectSections(projectId: String, rows: List<TaskRow>): List<TaskSection> {
+    private fun projectSections(projectId: String, rows: List<TaskRow>, all: List<TaskRow> = rows): List<TaskSection> {
         val open = rows.filter { !it.task.isDone }
         val columns = columnsByProject[projectId].orEmpty().sortedBy { it.sortOrder }
         val sections = if (columns.isEmpty()) {
@@ -256,7 +259,7 @@ class TaskIndex(
                 TaskSection("No section", open.filter { it.task.columnId == null || it.task.columnId !in ids })
         }
         // Empty sections stay visible in a list with sections, so tasks can be added or dropped there.
-        return sections.filter { it.rows.isNotEmpty() || it.columnId != null } + completed(rows)
+        return sections.filter { it.rows.isNotEmpty() || it.columnId != null } + completed(all)
     }
 
     private fun completed(rows: List<TaskRow>): List<TaskSection> =

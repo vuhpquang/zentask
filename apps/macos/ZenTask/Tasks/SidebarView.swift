@@ -44,7 +44,7 @@ struct SidebarView: View {
                         .tag(SidebarItem.custom(filter.id))
                         .contextMenu {
                             Button("Edit…") { tasks.sheet = .editFilter(filter.id) }
-                            Button("Delete", role: .destructive) { tasks.core.deleteFilter(id: filter.id) }
+                            Button("Delete…", role: .destructive) { tasks.confirmDeleteFilter = filter }
                         }
                 }
             } header: {
@@ -82,7 +82,7 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
-        .environment(\.sidebarRowSize, .large)
+        .environment(\.sidebarRowSize, .medium)
         .safeAreaInset(edge: .bottom) { SyncFooter() }
     }
 
@@ -93,7 +93,6 @@ struct SidebarView: View {
 
     private func row(_ title: String, symbol: String, item: SidebarItem) -> some View {
         Label(title, systemImage: symbol)
-            .font(.body)
             .badge(tasks.count(item))
             .tag(item)
             .dropDestination(for: String.self) { ids, _ in tasks.drop(ids, onto: item) }

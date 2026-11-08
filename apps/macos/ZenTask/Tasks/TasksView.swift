@@ -33,5 +33,20 @@ struct TasksView: View {
         } message: {
             Text("The list, its sections and the tasks trashed with it are deleted on every device. This can't be undone.")
         }
+        .confirmationDialog(
+            "Delete the smart list \"\(tasks.confirmDeleteFilter?.name ?? "")\"?",
+            isPresented: Binding(get: { tasks.confirmDeleteFilter != nil }, set: { if !$0 { tasks.confirmDeleteFilter = nil } })
+        ) {
+            Button("Delete", role: .destructive) {
+                if let f = tasks.confirmDeleteFilter {
+                    tasks.core.deleteFilter(id: f.id)
+                    if tasks.sidebar == .custom(f.id) { tasks.sidebar = .smart(.today) }
+                }
+                tasks.confirmDeleteFilter = nil
+            }
+            Button("Cancel", role: .cancel) { tasks.confirmDeleteFilter = nil }
+        } message: {
+            Text("Only the smart list is deleted; its tasks stay where they are.")
+        }
     }
 }

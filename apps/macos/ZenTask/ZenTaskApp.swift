@@ -56,9 +56,9 @@ struct MainWindow: View {
     var body: some View {
         HStack(spacing: 0) {
             AppRail(tab: $tab)
-            Divider()
+                .ignoresSafeArea(.container, edges: .top) // only the rail reaches under the traffic lights
+            Divider().ignoresSafeArea(.container, edges: .top)
             TasksView()
         }
-        .ignoresSafeArea(.container, edges: .top)
     }
 }

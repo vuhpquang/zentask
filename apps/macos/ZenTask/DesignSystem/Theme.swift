@@ -29,14 +29,25 @@ enum Theme {
         }
     }
 
+    enum Detail {
+        static let chipHeight: CGFloat = 30
+        static let cardRadius: CGFloat = 12
+        static let cardPadding: CGFloat = 14
+        static let maxWidth: CGFloat = 640
+    }
+
     enum Opacity {
         static let field: Double = 0.6
         static let chip: Double = 0.15
         static let pill: Double = 0.18
+        static let card: Double = 0.5
+        static let chipFill: Double = 0.14
     }
 
     enum Row {
-        static let checkbox: CGFloat = 16
+        static let checkbox: CGFloat = 19
+        static let verticalPadding: CGFloat = 7
+        static let metaSpacing: CGFloat = 3
         static let indent: CGFloat = 24
         static let pillRadius: CGFloat = 6
     }
@@ -57,6 +68,10 @@ enum Theme {
         static let settingsWidth: CGFloat = 540
         static let sidebarMin: CGFloat = 200
         static let sheetWidth: CGFloat = 380
+        static let minRow: CGFloat = 40
+        static let tagField: CGFloat = 90
+        static let pickerWidth: CGFloat = 240
+        static let pickerMaxHeight: CGFloat = 360
         static let filterWidth: CGFloat = 460
         static let filterFormHeight: CGFloat = 420
         static let swatch: CGFloat = 24

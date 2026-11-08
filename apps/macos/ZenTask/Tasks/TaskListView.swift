@@ -11,7 +11,8 @@ struct TaskListView: View {
             if !isReadOnlyList {
                 QuickAddField(focused: $quickAddFocused) { text, ignored in tasks.quickAdd(text, ignored: ignored) }
                 .padding(.horizontal, Theme.Space.l)
-                .padding(.vertical, Theme.Space.s)
+                .padding(.top, Theme.Space.m)
+                .padding(.bottom, Theme.Space.s)
             }
             List(selection: $tasks.selection) {
                 if case .smart(.trash) = tasks.sidebar, !tasks.trashedProjects.isEmpty {
@@ -54,6 +55,7 @@ struct TaskListView: View {
                 }
             }
             .listStyle(.inset)
+            .environment(\.defaultMinListRowHeight, Theme.Size.minRow)
             .overlay {
                 if tasks.sections.isEmpty { emptyState }
             }
@@ -117,16 +119,16 @@ struct TaskListView: View {
     @ViewBuilder
     private func rows(_ section: TaskSection) -> some View {
         ForEach(section.rows, id: \.task.id) { row in
-            VStack(spacing: 0) {
-                TaskRowView(task: row.task, row: row, showProject: showsProject)
-                ForEach(row.subtasks, id: \.id) { sub in
-                    TaskRowView(task: sub, row: nil, showProject: false)
-                        .padding(.leading, Theme.Row.indent)
-                        .onTapGesture { tasks.selection = sub.id }
-                }
+            TaskRowView(task: row.task, row: row, showProject: showsProject)
+                .tag(row.task.id)
+                .draggable(row.task.id)
+            // Subtasks are their own rows: selectable, reachable with the arrow keys, draggable alone.
+            ForEach(row.subtasks, id: \.id) { sub in
+                TaskRowView(task: sub, row: nil, showProject: false)
+                    .padding(.leading, Theme.Row.indent)
+                    .tag(sub.id)
+                    .draggable(sub.id)
             }
-            .tag(row.task.id)
-            .draggable(row.task.id)
         }
         .onMove(perform: canReorder(section) ? { from, to in tasks.move(in: section, from: from, to: to) } : nil)
     }
@@ -134,6 +136,8 @@ struct TaskListView: View {
     /// Manual reordering makes sense inside a list's own sections (not date or priority groups).
     private func canReorder(_ section: TaskSection) -> Bool {
         guard case .project = tasks.sidebar, !section.isCompleted else { return false }
+        // Moves map to rows only when no subtask rows sit between them.
+        guard section.rows.allSatisfy({ $0.subtasks.isEmpty }) else { return false }
         return tasks.options.group.isEmpty || tasks.options.group == "column" || tasks.options.group == "none"
     }
 
@@ -171,10 +175,11 @@ struct TaskRowView: View {
     let showProject: Bool
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: Theme.Space.s) {
+        HStack(alignment: .firstTextBaseline, spacing: Theme.Space.m) {
             CheckButton(task: task) { tasks.toggleComplete(task) }
-            VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+            VStack(alignment: .leading, spacing: Theme.Row.metaSpacing) {
                 Text(task.title.isEmpty ? "Untitled" : task.title)
+                    .font(.body)
                     .strikethrough(task.isDone)
                     .foregroundStyle(task.isDone || task.status == -1 ? .secondary : .primary)
                     .lineLimit(2)
@@ -182,7 +187,9 @@ struct TaskRowView: View {
             }
             Spacer(minLength: 0)
         }
-        .padding(.vertical, Theme.Space.xxs)
+        .padding(.vertical, Theme.Row.verticalPadding)
+        .padding(.horizontal, Theme.Space.xs)
+        .contentShape(Rectangle())
         .contextMenu { TaskMenu(task: task) }
     }
 
@@ -193,8 +200,9 @@ struct TaskRowView: View {
     private var meta: some View {
         HStack(spacing: Theme.Space.s) {
             if let day = tasks.day(of: task) {
-                Text(DateText.short(day: day, task: task))
-                    .foregroundStyle(row?.overdue == true ? .red : .secondary)
+                Label(DateText.short(day: day, task: task), systemImage: "calendar")
+                    .labelStyle(.titleAndIcon)
+                    .foregroundStyle(row?.overdue == true ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
             }
             if task.repeatRule != nil {
                 Image(systemName: "repeat").foregroundStyle(.secondary)
@@ -206,7 +214,7 @@ struct TaskRowView: View {
                 TagPill(name: tag, color: tasks.tagColor(tag))
             }
             if showProject, let row, !row.projectName.isEmpty {
-                Text(row.projectName).foregroundStyle(.tertiary)
+                Text(row.projectName).foregroundStyle(.secondary)
             }
         }
         .font(.caption)

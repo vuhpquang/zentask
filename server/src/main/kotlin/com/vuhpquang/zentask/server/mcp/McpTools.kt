@@ -610,9 +610,25 @@ object McpTools {
 
     internal fun json(e: JsonElement): String = ZenJson.encodeToString(JsonElement.serializer(), e)
 
-    /** Before/after audit payload for changed tasks. */
+    /**
+     * Before/after audit payload: every record named by [ids], whatever its kind (task, list, section,
+     * smart list, folder, checklist item), as stored.
+     */
     internal fun snapshot(ctx: McpReplica.Context, ids: List<String>): JsonObject = buildJsonObject {
-        ids.forEach { id -> put(id, ctx.store.get(EntityTypes.task, id)?.let { JsonObject(EntityTypes.task.toFields(it)) } ?: JsonNull) }
+        val kinds = listOf(EntityTypes.task, EntityTypes.project, EntityTypes.column, EntityTypes.filter, EntityTypes.projectGroup, EntityTypes.checklistItem, EntityTypes.tag)
+        ids.distinct().forEach { id ->
+            val raw = kinds.firstNotNullOfOrNull { k -> ctx.store.rawRecord(k.name, id)?.let { k.name to it } }
+            put(id, raw?.let { (kind, r) -> buildJsonObject { put("kind", kind); put("fields", JsonObject(r.fields)) } } ?: JsonNull)
+        }
+    }
+
+    /** Record ids a call is about, read from its arguments (ids, and list names resolved to list ids). */
+    internal fun touched(args: JsonObject, ctx: McpReplica.Context): List<String> {
+        val direct = listOf("id", "task_id", "parent_id", "item_id").mapNotNull { (args[it] as? JsonPrimitive)?.contentOrNull }
+        val list = (args["list"] as? JsonPrimitive)?.contentOrNull?.let { key ->
+            ctx.index.projects.firstOrNull { it.id == key || it.name.equals(key, ignoreCase = true) }?.id
+        }
+        return direct + listOfNotNull(list)
     }
 
     // ---- schema helpers ----

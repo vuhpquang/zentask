@@ -338,4 +338,17 @@ class McpToolsTest {
         val found = obj(client.tool(token, "search_tasks", """{"smart_list":"Urgent"}""").first)
         assertEquals(listOf("Hot"), found["tasks"]!!.jsonArray.map { it.jsonObject["title"]!!.jsonPrimitive.content })
     }
+
+    @Test
+    fun listChangesAreAuditedWithBeforeAndAfter() = testApplication {
+        server()
+        val token = client.loginToken()
+        client.tool(token, "create_list", """{"name":"Trip"}""")
+        client.tool(token, "update_list", """{"list":"Trip","new_name":"Japan"}""")
+        val db = ServerDb(dir.resolve("zentask.db"))
+        val (tool, changes) = db.auditRows().last()
+        db.close()
+        assertEquals("update_list", tool)
+        assertTrue(changes.contains("\"Trip\"") && changes.contains("\"Japan\""), changes)
+    }
 }

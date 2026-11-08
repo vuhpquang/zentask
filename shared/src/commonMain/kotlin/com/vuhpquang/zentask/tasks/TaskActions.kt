@@ -55,11 +55,15 @@ class TaskActions(
         }?.atStartOfDayIn(z)?.toEpochMilliseconds()
         val filterTags = (filter as? TaskFilter.WithTag)?.let { listOf(it.name) }.orEmpty()
         val allTags = normalize(tags + filterTags)
+        val project = projectId ?: (filter as? TaskFilter.InProject)?.id ?: Project.INBOX_ID
+        // New tasks go to the top of their list with their own sort order (no ties to renumber later).
+        val top = store.idsWhere(tasks, "projectId", project).mapNotNull { store.get(tasks, it)?.sortOrder }.minOrNull()
         val task = Task(
             id = Uuid.random().toString(),
             createdAt = now,
             title = title.trim(),
-            projectId = projectId ?: (filter as? TaskFilter.InProject)?.id ?: Project.INBOX_ID,
+            sortOrder = top?.let { it - (1L shl 32) } ?: 0,
+            projectId = project,
             priority = priority ?: 0,
             tags = allTags,
             dueDate = due ?: filterDue,
@@ -76,7 +80,11 @@ class TaskActions(
     @Throws(IllegalStateException::class)
     fun addSubtask(parentId: String, title: String): Task {
         val parent = store.get(tasks, parentId) ?: error("no task $parentId")
-        val t = Task(id = Uuid.random().toString(), createdAt = wall(), title = title.trim(), projectId = parent.projectId, parentId = parentId)
+        val last = store.idsWhere(tasks, "parentId", parentId).mapNotNull { store.get(tasks, it)?.sortOrder }.maxOrNull()
+        val t = Task(
+            id = Uuid.random().toString(), createdAt = wall(), title = title.trim(), projectId = parent.projectId, parentId = parentId,
+            sortOrder = last?.let { it + (1L shl 32) } ?: 0,
+        )
         store.put(tasks, t)
         return t
     }

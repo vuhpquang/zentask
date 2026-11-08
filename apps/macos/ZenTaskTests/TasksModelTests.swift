@@ -115,10 +115,10 @@ final class TasksModelTests: XCTestCase {
         for title in ["A", "B", "C"] { m.quickAdd(title) }
         await m.reload(); await m.settle()
         let noSection = try! XCTUnwrap(m.sections.first { $0.columnId == nil && !$0.isCompleted })
-        XCTAssertEqual(noSection.rows.map(\.task.title), ["A", "B", "C"])
+        XCTAssertEqual(noSection.rows.map(\.task.title), ["C", "B", "A"], "new tasks go to the top")
         m.move(in: noSection, from: IndexSet(integer: 2), to: 0)
         await m.reload(); await m.settle()
-        XCTAssertEqual(m.sections.first { $0.columnId == nil }?.rows.map(\.task.title), ["C", "A", "B"])
+        XCTAssertEqual(m.sections.first { $0.columnId == nil }?.rows.map(\.task.title), ["A", "C", "B"])
         let b = m.sections.first { $0.columnId == nil }!.rows.last!.task.id
         XCTAssertTrue(m.drop([b], intoColumn: doing.id))
         await m.reload(); await m.settle()

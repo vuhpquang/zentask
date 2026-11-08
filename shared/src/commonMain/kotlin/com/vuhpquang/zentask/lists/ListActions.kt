@@ -48,6 +48,7 @@ class ListActions(
         return p
     }
 
+    @Throws(IllegalArgumentException::class)
     fun rename(id: String, name: String) {
         notInbox(id, "renamed")
         store.update(projects, id) { it.copy(name = name.trim()) }
@@ -57,6 +58,7 @@ class ListActions(
         store.update(projects, id) { it.copy(color = color) }
     }
 
+    @Throws(IllegalArgumentException::class)
     fun archive(id: String) {
         notInbox(id, "archived")
         store.update(projects, id) { it.copy(closed = true) }
@@ -72,10 +74,12 @@ class ListActions(
     }
 
     /** Moves the list and its tasks to Trash (same timestamp). */
+    @Throws(IllegalArgumentException::class, IllegalStateException::class)
     fun trash(id: String) {
         notInbox(id, "moved to Trash")
         val now = wall()
         store.inTransaction {
+            check(store.get(projects, id)?.trashedAt == null) { "The list is already in Trash" }
             store.update(projects, id) { it.copy(trashedAt = now) }
             tasksOf(id).filter { it.trashedAt == null }.forEach { t -> store.update(tasks, t.id) { it.copy(trashedAt = now) } }
         }
@@ -99,7 +103,13 @@ class ListActions(
             check(p.trashedAt != null) { "Move the list to Trash before deleting it permanently" }
             val taskActions = TaskActions(store, wall)
             tasksOf(id).filter { it.trashedAt == p.trashedAt && it.parentId == null }.forEach { taskActions.deleteForever(it.id) }
-            tasksOf(id).filter { it.trashedAt == p.trashedAt }.forEach { store.delete(tasks, it.id) }
+            tasksOf(id).filter { it.trashedAt == p.trashedAt }.forEach { t ->
+                store.idsWhere(EntityTypes.checklistItem, "taskId", t.id).forEach { store.delete(EntityTypes.checklistItem, it) }
+                store.delete(tasks, t.id)
+            }
+            // Tasks that went to Trash on their own earlier, or were restored on their own: keep them,
+            // in the Inbox, so nothing points at a deleted list.
+            tasksOf(id).filter { !it.deleted }.forEach { t -> store.update(tasks, t.id) { it.copy(projectId = Project.INBOX_ID, columnId = null) } }
             store.idsWhere(EntityTypes.column, "projectId", id).forEach { store.delete(EntityTypes.column, it) }
             store.delete(projects, id)
         }
@@ -150,22 +160,25 @@ class ListActions(
     // ---- ordering ----
 
     /**
-     * Places task [id] between [after] (the task above) and [before] (the task below), optionally into
-     * section [columnId]. Usually one record changes; if there is no gap left, the list's tasks are
-     * renumbered in one transaction.
+     * Places task [id] between [after] (the task above) and [before] (the task below). With [setColumn]
+     * the task moves into section [columnId] (null = "No section"); without it the task keeps its section
+     * (reordering inside a date or priority group must never change sections). Usually one record
+     * changes; if there is no gap left, only the open tasks of that section are renumbered.
      */
-    fun reorderTask(id: String, after: String?, before: String?, columnId: String? = null) {
+    fun reorderTask(id: String, after: String?, before: String?, columnId: String? = null, setColumn: Boolean = columnId != null) {
         store.inTransaction {
             val t = store.get(tasks, id) ?: return@inTransaction
             val above = after?.let { store.get(tasks, it) }
             val below = before?.let { store.get(tasks, it) }
-            val column = columnId ?: (above ?: below)?.columnId ?: t.columnId
+            val column = if (setColumn) columnId else t.columnId
             val order = SortOrder.between(above?.sortOrder, below?.sortOrder)
             if (order != null) {
                 store.update(tasks, id) { it.copy(sortOrder = order, columnId = column) }
                 return@inTransaction
             }
-            val siblings = tasksOf(t.projectId).filter { it.id != id && it.trashedAt == null }.sortedBy { it.sortOrder }.toMutableList()
+            val siblings = tasksOf(t.projectId)
+                .filter { it.id != id && it.trashedAt == null && it.status == 0 && it.parentId == t.parentId && it.columnId == column }
+                .sortedBy { it.sortOrder }.toMutableList()
             val index = above?.let { a -> siblings.indexOfFirst { it.id == a.id } + 1 } ?: 0
             siblings.add(index.coerceIn(0, siblings.size), t)
             siblings.forEachIndexed { i, s ->

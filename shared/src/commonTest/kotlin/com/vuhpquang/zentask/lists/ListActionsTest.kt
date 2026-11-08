@@ -141,4 +141,57 @@ class ListActionsTest {
         assertEquals(5L, SortOrder.between(0, 10))
         assertNull(SortOrder.between(4, 5))
     }
+
+    @Test
+    fun reorderCanKeepTheTasksSection() {
+        store.put(EntityTypes.task, Task(id = "a", projectId = "p", columnId = "doing", sortOrder = 0))
+        store.put(EntityTypes.task, Task(id = "b", projectId = "p", columnId = "todo", sortOrder = 10L shl 32))
+        lists.reorderTask("a", after = "b", before = null, columnId = null, setColumn = false)
+        assertEquals("doing", task("a").columnId, "a date-group reorder never changes the section")
+        lists.reorderTask("a", after = "b", before = null, columnId = null, setColumn = true)
+        assertNull(task("a").columnId)
+    }
+
+    @Test
+    fun newTasksGetDistinctOrdersSoReordersRarelyRenumber() {
+        val actions = com.vuhpquang.zentask.tasks.TaskActions(store, wall = { wall })
+        val a = actions.create("A", com.vuhpquang.zentask.tasks.TaskFilter.InProject("p"))
+        val b = actions.create("B", com.vuhpquang.zentask.tasks.TaskFilter.InProject("p"))
+        assertTrue(task(a.id).sortOrder != task(b.id).sortOrder)
+        val before = store.pending(100).size
+        store.markSynced(store.pending(100))
+        lists.reorderTask(a.id, after = null, before = b.id)
+        assertEquals(1, store.pending(100).size, "one record changes, no renumber (was $before pending)")
+    }
+
+    @Test
+    fun renumberOnlyTouchesTheMovingSection() {
+        listOf("a" to 0L, "b" to 1L, "c" to 2L).forEach { (id, o) -> store.put(EntityTypes.task, Task(id = id, projectId = "p", sortOrder = o, columnId = "todo")) }
+        store.put(EntityTypes.task, Task(id = "x", projectId = "p", sortOrder = 5L, columnId = "doing"))
+        store.put(EntityTypes.task, Task(id = "done", projectId = "p", sortOrder = 7L, columnId = "todo", status = 2))
+        store.markSynced(store.pending(100))
+        lists.reorderTask("c", after = "a", before = "b", columnId = "todo", setColumn = true)
+        val touched = store.pending(100).map { it.record.id }.toSet()
+        assertTrue("x" !in touched && "done" !in touched, "touched: $touched")
+    }
+
+    @Test
+    fun deleteForeverMovesSurvivorsToInbox() {
+        val l = lists.createList("Old")
+        store.put(EntityTypes.task, Task(id = "early", projectId = l.id, trashedAt = 5))
+        store.put(EntityTypes.task, Task(id = "a", projectId = l.id))
+        lists.trash(l.id)
+        store.update(EntityTypes.task, "a") { it.copy(trashedAt = null) } // restored on its own
+        lists.deleteForever(l.id)
+        assertEquals(Project.INBOX_ID, task("a").projectId)
+        assertTrue(!task("a").deleted)
+        assertEquals(Project.INBOX_ID, task("early").projectId, "a task trashed earlier stays in Trash, but not in a deleted list")
+    }
+
+    @Test
+    fun trashingATrashedListIsRefused() {
+        val l = lists.createList("X")
+        lists.trash(l.id)
+        assertFailsWith<IllegalStateException> { lists.trash(l.id) }
+    }
 }
