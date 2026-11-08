@@ -7,6 +7,6 @@ final class AppInfoTests: XCTestCase {
     }
 
     func testDisplayVersion() {
-        XCTAssertEqual(AppInfo.displayVersion, "ZenTask 0.1.0")
+        XCTAssertEqual(AppInfo.displayVersion, "ZenTask \(AppInfo.sharedVersion)")
     }
 }

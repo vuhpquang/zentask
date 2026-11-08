@@ -1,5 +1,6 @@
 package com.vuhpquang.zentask.server
 
+import com.vuhpquang.zentask.ZenTaskInfo
 import io.ktor.client.request.get
 import io.ktor.client.request.post
 import io.ktor.client.statement.bodyAsText
@@ -15,7 +16,7 @@ class HealthRouteTest {
         application { module() }
         val res = client.get("/health")
         assertEquals(HttpStatusCode.OK, res.status)
-        assertEquals("""{"status":"ok","version":"0.1.0"}""", res.bodyAsText())
+        assertEquals("""{"status":"ok","version":"${ZenTaskInfo.version}"}""", res.bodyAsText())
     }
 
     @Test

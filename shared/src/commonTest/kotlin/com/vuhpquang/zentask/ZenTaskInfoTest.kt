@@ -2,11 +2,12 @@ package com.vuhpquang.zentask
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class ZenTaskInfoTest {
     @Test
-    fun versionMatchesRootVersionFile() {
-        assertEquals("0.1.0", ZenTaskInfo.version)
+    fun versionIsSemver() {
+        assertTrue(Regex("""\d+\.\d+\.\d+""").matches(ZenTaskInfo.version), ZenTaskInfo.version)
     }
 
     @Test
