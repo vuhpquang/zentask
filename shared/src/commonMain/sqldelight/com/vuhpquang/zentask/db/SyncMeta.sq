@@ -1,0 +1,11 @@
+-- Small key/value state of this client. Keys are a file format: nodeId, hlc, checkpoint, serverId, outboxSeq.
+CREATE TABLE sync_meta (
+    key TEXT NOT NULL PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
+valueOf:
+SELECT value FROM sync_meta WHERE key = ?;
+
+put:
+INSERT OR REPLACE INTO sync_meta(key, value) VALUES (?, ?);

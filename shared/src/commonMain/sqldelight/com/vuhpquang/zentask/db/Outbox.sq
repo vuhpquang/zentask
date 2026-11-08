@@ -1,0 +1,23 @@
+-- Outbox: records changed locally and not yet accepted by the server. seq orders the changes and lets
+-- a sync clear only what it actually sent (an edit made during the request gets a higher seq).
+CREATE TABLE pending_change (
+    entity TEXT NOT NULL,
+    id TEXT NOT NULL,
+    seq INTEGER NOT NULL,
+    PRIMARY KEY (entity, id)
+);
+
+mark:
+INSERT OR REPLACE INTO pending_change(entity, id, seq) VALUES (?, ?, ?);
+
+markAll:
+INSERT OR REPLACE INTO pending_change(entity, id, seq) SELECT entity, id, ? FROM record;
+
+pending:
+SELECT p.entity, p.id, p.seq, r.fields, r.clocks
+FROM pending_change p JOIN record r ON r.entity = p.entity AND r.id = p.id
+ORDER BY p.seq, p.entity, p.id
+LIMIT ?;
+
+clear:
+DELETE FROM pending_change WHERE entity = ? AND id = ? AND seq <= ?;

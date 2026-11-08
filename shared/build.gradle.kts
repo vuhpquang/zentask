@@ -40,6 +40,7 @@ val generateBuildInfo = tasks.register("generateBuildInfo") {
 
 kotlin {
     jvmToolchain(17)
+    compilerOptions { freeCompilerArgs.add("-Xexpect-actual-classes") }
     jvm()
 
     // Kotlin/Native targets only configure on macOS so Linux (Docker) builds stay JVM-only.

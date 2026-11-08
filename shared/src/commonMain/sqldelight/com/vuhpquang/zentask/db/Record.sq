@@ -1,0 +1,21 @@
+-- Every synced record, whatever its entity: fields and per-field HLC clocks as JSON objects.
+-- Generic on purpose (P1 plan, "Generic record storage"): a newer client's fields and entities survive here.
+CREATE TABLE record (
+    entity TEXT NOT NULL,
+    id TEXT NOT NULL,
+    fields TEXT NOT NULL,
+    clocks TEXT NOT NULL,
+    deleted INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (entity, id)
+);
+
+CREATE INDEX record_entity_deleted ON record(entity, deleted);
+
+upsert:
+INSERT OR REPLACE INTO record(entity, id, fields, clocks, deleted) VALUES (?, ?, ?, ?, ?);
+
+byId:
+SELECT * FROM record WHERE entity = ? AND id = ?;
+
+live:
+SELECT * FROM record WHERE entity = ? AND deleted = 0;
