@@ -35,6 +35,7 @@ Kiến trúc phải sẵn sàng cho cả 4 ngay từ đầu (Kotlin Multiplatfor
 - Đọc Google Calendar từ nhiều tài khoản (cá nhân + công ty).
 - Nút Sync TickTick kéo một chiều, bấm nhiều lần không nhân đôi, dùng song song 3–6 tháng.
 - Release macOS bằng script, cài thẳng vào `/Applications`.
+- **MCP server** để AI (Claude Code, Claude Desktop, …) thêm/sửa/xoá/tìm task, list, tag, habit, countdown (mục 10a).
 
 **Non-goals (v1)**
 - Cộng tác / chia sẻ list với người khác, multi-user.
@@ -152,6 +153,32 @@ Chạy ở client (shared module), ghi vào DB cục bộ rồi sync lên server
    - Bản ghi tạo trong ZenTask (không có `ticktickId`) → không bao giờ bị đụng tới.
 4. Màn hình Sync TickTick: trạng thái cookie, lần sync cuối, preview số tạo/cập nhật/đưa vào trash trước khi áp dụng (lần đầu), kết quả và lỗi.
 
+## 10a. MCP cho AI (chủ dự án yêu cầu 2026-11-08)
+
+Mục tiêu: AI thao tác được dữ liệu ZenTask, gồm thêm, sửa, xoá và tìm kiếm, như một thiết bị nữa.
+
+Các quyết định dưới đây là của người viết thiết kế; chủ dự án có thể đổi.
+
+- **MCP chạy trên server Ktor**, endpoint `POST /mcp` (transport Streamable HTTP, thư viện `io.modelcontextprotocol:kotlin-sdk`).
+  - Vì dữ liệu đã nằm trên server, AI ở máy nào cũng dùng được, không cần app Mac đang mở.
+  - Thay đổi do AI ghi đi qua đúng `merge` per-field của sync, với clock HLC của node riêng `mcp`. Server tăng `version` nên các client nhận về ở lần sync kế tiếp như mọi thay đổi khác. Không có đường ghi thứ hai.
+- **Xác thực**:
+  - Bearer token riêng cho AI, tạo bằng `POST /v1/auth/login` với `deviceName` kiểu "Claude Code". Token hiện trong danh sách thiết bị và thu hồi được như mọi thiết bị.
+  - Cấu hình mẫu: `claude mcp add --transport http zentask https://zentask-api.vuhpquang.com/mcp --header "Authorization: Bearer <token>"`.
+  - Connector trên claude.ai cần OAuth nên để sau, chỉ làm nếu chủ dự án cần.
+- **Tools** tăng dần theo phase:
+  - Task (cùng P3): `search_tasks` (list, tag, priority, khoảng ngày, trạng thái, từ khoá), `get_task`, `create_task`, `update_task` (sửa từng trường), `complete_task` (task lặp lại xử lý giống app, mục 7.1), `trash_task` / `restore_task`, `delete_task`.
+  - Tag: `list_tags`, `create_tag`, `update_tag`, `delete_tag`.
+  - P4: `list_projects`, `create_project`, `update_project`, `delete_project`, column, filter.
+  - P6: `list_habits`, `check_in_habit`, countdown CRUD.
+  - P5: `list_events` (chỉ đọc).
+- **An toàn** (vì "mất dữ liệu" là anti-goal):
+  - "Xoá" mặc định là đưa vào Trash. Xoá vĩnh viễn chỉ khi gọi `delete_task` với `permanent: true`.
+  - Mỗi lần ghi qua MCP lưu một dòng nhật ký (`mcp_audit`: thời điểm, tool, bản ghi trước và sau) để hoàn tác được.
+  - Có giới hạn số thao tác mỗi phút.
+  - Dữ liệu đưa vào được kiểm tra như `/v1/sync`: priority, status và ngày phải hợp lệ.
+- Logic nghiệp vụ (hoàn thành task lặp lại, chuẩn hoá tag, quick-add) nằm trong `shared` để app và MCP dùng chung.
+
 ## 11. UI macOS
 
 Bố cục học theo TickTick (theo ảnh chủ dự án gửi), dark mode là chính, hỗ trợ light:
@@ -178,6 +205,7 @@ Bố cục học theo TickTick (theo ảnh chủ dự án gửi), dark mode là 
 | **P1** DB + Sync | Schema SQLDelight đầy đủ (mục 6), repository, HLC, outbox, sync protocol + server endpoints + auth | Hai bản DB client (test) sync qua server, test merge per-field/tombstone pass |
 | **P2** Import & Sync TickTick | Client API v2 bằng cookie (task, list, tag, habit, countdown), merge theo baseline, CSV fallback, màn hình Sync TickTick (UI tối thiểu), hướng dẫn lấy cookie | Dữ liệu TickTick thật nằm trong ZenTask, đếm khớp; bấm Sync lần 2 không nhân đôi |
 | **P3** Task + Tag + Priority | Inbox, CRUD task, chi tiết task, subtask/checklist, tag (lồng, màu), priority, quick add, nhắc nhở | Dùng hằng ngày được cho task |
+| **P3b** MCP | MCP server `/mcp` trên Ktor, các tool cho task và tag, nhật ký `mcp_audit`, hướng dẫn kết nối Claude Code trong `setup-guide.md`. Tool cho list/habit/countdown/event thêm ở P4/P6/P5 | Từ Claude Code thêm, sửa, hoàn thành và xoá được task; app Mac thấy thay đổi sau khi sync |
 | **P4** List | Folder, list, column, smart list mặc định + filter tuỳ chỉnh, nhóm/sắp xếp, kéo thả | Sidebar + list view như TickTick |
 | **P5** Calendar | Google OAuth + iCal fallback ở server, Day/Week/Month view, task + event, kéo thả đặt giờ | Week view như ảnh mẫu |
 | **P6** Habit + Countdown | Habit list, check-in, streak/thống kê, countdown list, countdown trên calendar | Thay được TickTick hoàn toàn trên Mac |

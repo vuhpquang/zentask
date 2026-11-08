@@ -9,6 +9,7 @@ Các bước dưới đây cần tài khoản hoặc quyền mà chỉ anh có. 
 | 3 | Google Cloud OAuth client cho Google Calendar, publish app (bước 3.6) | P5 (calendar) |
 | 4 | (Tuỳ chọn) Link iCal bí mật của lịch công ty | P5, chỉ khi bước 3 bị công ty chặn |
 | 5 | Cookie TickTick | P2 (hướng dẫn chi tiết sẽ thêm khi tới P2) |
+| 6 | Kết nối MCP cho AI (Claude Code) | P3b (hướng dẫn chi tiết sẽ thêm khi tới P3b) |
 
 ---
 
