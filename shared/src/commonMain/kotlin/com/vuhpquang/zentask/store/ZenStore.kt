@@ -223,6 +223,11 @@ class ZenStore(
 
     fun close() = driver.close()
 
+    /** Runs [block] under the store lock inside one transaction (for other modules of `shared`, e.g. TickTick sync). */
+    internal fun <R> inTransaction(block: (ZenTaskDatabase) -> R): R = lock.withLock {
+        db.transactionWithResult { block(db) }
+    }
+
     // ---- Internals ----
 
     private fun write(r: SyncRecord) {

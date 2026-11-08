@@ -1,0 +1,33 @@
+-- TickTick sync baseline: the TickTick values of each imported record as of the last pull (spec §10.3).
+-- A field differing from its baseline was changed in TickTick and overwrites ZenTask; otherwise ZenTask's
+-- value stays. gone = 1 once a sync moved the record to Trash/archive because TickTick no longer has it.
+CREATE TABLE ticktick_baseline (
+    entity TEXT NOT NULL,
+    id TEXT NOT NULL,
+    fields TEXT NOT NULL,
+    gone INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (entity, id)
+);
+
+baselineAll:
+SELECT * FROM ticktick_baseline;
+
+baselineCount:
+SELECT count(*) FROM ticktick_baseline;
+
+baselinePut:
+INSERT OR REPLACE INTO ticktick_baseline(entity, id, fields, gone) VALUES (?, ?, ?, ?);
+
+baselineMarkGone:
+UPDATE ticktick_baseline SET gone = 1 WHERE entity = ? AND id = ?;
+
+CREATE TABLE ticktick_meta (
+    key TEXT NOT NULL PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
+ticktickMeta:
+SELECT value FROM ticktick_meta WHERE key = ?;
+
+ticktickMetaPut:
+INSERT OR REPLACE INTO ticktick_meta(key, value) VALUES (?, ?);
