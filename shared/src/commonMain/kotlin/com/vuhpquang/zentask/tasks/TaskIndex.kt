@@ -123,7 +123,11 @@ class TaskIndex(
         } else {
             defaultSections(filter, now, zone, today)
         }
-        return if (options.hideCompleted) sections.filter { !it.isCompleted } else sections
+        // Pinned tasks lead their group (newest pin first), the rest keep their order.
+        val pinnedFirst = sections.map { s ->
+            if (s.rows.none { it.task.pinnedAt != null }) s else s.copy(rows = s.rows.filter { it.task.pinnedAt != null }.sortedByDescending { it.task.pinnedAt } + s.rows.filter { it.task.pinnedAt == null })
+        }
+        return if (options.hideCompleted) pinnedFirst.filter { !it.isCompleted } else pinnedFirst
     }
 
     private fun defaultSections(filter: TaskFilter, now: Instant, zone: TimeZone, today: LocalDate): List<TaskSection> {

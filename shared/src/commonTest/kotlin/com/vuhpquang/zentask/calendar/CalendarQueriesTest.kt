@@ -100,4 +100,39 @@ class CalendarQueriesTest {
         assertEquals("countdown", d[1].allDay.single().kind)
         assertTrue(d.flatMap { it.allDay }.none { it.title == "Hidden" })
     }
+
+    @Test
+    fun viewOptionsFilterListsAndShowHabits() {
+        val day = LocalDate(2026, 11, 9)
+        val at = { h: Int -> kotlinx.datetime.LocalDateTime(2026, 11, 9, h, 0).toInstant(zone).toEpochMilliseconds() }
+        val tasks = listOf(
+            com.vuhpquang.zentask.model.Task(id = "w", title = "Work thing", projectId = "work", dueDate = at(9), tags = listOf("deep")),
+            com.vuhpquang.zentask.model.Task(id = "h", title = "Home thing", projectId = "home", dueDate = at(10)),
+            com.vuhpquang.zentask.model.Task(id = "d", title = "Done thing", projectId = "home", dueDate = at(11), status = 2),
+        )
+        val habits = listOf(
+            com.vuhpquang.zentask.model.Habit(id = "gym", name = "Gym", reminders = listOf("19:00"), color = "#EC4899"),
+            com.vuhpquang.zentask.model.Habit(id = "read", name = "Read"),
+            com.vuhpquang.zentask.model.Habit(id = "old", name = "Old", archivedAt = 1),
+        )
+        val checkins = listOf(com.vuhpquang.zentask.model.HabitCheckin(id = "c", habitId = "read", stamp = 20261109, status = 2))
+        val projects = listOf(com.vuhpquang.zentask.model.Project(id = "work", name = "Work", color = "#3B82F6"))
+        fun titles(o: CalendarViewOptions) = CalendarQueries.days(
+            emptyList(), sources, accounts, tasks, day, 1, zone, emptySet(), emptyList(), o, habits, checkins, projects,
+        ).single().let { d -> (d.allDay + d.timed.map { it.entry }).map { it.title }.toSet() }
+
+        assertEquals(setOf("Work thing", "Home thing", "Done thing", "Gym", "Read"), titles(CalendarViewOptions()))
+        assertEquals(setOf("Work thing", "Home thing", "Gym", "Read"), titles(CalendarViewOptions(showCompleted = false)))
+        assertEquals(setOf("Work thing", "Home thing", "Done thing"), titles(CalendarViewOptions(showHabits = false)))
+        assertEquals(setOf("Work thing", "Gym", "Read"), titles(CalendarViewOptions(lists = listOf("work"))))
+        assertEquals(setOf("Work thing", "Gym", "Read"), titles(CalendarViewOptions(tags = listOf("deep"))))
+
+        val d = CalendarQueries.days(emptyList(), sources, accounts, tasks, day, 1, zone, emptySet(), emptyList(), CalendarViewOptions(colorBy = "list"), habits, checkins, projects).single()
+        val gym = d.timed.single { it.entry.kind == "habit" }
+        assertEquals(19 * 60, gym.startMinute)
+        assertEquals("gym", gym.entry.id.substringBefore("@"))
+        assertTrue(d.allDay.single { it.title == "Read" }.done, "checked-in habits show as done")
+        assertEquals("#3B82F6", d.timed.single { it.entry.id == "w" }.entry.color, "colour by list")
+        assertEquals(CalendarViewOptions(), CalendarViewOptions.parse("not json"))
+    }
 }

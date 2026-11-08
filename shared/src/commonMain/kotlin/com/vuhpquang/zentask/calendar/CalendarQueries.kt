@@ -4,7 +4,13 @@ import com.vuhpquang.zentask.model.CalendarAccount
 import com.vuhpquang.zentask.model.CalendarEvent
 import com.vuhpquang.zentask.model.CalendarSource
 import com.vuhpquang.zentask.habits.CountdownQueries
+import com.vuhpquang.zentask.habits.HabitSchedule
 import com.vuhpquang.zentask.habits.Stamp
+import com.vuhpquang.zentask.model.Habit
+import com.vuhpquang.zentask.model.HabitCheckin
+import com.vuhpquang.zentask.model.Project
+import com.vuhpquang.zentask.model.ZenJson
+import kotlinx.serialization.Serializable
 import com.vuhpquang.zentask.model.Countdown
 import com.vuhpquang.zentask.model.Task
 import com.vuhpquang.zentask.tasks.isDone
@@ -16,10 +22,37 @@ import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Instant
 
+/**
+ * What the Calendar shows (synced Preference `calendar.view`). Empty [lists] and [tags] = everything;
+ * otherwise a task shows when its list or one of its tags is checked. [colorBy]: "priority" or "list".
+ */
+@Serializable
+data class CalendarViewOptions(
+    val lists: List<String> = emptyList(),
+    val tags: List<String> = emptyList(),
+    val showCompleted: Boolean = true,
+    val showHabits: Boolean = true,
+    val showCountdowns: Boolean = true,
+    val colorBy: String = "priority",
+    val showLunar: Boolean = true,
+) {
+    fun encode(): String = ZenJson.encodeToString(serializer(), this)
+
+    companion object {
+        const val KEY = "calendar.view"
+
+        fun parse(json: String): CalendarViewOptions = try {
+            ZenJson.decodeFromString(serializer(), json)
+        } catch (_: Exception) {
+            CalendarViewOptions()
+        }
+    }
+}
+
 /** One thing on the calendar: a Google/iCal event (read-only), a dated task, or a countdown. */
 data class CalendarEntry(
     val id: String,
-    /** "event", "task" or "countdown". */
+    /** "event", "task", "countdown" or "habit" (id `<habitId>@<yyyyMMdd>`). */
     val kind: String,
     val title: String,
     val start: Long,
@@ -43,6 +76,7 @@ data class CalendarDay(val dayStart: Long, val allDay: List<CalendarEntry>, val 
  */
 object CalendarQueries {
     private const val TASK_MINUTES = 30
+    private const val HABIT_MINUTES = 30
     private const val DAY_MINUTES = 24 * 60
 
     fun days(
@@ -55,7 +89,16 @@ object CalendarQueries {
         zone: TimeZone,
         hidden: Set<String>,
         countdowns: List<Countdown> = emptyList(),
+        options: CalendarViewOptions = CalendarViewOptions(),
+        habits: List<Habit> = emptyList(),
+        checkins: List<HabitCheckin> = emptyList(),
+        projects: List<Project> = emptyList(),
     ): List<CalendarDay> {
+        val listColor = projects.associate { it.id to it.color }
+        val wanted = { t: Task ->
+            (options.lists.isEmpty() && options.tags.isEmpty()) ||
+                t.projectId in options.lists || t.tags.any { tag -> options.tags.any { it.equals(tag, ignoreCase = true) } }
+        }
         val liveAccounts = accounts.filter { !it.deleted }.mapTo(HashSet()) { it.id }
         val visible = sources.filter { !it.deleted && it.accountId in liveAccounts && it.id !in hidden }.associateBy { it.id }
         val entries = events.filter { !it.deleted && it.sourceId in visible }.map { e ->
@@ -72,8 +115,10 @@ object CalendarQueries {
             } else {
                 CalendarEntry(e.id, "event", e.title, e.start, maxOf(e.end, e.start), false, visible[e.sourceId]?.color, location = e.location)
             }
-        } + tasks.filter { !it.deleted && it.trashedAt == null && it.status != -1 }.mapNotNull { t -> taskEntry(t, zone) } +
-            countdownEntries(countdowns, first, count, zone)
+        } + tasks.filter { !it.deleted && it.trashedAt == null && it.status != -1 && wanted(it) && (options.showCompleted || !it.isDone) }
+            .mapNotNull { t -> taskEntry(t, zone)?.let { e -> if (options.colorBy == "list") e.copy(color = listColor[t.projectId]) else e } } +
+            (if (options.showCountdowns) countdownEntries(countdowns, first, count, zone) else emptyList()) +
+            (if (options.showHabits) habitEntries(habits, checkins, first, count, zone) else emptyList())
 
         return (0 until count).map { i ->
             val date = first.plus(i, DateTimeUnit.DAY)
@@ -102,6 +147,21 @@ object CalendarQueries {
                     "${c.id}@${Stamp.of(d)}", "countdown", c.name, d.atStartOfDayIn(zone).toEpochMilliseconds(),
                     d.plus(1, DateTimeUnit.DAY).atStartOfDayIn(zone).toEpochMilliseconds(), true, c.color,
                 )
+            }
+        }
+    }
+
+    /** Habits on the days they're due: at their first reminder time (30 min), or all day without one. */
+    private fun habitEntries(habits: List<Habit>, checkins: List<HabitCheckin>, first: LocalDate, count: Int, zone: TimeZone): List<CalendarEntry> {
+        val done = checkins.filter { !it.deleted && it.status == 2 }.mapTo(HashSet()) { it.habitId to it.stamp }
+        return habits.filter { !it.deleted && it.archivedAt == null }.flatMap { h ->
+            val time = h.reminders.firstNotNullOfOrNull { r -> Regex("""^(\d{1,2}):(\d{2})$""").matchEntire(r.trim())?.let { it.groupValues[1].toInt() * 60 + it.groupValues[2].toInt() } }
+            (0 until count).map { first.plus(it, DateTimeUnit.DAY) }.filter { HabitSchedule.isDue(h, it, zone) }.map { d ->
+                val stamp = Stamp.of(d)
+                val midnight = d.atStartOfDayIn(zone).toEpochMilliseconds()
+                val start = if (time != null) midnight + time * 60_000L else midnight
+                val end = if (time != null) start + HABIT_MINUTES * 60_000L else d.plus(1, DateTimeUnit.DAY).atStartOfDayIn(zone).toEpochMilliseconds()
+                CalendarEntry("${h.id}@$stamp", "habit", h.name, start, end, time == null, h.color, (h.id to stamp) in done)
             }
         }
     }

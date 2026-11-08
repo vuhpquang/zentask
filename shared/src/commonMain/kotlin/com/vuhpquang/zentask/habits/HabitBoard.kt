@@ -3,7 +3,10 @@ package com.vuhpquang.zentask.habits
 import com.vuhpquang.zentask.model.Countdown
 import com.vuhpquang.zentask.model.Habit
 import com.vuhpquang.zentask.model.HabitCheckin
+import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.isoDayNumber
+import kotlinx.datetime.minus
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
 
@@ -44,10 +47,18 @@ object HabitBoard {
                     values = values,
                     todayValue = values[todayStamp] ?: 0.0,
                     doneToday = todayStamp in done,
-                    dueToday = HabitSchedule.isDue(h, today, zone),
+                    dueToday = HabitSchedule.isDue(h, today, zone) && (todayStamp in done || weekLeft(h, done, today)),
                     archived = h.archivedAt != null,
                 )
             }
+    }
+
+    /** N-times-a-week habits stop being due once this week's target is met (Monday-first weeks). */
+    private fun weekLeft(h: Habit, done: Set<Int>, today: LocalDate): Boolean {
+        val target = HabitSchedule.weekTarget(h) ?: return true
+        val monday = today.minus(today.dayOfWeek.isoDayNumber - 1, DateTimeUnit.DAY)
+        val thisWeek = done.count { s -> Stamp.date(s)?.let { it >= monday && it <= today } == true }
+        return thisWeek < target
     }
 
     /** Upcoming soonest first, then past ones most recent first, archived last. */

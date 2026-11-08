@@ -22,6 +22,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import com.vuhpquang.zentask.calendar.CalendarDay
 import com.vuhpquang.zentask.calendar.CalendarQueries
+import com.vuhpquang.zentask.calendar.CalendarViewOptions
+import com.vuhpquang.zentask.calendar.Lunar
 import com.vuhpquang.zentask.habits.CountdownActions
 import com.vuhpquang.zentask.habits.CountdownCard
 import com.vuhpquang.zentask.habits.HabitActions
@@ -225,7 +227,31 @@ class ZenTaskCore(
         return CalendarQueries.days(
             store.list(EntityTypes.calendarEvent), store.list(EntityTypes.calendarSource), store.list(EntityTypes.calendarAccount),
             store.list(EntityTypes.task), first, count, z, hiddenCalendars(), store.list(EntityTypes.countdown),
+            calendarView(), store.list(EntityTypes.habit), store.list(EntityTypes.habitCheckin), store.list(EntityTypes.project),
         )
+    }
+
+    fun calendarView(): CalendarViewOptions =
+        store.get(EntityTypes.preference, CalendarViewOptions.KEY)?.takeIf { !it.deleted }?.let { CalendarViewOptions.parse(it.value) } ?: CalendarViewOptions()
+
+    fun setCalendarView(options: CalendarViewOptions) {
+        val id = CalendarViewOptions.KEY
+        val existing = store.get(EntityTypes.preference, id)
+        if (existing == null) {
+            store.put(EntityTypes.preference, Preference(id = id, key = id, value = options.encode()))
+        } else {
+            store.update(EntityTypes.preference, id) { it.copy(value = options.encode(), deleted = false) }
+        }
+    }
+
+    /** Vietnamese lunar date label for a local day ("30", or "1/10" on a month's first day). */
+    fun lunarLabel(dayMillis: Long): String = Lunar.of(Instant.fromEpochMilliseconds(dayMillis).toLocalDateTime(zone()).date).label
+
+    /** Checks in (or undoes) a habit from a calendar entry id `<habitId>@<yyyyMMdd>`. */
+    fun toggleHabitEntry(entryId: String) {
+        val habitId = entryId.substringBefore("@")
+        val stamp = entryId.substringAfter("@").toIntOrNull() ?: return
+        habitCheckIn(habitId, stamp)
     }
 
     data class CalendarInfo(val source: CalendarSource, val account: CalendarAccount?, val hidden: Boolean)

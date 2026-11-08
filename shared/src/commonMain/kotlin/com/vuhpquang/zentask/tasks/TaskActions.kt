@@ -228,6 +228,25 @@ class TaskActions(
         }
     }
 
+    /** Sets (or clears, with null) the repeat rule; [from] is "due" or "completion". */
+    fun setRepeat(id: String, rule: String?, from: String?) {
+        store.update(tasks, id) { it.copy(repeatRule = rule?.takeIf { r -> r.isNotBlank() }, repeatFrom = if (rule.isNullOrBlank()) null else from ?: "due") }
+    }
+
+    /** Reminder triggers (`TRIGGER:-PT15M`…), duplicates dropped. */
+    fun setReminders(id: String, triggers: List<String>) {
+        store.update(tasks, id) { it.copy(reminders = triggers.map(String::trim).filter(String::isNotEmpty).distinct()) }
+    }
+
+    fun pin(id: String) {
+        val now = wall()
+        store.update(tasks, id) { it.copy(pinnedAt = now) }
+    }
+
+    fun unpin(id: String) {
+        store.update(tasks, id) { it.copy(pinnedAt = null) }
+    }
+
     fun setTags(id: String, tags: List<String>) {
         val clean = normalize(tags)
         store.inTransaction {

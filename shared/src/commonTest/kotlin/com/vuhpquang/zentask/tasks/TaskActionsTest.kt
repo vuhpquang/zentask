@@ -244,4 +244,21 @@ class TaskActionsTest {
         assertEquals(listOf("Shoes" to TaskStatus.OPEN), items.map { it.title to it.status })
         assertEquals(listOf("Book hotel"), all().filter { it.parentId == copy.id }.map { it.title })
     }
+
+    @Test
+    fun repeatRemindersAndPin() {
+        val t = actions.create("Water plants", null, null, null, emptyList(), null, true)
+        actions.setRepeat(t.id, "RRULE:FREQ=WEEKLY;INTERVAL=1", "due")
+        actions.setReminders(t.id, listOf("TRIGGER:PT0S", "TRIGGER:-PT15M", "TRIGGER:PT0S"))
+        actions.pin(t.id)
+        val got = store.get(EntityTypes.task, t.id)!!
+        assertEquals("RRULE:FREQ=WEEKLY;INTERVAL=1", got.repeatRule)
+        assertEquals("due", got.repeatFrom)
+        assertEquals(listOf("TRIGGER:PT0S", "TRIGGER:-PT15M"), got.reminders, "deduplicated")
+        assertTrue(got.pinnedAt != null)
+        actions.unpin(t.id)
+        actions.setRepeat(t.id, null, null)
+        assertNull(store.get(EntityTypes.task, t.id)!!.pinnedAt)
+        assertNull(store.get(EntityTypes.task, t.id)!!.repeatRule)
+    }
 }

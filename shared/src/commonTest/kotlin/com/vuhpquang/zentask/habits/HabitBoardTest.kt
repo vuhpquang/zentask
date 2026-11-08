@@ -58,4 +58,15 @@ class HabitBoardTest {
         assertEquals(-311, cards[2].daysLeft)
         assertEquals(-1, cards[1].years)
     }
+
+    @Test
+    fun timesAWeekHabitIsNoLongerDueOnceTheWeekIsDone() {
+        val h = Habit(id = "m", name = "Meditate", repeatRule = "RRULE:FREQ=WEEKLY;TT_TIMES=2")
+        val sunday = LocalDate(2026, 11, 8)
+        fun row(vararg stamps: Int) = HabitBoard.rows(listOf(h), stamps.mapIndexed { i, st -> HabitCheckin(id = "c$i", habitId = "m", stamp = st, status = 2) }, sunday).single()
+        assertTrue(row(20261102).dueToday, "1 of 2 this week")
+        assertEquals(false, row(20261102, 20261104).dueToday, "target met")
+        assertTrue(row(20261102, 20261108).dueToday, "done today still counts as today's habit")
+        assertTrue(row(20261026, 20261027).dueToday, "last week's check-ins don't count")
+    }
 }
