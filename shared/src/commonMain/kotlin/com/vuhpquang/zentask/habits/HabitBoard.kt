@@ -7,6 +7,7 @@ import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.isoDayNumber
 import kotlinx.datetime.minus
+import kotlinx.datetime.plus
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
 
@@ -26,6 +27,9 @@ data class HabitRow(
 
 /** A countdown ready to draw. [daysLeft] < 0 = days since; [years] = age/anniversary count, -1 if not yearly. */
 data class CountdownCard(val countdown: Countdown, val dateMillis: Long, val daysLeft: Int, val years: Int)
+
+/** One day of the habit week strip: how many habits were due and how many were done. */
+data class HabitDay(val stamp: Int, val due: Int, val done: Int)
 
 /** Builds the Habits and Countdown screens from all records in one pass (pure). */
 object HabitBoard {
@@ -51,6 +55,20 @@ object HabitBoard {
                     archived = h.archivedAt != null,
                 )
             }
+    }
+
+    /** Monday to Sunday of [today]'s week, over live (not archived) habits. */
+    fun week(habits: List<Habit>, checkins: List<HabitCheckin>, today: LocalDate, zone: TimeZone = TimeZone.currentSystemDefault()): List<HabitDay> {
+        val live = habits.filter { !it.deleted && it.archivedAt == null }
+        val ids = live.mapTo(HashSet()) { it.id }
+        val done = checkins.filter { !it.deleted && it.status == 2 && it.habitId in ids }.mapTo(HashSet()) { it.habitId to it.stamp }
+        val monday = today.minus(today.dayOfWeek.isoDayNumber - 1, DateTimeUnit.DAY)
+        return (0 until 7).map { i ->
+            val d = monday.plus(i, DateTimeUnit.DAY)
+            val stamp = Stamp.of(d)
+            val due = live.filter { HabitSchedule.isDue(it, d, zone) }
+            HabitDay(stamp, due.size, due.count { (it.id to stamp) in done })
+        }
     }
 
     /** N-times-a-week habits stop being due once this week's target is met (Monday-first weeks). */

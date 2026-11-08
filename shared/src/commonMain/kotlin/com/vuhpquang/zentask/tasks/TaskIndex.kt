@@ -6,6 +6,7 @@ import com.vuhpquang.zentask.lists.FilterRule
 import com.vuhpquang.zentask.lists.ViewOptions
 import com.vuhpquang.zentask.model.EntityTypes
 import com.vuhpquang.zentask.model.Filter
+import com.vuhpquang.zentask.model.Priority
 import com.vuhpquang.zentask.model.Project
 import com.vuhpquang.zentask.model.Tag
 import com.vuhpquang.zentask.model.Task
@@ -43,6 +44,9 @@ data class TaskRow(
     val projectName: String,
     val overdue: Boolean,
 )
+
+/** One Eisenhower quadrant: open tasks of one priority, grouped by date. */
+data class Quadrant(val priority: Int, val sections: List<TaskSection>)
 
 /**
  * [columnId]: the list section (column) this group shows, when it is one. [key]: stable id of the group
@@ -173,6 +177,18 @@ class TaskIndex(
         }
         val done = if (filter is TaskFilter.Smart && filter.list in setOf(SmartList.TODAY, SmartList.TOMORROW, SmartList.NEXT_7_DAYS, SmartList.ALL) || filter is TaskFilter.Custom) emptyList() else completed(rows)
         return groups.filter { it.rows.isNotEmpty() } + done
+    }
+
+    /**
+     * The Eisenhower matrix: Urgent & important = high, Not urgent & important = medium,
+     * Urgent & unimportant = low, Not urgent & unimportant = none. Open, visible tasks only.
+     */
+    fun matrix(now: Instant, zone: TimeZone): List<Quadrant> {
+        val today = now.toLocalDateTime(zone).date
+        val open = rows(TaskFilter.Smart(SmartList.ALL), now, zone).filter { it.task.isOpen }
+        return listOf(Priority.HIGH, Priority.MEDIUM, Priority.LOW, Priority.NONE).map { p ->
+            Quadrant(p, dateSections(open.filter { it.task.priority == p }, today, zone).map { it.copy(key = "q$p:" + it.key) })
+        }
     }
 
     /** Open-task counts for the sidebar badges. */

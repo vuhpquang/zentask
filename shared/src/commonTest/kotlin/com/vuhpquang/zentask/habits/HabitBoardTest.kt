@@ -69,4 +69,22 @@ class HabitBoardTest {
         assertTrue(row(20261102, 20261108).dueToday, "done today still counts as today's habit")
         assertTrue(row(20261026, 20261027).dueToday, "last week's check-ins don't count")
     }
+
+    @Test
+    fun weekStripCountsDueAndDoneHabitsPerDay() {
+        val habits = listOf(
+            Habit(id = "a", name = "Read"),
+            Habit(id = "b", name = "Gym", repeatRule = "RRULE:FREQ=WEEKLY;BYDAY=MO,WE"),
+            Habit(id = "x", name = "Old", archivedAt = 1),
+        )
+        val checkins = listOf(
+            HabitCheckin(id = "1", habitId = "a", stamp = 20261102, status = 2),
+            HabitCheckin(id = "2", habitId = "b", stamp = 20261102, status = 2),
+            HabitCheckin(id = "3", habitId = "x", stamp = 20261103, status = 2),
+        )
+        val week = HabitBoard.week(habits, checkins, LocalDate(2026, 11, 8))
+        assertEquals((20261102..20261108).toList(), week.map { it.stamp }, "Monday to Sunday")
+        assertEquals(listOf(2, 1, 2, 1, 1, 1, 1), week.map { it.due })
+        assertEquals(listOf(2, 0, 0, 0, 0, 0, 0), week.map { it.done }, "archived habits don't count")
+    }
 }

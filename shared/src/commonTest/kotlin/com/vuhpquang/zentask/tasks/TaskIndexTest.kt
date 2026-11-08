@@ -154,4 +154,19 @@ class TaskIndexTest {
         assertTrue(keys.all { it.isNotEmpty() })
         assertEquals(com.vuhpquang.zentask.lists.ViewOptions(sort = "date"), com.vuhpquang.zentask.lists.ViewOptions.parse("""{"sort":"date"}"""))
     }
+
+    @Test
+    fun matrixSortsOpenTasksIntoPriorityQuadrants() {
+        val i = index(
+            t("urgent", "2026-11-07T09:00", priority = 5), t("plan", priority = 3), t("chore", "2026-11-08T12:00", priority = 1),
+            t("someday"), t("done", priority = 5, status = TaskStatus.COMPLETED), t("archived", priority = 5, project = "old"),
+        )
+        val m = i.matrix(now, zone)
+        assertEquals(listOf(5, 3, 1, 0), m.map { it.priority })
+        assertEquals(listOf("Overdue"), m[0].sections.map { it.title })
+        assertEquals(listOf("urgent"), m[0].sections.flatMap { it.rows }.map { it.task.id })
+        assertEquals(listOf("plan"), m[1].sections.flatMap { it.rows }.map { it.task.id })
+        assertEquals(listOf("chore"), m[2].sections.flatMap { it.rows }.map { it.task.id })
+        assertEquals(listOf("someday"), m[3].sections.flatMap { it.rows }.map { it.task.id })
+    }
 }

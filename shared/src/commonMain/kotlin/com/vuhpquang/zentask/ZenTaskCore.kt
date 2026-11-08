@@ -28,6 +28,9 @@ import com.vuhpquang.zentask.habits.CountdownActions
 import com.vuhpquang.zentask.habits.CountdownCard
 import com.vuhpquang.zentask.habits.HabitActions
 import com.vuhpquang.zentask.habits.HabitBoard
+import com.vuhpquang.zentask.habits.HabitDay
+import com.vuhpquang.zentask.model.HabitSection
+import com.vuhpquang.zentask.tasks.Quadrant
 import com.vuhpquang.zentask.habits.HabitRow
 import com.vuhpquang.zentask.habits.Stamp
 import com.vuhpquang.zentask.lists.FilterRule
@@ -121,6 +124,12 @@ class ZenTaskCore(
     fun habitClear(habitId: String, stamp: Int) {
         Stamp.date(stamp)?.let { habitActions.clear(habitId, it) }
     }
+
+    fun habitWeek(): List<HabitDay> = HabitBoard.week(store.list(EntityTypes.habit), store.list(EntityTypes.habitCheckin), today(), zone())
+
+    fun habitSections(): List<HabitSection> = store.list(EntityTypes.habitSection).filter { !it.deleted }.sortedBy { it.sortOrder }
+
+    fun matrix(index: TaskIndex): List<Quadrant> = index.matrix(now(), zone())
 
     fun countdownCards(): List<CountdownCard> = HabitBoard.countdowns(store.list(EntityTypes.countdown), today(), zone())
 
