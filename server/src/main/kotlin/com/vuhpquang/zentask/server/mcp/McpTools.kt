@@ -379,28 +379,38 @@ object McpTools {
                 "Check in a habit for a day (default today). Yes/no habits become done (calling twice keeps them done); " +
                     "amount habits add `amount` (default their step). undo=true clears the day.",
                 schema(
-                    "habit" to str("Habit name or id"), "date" to str("ISO date, default today"), "amount" to int("Amount to add (amount habits)"),
+                    "habit" to str("Habit name or id"), "date" to str("ISO date, default today"), "amount" to buildJsonObject { put("type", "number"); put("description", "Amount to add (amount habits), e.g. 1.5") },
                     "undo" to bool("Clear the day instead"), "timezone" to str("IANA zone, default Asia/Ho_Chi_Minh"),
                     required = listOf("habit"),
                 ),
                 writes = true,
             ) { a, ctx, zone ->
-                val key = a.req("habit")
-                val h = ctx.store.list(EntityTypes.habit).filter { !it.deleted }
-                    .let { all -> all.firstOrNull { it.id == key } ?: all.firstOrNull { it.name.equals(key, ignoreCase = true) } ?: all.singleOrNull { QuickAddParser.fold(it.name.lowercase()).contains(QuickAddParser.fold(key.lowercase())) } }
-                    ?: throw ToolError("No habit named \"$key\". Call list_habits for the names")
+                val key = a.req("habit").trim()
+                val live = ctx.store.list(EntityTypes.habit).filter { !it.deleted }
+                val exact = live.filter { it.id == key || it.name.equals(key, ignoreCase = true) }
+                val folded = QuickAddParser.fold(key.lowercase())
+                val candidates = exact.ifEmpty { live.filter { QuickAddParser.fold(it.name.lowercase()).contains(folded) } }
+                val h = when (candidates.size) {
+                    1 -> candidates.single()
+                    0 -> throw ToolError("No habit named \"$key\". Call list_habits for the names")
+                    else -> throw ToolError("\"$key\" matches several habits: ${candidates.joinToString { "${it.name} (${it.id})" }}. Pass the id")
+                }
                 val today = Clock.System.now().toLocalDateTime(zone).date
                 val day = a.str("date")?.let { s -> runCatching { LocalDate.parse(s.trim()) }.getOrElse { throw ToolError("Can't read the date \"$s\". Use 2026-11-09") } } ?: today
                 if (day > today) throw ToolError("Can't check in a future day")
-                val before = ctx.habits.checkin(h.id, day)
+                if (day.year < 2000) throw ToolError("That date is too far back")
+                val amount = (a["amount"] as? JsonPrimitive)?.let { p -> p.contentOrNull?.toDoubleOrNull() ?: throw ToolError("amount must be a number") }
+                if (amount != null && amount <= 0) throw ToolError("amount must be more than 0")
+                val before = ctx.habits.checkins(h.id, day)
                 when {
                     a.bool("undo") == true -> ctx.habits.clear(h.id, day)
-                    h.type == Habit.TYPE_REAL -> ctx.habits.checkIn(h.id, day, a.int("amount")?.toDouble())
-                    before?.status != 2 -> ctx.habits.checkIn(h.id, day, null)
+                    h.type == Habit.TYPE_REAL -> ctx.habits.checkIn(h.id, day, amount)
+                    before.none { it.status == 2 } -> ctx.habits.checkIn(h.id, day, null)
                 }
-                val after = ctx.habits.checkin(h.id, day)
-                val row = HabitBoard.rows(listOf(ctx.store.get(EntityTypes.habit, h.id)!!), ctx.store.list(EntityTypes.habitCheckin), today).single()
-                ToolResult(json(habitJson(row)), changed = listOfNotNull(after?.id ?: before?.id))
+                val after = ctx.habits.checkins(h.id, day)
+                val changed = after.filter { it !in before }.map { it.id }
+                val row = HabitBoard.rows(listOf(ctx.store.get(EntityTypes.habit, h.id)!!), ctx.store.list(EntityTypes.habitCheckin), today, zone).single()
+                ToolResult(json(habitJson(row)), changed = changed)
             },
             Tool(
                 "list_countdowns",

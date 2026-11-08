@@ -34,6 +34,9 @@ final class CountdownsModel {
         started = true
         _Concurrency.Task { await reload() }
         _Concurrency.Task {
+            for await _ in NotificationCenter.default.notifications(named: .NSCalendarDayChanged) { await reload() }
+        }
+        _Concurrency.Task {
             for await _ in core.recordChanges {
                 pending?.cancel()
                 pending = _Concurrency.Task {
@@ -53,16 +56,16 @@ final class CountdownsModel {
     var active: [CountdownCard] { cards.filter { $0.countdown.archivedAt == nil } }
     var archived: [CountdownCard] { cards.filter { $0.countdown.archivedAt != nil } }
 
-    func save(_ draft: CountdownDraft, editing id: String?) {
+    /// [original] = the countdown as the editor opened it (nil = new): only what the editor changed is written.
+    func save(_ draft: CountdownDraft, original: Countdown?) {
         let a = core.countdownActions
-        let icon = draft.icon.trimmingCharacters(in: .whitespaces)
         let stamp = draft.stamp(calendar)
-        if let id {
-            a.update(id: id, name: draft.name, date: stamp, type: draft.type, repeat: draft.yearly ? "yearly" : "none",
-                     color: draft.color, icon: icon.isEmpty ? nil : icon, note: draft.note, showInCalendar: draft.showInCalendar)
+        if let original {
+            a.update(original: original, name: draft.name, date: stamp, type: draft.type, repeat: draft.yearly ? "yearly" : "none",
+                     color: draft.color, icon: draft.storedIcon, note: draft.note, showInCalendar: draft.showInCalendar)
         } else {
             _ = a.create(name: draft.name, date: stamp, type: draft.type, repeat: draft.yearly ? "yearly" : "none",
-                         color: draft.color, icon: icon.isEmpty ? nil : icon, note: draft.note, showInCalendar: draft.showInCalendar)
+                         color: draft.color, icon: draft.storedIcon, note: draft.note, showInCalendar: draft.showInCalendar)
         }
     }
 
@@ -90,6 +93,8 @@ struct CountdownDraft: Equatable {
     var icon = ""
     var note = ""
     var showInCalendar = true
+    private var originalIcon: String?
+    private var originalIconText: String?
 
     init() {}
 
@@ -101,6 +106,8 @@ struct CountdownDraft: Equatable {
         yearly = c.`repeat` == "yearly"
         color = c.color
         icon = HabitLook.emoji(c.icon) ?? ""
+        originalIcon = c.icon
+        originalIconText = icon
         note = c.note
         showInCalendar = c.showInCalendar
     }
@@ -111,4 +118,11 @@ struct CountdownDraft: Equatable {
     }
 
     var isValid: Bool { !name.trimmingCharacters(in: .whitespaces).isEmpty }
+
+    /// The icon to store: the original one unless the field was edited.
+    var storedIcon: String? {
+        let typed = icon.trimmingCharacters(in: .whitespaces)
+        if let originalIconText, typed == originalIconText { return originalIcon }
+        return typed.isEmpty ? nil : typed
+    }
 }

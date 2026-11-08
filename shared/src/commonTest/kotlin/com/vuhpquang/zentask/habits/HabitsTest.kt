@@ -7,6 +7,8 @@ import com.vuhpquang.zentask.model.HabitCheckin
 import com.vuhpquang.zentask.store.ZenStore
 import com.vuhpquang.zentask.store.createSqlDriver
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -114,5 +116,69 @@ class HabitsTest {
         val todayOne = CountdownQueries.next(Countdown(id = "t", date = 20201108, repeat = "yearly"), today)
         assertEquals(0, todayOne.daysLeft)
         assertEquals(6, todayOne.years)
+    }
+
+    @Test
+    fun duplicateCheckinsForADayActAsOne() {
+        val store = ZenStore(createSqlDriver(null)) { 1L }
+        val actions = HabitActions(store) { 1L }
+        store.put(EntityTypes.habit, Habit(id = "h", name = "Read"))
+        val day = LocalDate(2026, 11, 8)
+        actions.checkIn("h", day, null) // ZenTask's own check-in first…
+        store.put(EntityTypes.habitCheckin, HabitCheckin(id = "tt_9", habitId = "h", stamp = 20261108, status = 2, value = 1.0)) // …then TickTick's
+        assertEquals(setOf(day), actions.doneDays("h"))
+        actions.checkIn("h", day, null) // toggle off clears both
+        assertEquals(emptySet(), actions.doneDays("h"))
+        assertEquals(false, HabitBoard.rows(store.list(EntityTypes.habit), store.list(EntityTypes.habitCheckin), day).single().doneToday)
+        actions.checkIn("h", day, null)
+        assertEquals(setOf(day), actions.doneDays("h"))
+        actions.clear("h", day)
+        assertEquals(emptySet(), actions.doneDays("h"))
+    }
+
+    @Test
+    fun deletedHabitTakesNoCheckins() {
+        val store = ZenStore(createSqlDriver(null)) { 1L }
+        val actions = HabitActions(store) { 1L }
+        store.put(EntityTypes.habit, Habit(id = "h", name = "Read"))
+        actions.delete("h")
+        actions.checkIn("h", LocalDate(2026, 11, 8), null)
+        assertEquals(emptyList(), store.list(EntityTypes.habitCheckin).filter { !it.deleted })
+    }
+
+    @Test
+    fun yearlyCountdownInTheFutureCountsToItsOwnDate() {
+        val c = Countdown(id = "a", name = "First anniversary", date = 20280101, repeat = "yearly", type = "ANNIVERSARY")
+        val info = CountdownQueries.next(c, LocalDate(2026, 11, 8))
+        assertEquals(LocalDate(2028, 1, 1), info.date)
+        assertEquals(0, info.years)
+    }
+
+    @Test
+    fun everyOtherDayHabitWithoutStartDateAnchorsOnCreation() {
+        val created = LocalDate(2026, 11, 1).atStartOfDayIn(TimeZone.UTC).toEpochMilliseconds()
+        val h = Habit(id = "h", name = "Run", repeatRule = "RRULE:FREQ=DAILY;INTERVAL=2", createdAt = created)
+        assertEquals(true, HabitSchedule.isDue(h, LocalDate(2026, 11, 1), TimeZone.UTC))
+        assertEquals(false, HabitSchedule.isDue(h, LocalDate(2026, 11, 2), TimeZone.UTC))
+        val done = setOf(LocalDate(2026, 11, 3), LocalDate(2026, 11, 5), LocalDate(2026, 11, 7))
+        assertEquals(3, HabitStats.of(h, done, LocalDate(2026, 11, 8), TimeZone.UTC).currentStreak)
+    }
+
+    @Test
+    fun editingFromAStaleCopyKeepsNewerFields() {
+        val store = ZenStore(createSqlDriver(null)) { 1L }
+        val habits = HabitActions(store) { 1L }
+        val opened = habits.create("Water", null, null, Habit.TYPE_REAL, 8.0, 1.0, "cups", "RRULE:FREQ=DAILY;INTERVAL=1")
+        store.update(EntityTypes.habit, opened.id) { it.copy(goal = 10.0) } // arrives by sync while the sheet is open
+        habits.update(opened, "Drink water", null, null, Habit.TYPE_REAL, 8.0, 1.0, "cups", "RRULE:FREQ=DAILY;INTERVAL=1")
+        val now = store.get(EntityTypes.habit, opened.id)!!
+        assertEquals("Drink water", now.name)
+        assertEquals(10.0, now.goal, "the untouched goal isn't reverted")
+
+        val cds = CountdownActions(store) { 1L }
+        val c = cds.create("Trip", 20270120, "COUNTDOWN", "none", null, null, "", true)
+        store.update(EntityTypes.countdown, c.id) { it.copy(note = "book hotel") }
+        cds.update(c, "Japan trip", 20270120, "COUNTDOWN", "none", null, null, "", true)
+        assertEquals("book hotel", store.get(EntityTypes.countdown, c.id)!!.note)
     }
 }

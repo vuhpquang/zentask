@@ -410,6 +410,13 @@ class McpToolsTest {
         val read = habits.single { it["name"]!!.jsonPrimitive.content == "Read" }
         assertEquals("Mon, Wed", read["schedule"]!!.jsonPrimitive.content)
         assertEquals(1, read["total_days"]!!.jsonPrimitive.int)
+        assertTrue(client.tool(token, "check_in_habit", """{"habit":"water","amount":-2}""").second, "negative amount")
+        val (half, he) = client.tool(token, "check_in_habit", """{"habit":"water","amount":0.5}""")
+        assertFalse(he, half)
+        assertEquals(3.5, obj(half)["today_value"]!!.jsonPrimitive.content.toDouble())
+        client.tool(token, "create_habit", """{"name":"Read news"}""")
+        val (amb, ambErr) = client.tool(token, "check_in_habit", """{"habit":"rea"}""")
+        assertTrue(ambErr && amb.contains("several"), amb)
         val (undo, ue) = client.tool(token, "check_in_habit", """{"habit":"Read","date":"2026-11-02","undo":true}""")
         assertFalse(ue, undo)
         assertEquals(0, obj(client.tool(token, "list_habits").first)["habits"]!!.jsonArray.map { it.jsonObject }.single { it["name"]!!.jsonPrimitive.content == "Read" }["total_days"]!!.jsonPrimitive.int)

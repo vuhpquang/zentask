@@ -281,7 +281,7 @@ private struct HabitDetail: View {
                     .fixedSize()
                     .help("More")
                 }
-                CheckInCard(row: row, color: color)
+                CheckInCard(row: row, color: color).id(row.habit.id)
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: Theme.Space.m), count: 4), spacing: Theme.Space.m) {
                     StatCard(title: "Current streak", value: "\(row.stats.currentStreak)", unit: row.stats.unit, symbol: "flame.fill", tint: .orange)
                     StatCard(title: "Longest streak", value: "\(row.stats.longestStreak)", unit: row.stats.unit, symbol: "trophy.fill", tint: .yellow)

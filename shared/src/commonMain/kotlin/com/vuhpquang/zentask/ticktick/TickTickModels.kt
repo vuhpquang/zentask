@@ -150,6 +150,8 @@ data class TtCountdown(
     val color: String? = null,
     val remark: String? = null,
     val sortOrder: Long? = null,
+    /** e.g. `RRULE:FREQ=YEARLY;INTERVAL=1` (format unverified; birthdays/anniversaries repeat regardless). */
+    val repeatFlag: String? = null,
 )
 
 /**

@@ -121,6 +121,7 @@ Smart list mặc định (tính, không lưu): All, Today, Tomorrow, Next 7 Days
 - **Chặn lệch đồng hồ**: server từ chối thay đổi có clock vượt giờ server hơn 24 giờ (`clock_skew`), để một máy chỉnh sai giờ không khoá cứng trường đó. Clock cục bộ đi trước đồng hồ máy hơn 12 giờ thì được đặt lại theo giờ máy.
 - **Mật khẩu server**: lấy từ `.env`, server chỉ giữ bản băm PBKDF2 trong bộ nhớ. Đăng nhập sai 5 lần trong 15 phút thì khoá đăng nhập (toàn cục, vì mọi request đi qua cloudflared).
 - **Trường dạng danh sách** (`tags`, `reminders`): v1 merge theo LWW của cả trường. Chấp nhận được khi mới chỉ có một client. Nếu sau này thấy mất tag giữa các thiết bị thì nâng lên set-merge (add/remove theo từng phần tử) ở P7.
+- **Check-in habit (P6):** mỗi ngày một id cố định `chk_<habitId>_<yyyyMMdd>`; `value`, `status`, `checkinAt` luôn ghi cùng một clock nên merge không ghép value của máy này với status của máy kia. Nếu một ngày có cả check-in của ZenTask lẫn của TickTick thì coi là một (xong nếu một trong hai xong, số lượng lấy lớn hơn; bỏ check thì xoá cả hai). Hai máy cùng **offline** cộng số lượng cho cùng một ngày thì máy ghi sau thắng (mất một lần cộng) — chấp nhận, vì một người dùng hiếm khi làm vậy.
 
 ## 8. Auth & bảo mật
 

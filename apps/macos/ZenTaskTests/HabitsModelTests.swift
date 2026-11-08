@@ -31,7 +31,7 @@ final class HabitsModelTests: XCTestCase {
         let m = model()
         var d = HabitDraft()
         d.name = "Read"
-        m.save(d, editing: nil)
+        m.save(d, original: nil)
         await m.reload()
         let row = try XCTUnwrap(m.selected)
         let today = m.date(m.today)
@@ -54,7 +54,7 @@ final class HabitsModelTests: XCTestCase {
         d.isNumber = true
         d.goal = 3
         d.unit = "cups"
-        m.save(d, editing: nil)
+        m.save(d, original: nil)
         await m.reload()
         let today = m.date(m.today)
         m.tap(try XCTUnwrap(m.selected), on: today)
@@ -74,7 +74,7 @@ final class HabitsModelTests: XCTestCase {
         let m = model()
         var d = HabitDraft()
         d.name = "Old"
-        m.save(d, editing: nil)
+        m.save(d, original: nil)
         await m.reload()
         m.archive(try XCTUnwrap(m.selected).habit)
         await m.reload()
@@ -99,20 +99,41 @@ final class HabitsModelTests: XCTestCase {
         d.type = "BIRTHDAY"
         d.yearly = true
         d.date = m.calendar.date(from: DateComponents(year: 1960, month: 11, day: 10))!
-        m.save(d, editing: nil)
+        m.save(d, original: nil)
         await m.reload()
         let card = try XCTUnwrap(m.cards.first)
         XCTAssertEqual(card.countdown.date, 19601110)
         XCTAssertEqual(card.countdown.`repeat`, "yearly")
         XCTAssertGreaterThan(card.years, 60)
         var edit = CountdownDraft(card.countdown, calendar: m.calendar)
-        XCTAssertEqual(edit, d)
+        XCTAssertEqual([edit.name, edit.type, "\(edit.yearly)", "\(edit.stamp(m.calendar))"], [d.name, d.type, "\(d.yearly)", "19601110"])
         edit.name = "Mẹ"
-        m.save(edit, editing: card.countdown.id)
+        m.save(edit, original: card.countdown)
         await m.reload()
         XCTAssertEqual(m.cards.map(\.countdown.name), ["Mẹ"])
         m.archive(try XCTUnwrap(m.cards.first).countdown)
         await m.reload()
         XCTAssertTrue(m.active.isEmpty)
+    }
+
+    func testEditingKeepsRulesAndIconsTheEditorCantShow() async throws {
+        let m = model()
+        let h = m.core.habitActions.create(name: "Run", icon: "habit_running", color: nil, type: "BOOLEAN", goal: 1, step: 1, unit: "",
+                                           repeatRule: "RRULE:FREQ=DAILY;INTERVAL=2")
+        var d = HabitDraft(habit: h)
+        d.name = "Run 5k"
+        m.save(d, original: h)
+        await m.reload()
+        let saved = try XCTUnwrap(m.rows.first?.habit)
+        XCTAssertEqual(saved.name, "Run 5k")
+        XCTAssertEqual(saved.repeatRule, "RRULE:FREQ=DAILY;INTERVAL=2", "every 2 days survives a rename")
+        XCTAssertEqual(saved.icon, "habit_running", "TickTick icon name kept")
+        var changed = HabitDraft(habit: saved)
+        changed.frequency = .timesAWeek(3)
+        changed.icon = "🏃"
+        m.save(changed, original: saved)
+        await m.reload()
+        XCTAssertEqual(m.rows.first?.habit.repeatRule, "RRULE:FREQ=WEEKLY;TT_TIMES=3")
+        XCTAssertEqual(m.rows.first?.habit.icon, "🏃")
     }
 }

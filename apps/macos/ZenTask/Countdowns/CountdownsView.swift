@@ -150,6 +150,7 @@ struct CountdownEditor: View {
     @Environment(\.dismiss) private var dismiss
     let editing: CountdownSheet
     @State private var draft = CountdownDraft()
+    @State private var original: Countdown?
 
     private var editingId: String? { if case .edit(let id) = editing { id } else { nil } }
 
@@ -193,7 +194,7 @@ struct CountdownEditor: View {
                 Button("Cancel", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
                 Spacer()
                 Button(editingId == nil ? "Create" : "Save") {
-                    countdowns.save(draft, editing: editingId)
+                    countdowns.save(draft, original: original)
                     dismiss()
                 }
                 .keyboardShortcut(.defaultAction)
@@ -205,6 +206,7 @@ struct CountdownEditor: View {
         .frame(width: Theme.Countdown.sheetWidth)
         .onAppear {
             if let id = editingId, let c = countdowns.cards.first(where: { $0.countdown.id == id })?.countdown {
+                original = c
                 draft = CountdownDraft(c, calendar: countdowns.calendar)
             }
         }

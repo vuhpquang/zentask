@@ -72,8 +72,12 @@ class ZenStore(
      * Pass [base] — the value the edit started from — whenever [value] is an edited copy: only the fields
      * the edit changed are written, so a stale copy can't revert newer edits from other devices. Without
      * [base] every differing field is written (creating, importing). Prefer [update] for edits.
+     *
+     * [force] names fields that must share one clock whenever the record is written (e.g. a check-in's
+     * value and status): they are stamped even when unchanged, so per-field merge can't pair one device's
+     * value with another device's status.
      */
-    fun <T : Entity> put(type: EntityType<T>, value: T, base: T? = null): Unit = lock.withLock {
+    fun <T : Entity> put(type: EntityType<T>, value: T, base: T? = null, force: Set<String> = emptySet()): Unit = lock.withLock {
         require(type.clientWritable) { "${type.name} is server-owned" }
         var changed = false
         db.transaction {
@@ -85,11 +89,12 @@ class ZenStore(
                     (baseFields == null || baseFields[it] != incoming[it])
             }
             if (changedKeys.isEmpty()) return@transaction
+            val written = changedKeys + force.filter { it in incoming && it !in changedKeys }
             val now = wall()
             val clock = hlc.tick().encode()
             val fields = LinkedHashMap(existing?.fields.orEmpty())
             val clocks = LinkedHashMap(existing?.clocks.orEmpty())
-            for (key in changedKeys) {
+            for (key in written) {
                 fields[key] = incoming.getValue(key)
                 clocks[key] = clock
             }
@@ -107,9 +112,9 @@ class ZenStore(
     }
 
     /** Applies [transform] to the current value atomically; null when the record is missing or undecodable. */
-    fun <T : Entity> update(type: EntityType<T>, id: String, transform: (T) -> T): T? = lock.withLock {
+    fun <T : Entity> update(type: EntityType<T>, id: String, force: Set<String> = emptySet(), transform: (T) -> T): T? = lock.withLock {
         val current = get(type, id) ?: return@withLock null
-        put(type, transform(current), base = current)
+        put(type, transform(current), base = current, force = force)
         get(type, id)
     }
 

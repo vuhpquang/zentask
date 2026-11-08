@@ -63,7 +63,7 @@ final class CalendarModel {
     static func mondayFirst() -> Calendar {
         var c = Calendar(identifier: .gregorian)
         c.firstWeekday = 2
-        c.timeZone = .current
+        c.timeZone = .autoupdatingCurrent
         return c
     }
 

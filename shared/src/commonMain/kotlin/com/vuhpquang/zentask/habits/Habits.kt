@@ -8,6 +8,9 @@ import com.vuhpquang.zentask.store.ZenStore
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Instant
 import kotlinx.datetime.daysUntil
 import kotlinx.datetime.isoDayNumber
 import kotlinx.datetime.minus
@@ -41,7 +44,8 @@ object HabitSchedule {
     /** N times a week, or null for day-based schedules. */
     fun weekTarget(h: Habit): Int? = parts(h)["TT_TIMES"]?.toIntOrNull()?.takeIf { it > 0 }
 
-    fun isDue(h: Habit, date: LocalDate): Boolean {
+    /** Every-N-days habits count from their start date, or the day they were created ([zone]). */
+    fun isDue(h: Habit, date: LocalDate, zone: TimeZone = TimeZone.currentSystemDefault()): Boolean {
         val p = parts(h)
         if (p["FREQ"] == "WEEKLY") {
             if (weekTarget(h) != null) return true
@@ -49,7 +53,9 @@ object HabitSchedule {
             return days.isEmpty() || date.dayOfWeek in days
         }
         val interval = p["INTERVAL"]?.toIntOrNull()?.takeIf { it > 1 } ?: return true
-        val start = h.targetStartDate?.let(Stamp::date) ?: return true
+        val start = h.targetStartDate?.let(Stamp::date)
+            ?: h.createdAt.takeIf { it > 0 }?.let { Instant.fromEpochMilliseconds(it).toLocalDateTime(zone).date }
+            ?: return true
         return start.daysUntil(date).mod(interval) == 0
     }
 
@@ -67,16 +73,20 @@ object HabitSchedule {
 /** Streaks and totals; [unit] is "days", or "weeks" for N-times-a-week habits. */
 data class HabitStats(val currentStreak: Int, val longestStreak: Int, val totalDays: Int, val unit: String) {
     companion object {
-        fun of(h: Habit, done: Set<LocalDate>, today: LocalDate): HabitStats {
+        /** Days walked back at most (bounds the work for a stray ancient check-in). */
+        private const val MAX_DAYS = 3660
+
+        fun of(h: Habit, done: Set<LocalDate>, today: LocalDate, zone: TimeZone = TimeZone.currentSystemDefault()): HabitStats {
             val target = HabitSchedule.weekTarget(h)
-            if (target != null) return weekly(target, done, today)
+            if (target != null) return weekly(target, done.filterTo(HashSet()) { it <= today }, today)
             // Walk back over due days; today not done yet doesn't break the streak.
             var current = 0
             var d = today
             var first = true
-            val earliest = done.minOrNull() ?: today
+            val floor = today.minus(MAX_DAYS, DateTimeUnit.DAY)
+            val earliest = maxOf(done.minOrNull() ?: today, floor)
             while (d >= earliest) {
-                if (HabitSchedule.isDue(h, d)) {
+                if (HabitSchedule.isDue(h, d, zone)) {
                     if (d in done) current++ else if (!(first && d == today)) break
                 }
                 first = false
@@ -86,7 +96,7 @@ data class HabitStats(val currentStreak: Int, val longestStreak: Int, val totalD
             var run = 0
             d = earliest
             while (d <= today) {
-                if (HabitSchedule.isDue(h, d)) {
+                if (HabitSchedule.isDue(h, d, zone)) {
                     if (d in done) { run++; longest = maxOf(longest, run) } else if (d != today) run = 0
                 }
                 d = d.plus(1, DateTimeUnit.DAY)
@@ -132,8 +142,10 @@ class HabitActions(
         return h
     }
 
-    fun update(id: String, name: String, icon: String?, color: String?, type: String, goal: Double, step: Double, unit: String, repeatRule: String) {
-        store.update(EntityTypes.habit, id) { it.copy(name = name.trim(), icon = icon, color = color, type = type, goal = goal, step = step, unit = unit, repeatRule = repeatRule) }
+    /** Saves an edit made from [original] (the copy the editor opened): only the fields changed in the editor are written. */
+    fun update(original: Habit, name: String, icon: String?, color: String?, type: String, goal: Double, step: Double, unit: String, repeatRule: String) {
+        val edited = original.copy(name = name.trim(), icon = icon, color = color, type = type, goal = goal, step = step, unit = unit, repeatRule = repeatRule)
+        if (store.get(EntityTypes.habit, original.id)?.deleted == false) store.put(EntityTypes.habit, edited, base = original)
     }
 
     fun archive(id: String) {
@@ -153,43 +165,62 @@ class HabitActions(
         }
     }
 
-    fun checkin(habitId: String, date: LocalDate): HabitCheckin? {
+    /** Every live check-in for the day (normally one; a ZenTask one and an imported TickTick one can coexist). */
+    fun checkins(habitId: String, date: LocalDate): List<HabitCheckin> {
         val stamp = Stamp.of(date)
-        return store.idsWhere(EntityTypes.habitCheckin, "habitId", habitId).mapNotNull { store.get(EntityTypes.habitCheckin, it) }.firstOrNull { it.stamp == stamp && !it.deleted }
+        return store.idsWhere(EntityTypes.habitCheckin, "habitId", habitId).mapNotNull { store.get(EntityTypes.habitCheckin, it) }
+            .filter { it.stamp == stamp && !it.deleted }
+            .sortedWith(compareBy({ it.ticktickId == null }, { it.id }))
     }
+
+    /** The day's canonical check-in: the imported one when there is one, so TickTick and ZenTask agree. */
+    fun checkin(habitId: String, date: LocalDate): HabitCheckin? = checkins(habitId, date).firstOrNull()
 
     fun doneDays(habitId: String): Set<LocalDate> =
         store.idsWhere(EntityTypes.habitCheckin, "habitId", habitId).mapNotNull { store.get(EntityTypes.habitCheckin, it) }
-            .filter { it.status == 2 }.mapNotNullTo(HashSet()) { Stamp.date(it.stamp) }
+            .filter { it.status == 2 && !it.deleted }.mapNotNullTo(HashSet()) { Stamp.date(it.stamp) }
 
     /**
-     * Yes/no habit: toggles done. Number habit: adds [amount] (default the habit's step); done once the
-     * goal is reached.
+     * Yes/no habit: toggles done (any check-in of the day counts; undoing clears them all). Number habit:
+     * adds [amount] (default the habit's step) to the day's total; done once the goal is reached.
+     * Value, status and time are always written together ([CHECKIN_FIELDS]) so a merge keeps them paired.
      */
     fun checkIn(habitId: String, date: LocalDate, amount: Double?) {
         store.inTransaction {
-            val h = store.get(EntityTypes.habit, habitId) ?: return@inTransaction
+            val h = store.get(EntityTypes.habit, habitId)?.takeIf { !it.deleted } ?: return@inTransaction
             val now = wall()
-            val existing = checkin(habitId, date)
-            val next: (HabitCheckin) -> HabitCheckin = { c ->
-                if (h.type == Habit.TYPE_REAL) {
-                    val value = c.value + (amount ?: h.step)
-                    c.copy(value = value, goal = h.goal, status = if (value >= h.goal) 2 else 1, checkinAt = now)
-                } else {
-                    val done = c.status == 2
-                    c.copy(value = if (done) 0.0 else 1.0, goal = h.goal, status = if (done) 0 else 2, checkinAt = now)
-                }
-            }
-            if (existing != null) {
-                store.update(EntityTypes.habitCheckin, existing.id, next)
+            val all = checkins(habitId, date)
+            if (h.type == Habit.TYPE_REAL) {
+                val total = (all.maxOfOrNull { it.value } ?: 0.0) + (amount ?: h.step)
+                val status = if (total >= h.goal) 2 else if (total > 0) 1 else 0
+                write(habitId, date, all.firstOrNull(), now) { it.copy(value = maxOf(0.0, total), goal = h.goal, status = status, checkinAt = now) }
+                all.drop(1).forEach { reset(it) }
+            } else if (all.any { it.status == 2 }) {
+                all.forEach { reset(it) }
             } else {
-                store.put(EntityTypes.habitCheckin, next(HabitCheckin(id = "chk_${habitId}_${Stamp.of(date)}", createdAt = now, habitId = habitId, stamp = Stamp.of(date))))
+                write(habitId, date, all.firstOrNull(), now) { it.copy(value = 1.0, goal = h.goal, status = 2, checkinAt = now) }
             }
         }
     }
 
     fun clear(habitId: String, date: LocalDate) {
-        checkin(habitId, date)?.let { c -> store.update(EntityTypes.habitCheckin, c.id) { it.copy(value = 0.0, status = 0) } }
+        store.inTransaction { checkins(habitId, date).forEach { reset(it) } }
+    }
+
+    private fun write(habitId: String, date: LocalDate, existing: HabitCheckin?, now: Long, change: (HabitCheckin) -> HabitCheckin) {
+        if (existing != null) {
+            store.update(EntityTypes.habitCheckin, existing.id, CHECKIN_FIELDS, change)
+        } else {
+            store.put(EntityTypes.habitCheckin, change(HabitCheckin(id = "chk_${habitId}_${Stamp.of(date)}", createdAt = now, habitId = habitId, stamp = Stamp.of(date))))
+        }
+    }
+
+    private fun reset(c: HabitCheckin) {
+        if (c.value != 0.0 || c.status != 0) store.update(EntityTypes.habitCheckin, c.id, CHECKIN_FIELDS) { it.copy(value = 0.0, status = 0) }
+    }
+
+    private companion object {
+        val CHECKIN_FIELDS = setOf("value", "status", "checkinAt")
     }
 }
 
@@ -200,6 +231,7 @@ object CountdownQueries {
     fun next(c: Countdown, today: LocalDate): CountdownInfo {
         val original = Stamp.date(c.date) ?: return CountdownInfo(today, 0, null)
         if (c.repeat != "yearly") return CountdownInfo(original, today.daysUntil(original), null)
+        if (original >= today) return CountdownInfo(original, today.daysUntil(original), 0) // the first one is still ahead
         var year = today.year
         var occurrence = onYear(original, year)
         if (occurrence < today) { year++; occurrence = onYear(original, year) }
@@ -227,10 +259,10 @@ class CountdownActions(
         return c
     }
 
-    fun update(id: String, name: String, date: Int, type: String, repeat: String, color: String?, icon: String?, note: String, showInCalendar: Boolean) {
-        store.update(EntityTypes.countdown, id) {
-            it.copy(name = name.trim(), date = date, type = type, repeat = repeat, color = color, icon = icon, note = note, showInCalendar = showInCalendar)
-        }
+    /** Saves an edit made from [original]: only the fields changed in the editor are written. */
+    fun update(original: Countdown, name: String, date: Int, type: String, repeat: String, color: String?, icon: String?, note: String, showInCalendar: Boolean) {
+        val edited = original.copy(name = name.trim(), date = date, type = type, repeat = repeat, color = color, icon = icon, note = note, showInCalendar = showInCalendar)
+        if (store.get(EntityTypes.countdown, original.id)?.deleted == false) store.put(EntityTypes.countdown, edited, base = original)
     }
 
     fun archive(id: String) {

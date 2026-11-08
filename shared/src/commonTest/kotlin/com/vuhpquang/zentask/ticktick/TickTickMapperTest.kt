@@ -44,6 +44,21 @@ internal const val BATCH_JSON = """
 """
 
 class TickTickMapperTest {
+    @Test
+    fun birthdaysAndAnniversariesRepeatYearly() {
+        val out = TickTickMapper.map(
+            TickTickSnapshot(
+                countdowns = listOf(
+                    TtCountdown(id = "b", name = "Mom", date = 19601110, type = "birthday"),
+                    TtCountdown(id = "t", name = "Trip", date = 20270120, type = "countdown"),
+                    TtCountdown(id = "y", name = "Tết", date = 20270206, type = "holiday", repeatFlag = "RRULE:FREQ=YEARLY;INTERVAL=1"),
+                ),
+                habitsAvailable = true,
+            ),
+        ).map { it.entity }.filterIsInstance<com.vuhpquang.zentask.model.Countdown>().associate { it.name to it.repeat }
+        assertEquals(mapOf("Mom" to "yearly", "Trip" to "none", "Tết" to "yearly"), out)
+    }
+
     private val snapshot = TickTickSnapshot.fromBatch(TickTickJson.decodeFromString(TtBatch.serializer(), BATCH_JSON))
     private val mapped = TickTickMapper.map(snapshot)
     private inline fun <reified T> all(): List<T> = mapped.map { it.entity }.filterIsInstance<T>()

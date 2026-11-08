@@ -180,4 +180,25 @@ class SyncEndToEndTest {
             assertEquals(setOf("before-backup", "after-backup"), b.store.list(EntityTypes.task).map { it.id }.toSet())
         }
     }
+
+    @Test
+    fun numberCheckinsNeverMergeIntoDoneBelowGoal() = testApplication {
+        server()
+        val a = device("A")
+        val b = device("B")
+        val habit = com.vuhpquang.zentask.model.Habit(id = "h", name = "Water", type = com.vuhpquang.zentask.model.Habit.TYPE_REAL, goal = 5.0)
+        a.store.put(EntityTypes.habit, habit)
+        val day = kotlinx.datetime.LocalDate(2026, 11, 8)
+        com.vuhpquang.zentask.habits.HabitActions(a.store) { wall }.checkIn("h", day, 3.0)
+        a.sync(); b.sync()
+        wall += 1_000
+        com.vuhpquang.zentask.habits.HabitActions(a.store) { wall }.checkIn("h", day, 2.0) // A reaches the goal: 5, done
+        wall += 1_000
+        com.vuhpquang.zentask.habits.HabitActions(b.store) { wall }.checkIn("h", day, 0.5) // B, later, offline: 3.5, not done
+        a.sync(); b.sync(); a.sync()
+        for (d in listOf(a, b)) {
+            val c = com.vuhpquang.zentask.habits.HabitActions(d.store) { wall }.checkin("h", day)!!
+            assertEquals(c.value >= 5.0, c.status == 2, "status must agree with value, got $c")
+        }
+    }
 }

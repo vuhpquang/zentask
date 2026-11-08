@@ -8,6 +8,7 @@ struct HabitEditor: View {
     let editing: HabitSheet
     @State private var draft = HabitDraft()
     @State private var kind = 0
+    @State private var original: Habit?
 
     private var editingId: String? { if case .edit(let id) = editing { id } else { nil } }
 
@@ -74,7 +75,7 @@ struct HabitEditor: View {
                         }
                     }
                 case .timesAWeek(let n):
-                    Stepper("\(n) times a week", value: Binding(get: { n }, set: { draft.frequency = .timesAWeek($0) }), in: 1...6)
+                    Stepper("\(n) times a week", value: Binding(get: { n }, set: { draft.frequency = .timesAWeek($0) }), in: 1...7)
                 case .daily:
                     EmptyView()
                 }
@@ -107,7 +108,7 @@ struct HabitEditor: View {
                 Button("Cancel", role: .cancel) { dismiss() }.keyboardShortcut(.cancelAction)
                 Spacer()
                 Button(editingId == nil ? "Create" : "Save") {
-                    habits.save(draft, editing: editingId)
+                    habits.save(draft, original: original)
                     dismiss()
                 }
                 .keyboardShortcut(.defaultAction)
@@ -119,6 +120,7 @@ struct HabitEditor: View {
         .frame(width: Theme.Habits.sheetWidth)
         .onAppear {
             if let id = editingId, let h = habits.rows.first(where: { $0.habit.id == id })?.habit {
+                original = h
                 draft = HabitDraft(habit: h)
             }
             kind = switch draft.frequency { case .daily: 0; case .weekdays: 1; case .timesAWeek: 2 }

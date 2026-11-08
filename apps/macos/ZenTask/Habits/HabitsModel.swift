@@ -38,6 +38,10 @@ final class HabitsModel {
         guard !started else { return }
         started = true
         _Concurrency.Task { await reload() }
+        // "Today" moves at midnight (or with a time-zone change) even when no record changes.
+        _Concurrency.Task {
+            for await _ in NotificationCenter.default.notifications(named: .NSCalendarDayChanged) { await reload() }
+        }
         _Concurrency.Task {
             for await _ in core.recordChanges {
                 pending?.cancel()
@@ -138,14 +142,14 @@ final class HabitsModel {
         core.habitClear(habitId: row.habit.id, stamp: stamp(day))
     }
 
-    func save(_ draft: HabitDraft, editing id: String?) {
+    /// [original] = the habit as the editor opened it (nil = new): only what the editor changed is written.
+    func save(_ draft: HabitDraft, original: Habit?) {
         let a = core.habitActions
-        let icon = draft.icon.trimmingCharacters(in: .whitespaces)
-        if let id {
-            a.update(id: id, name: draft.name, icon: icon.isEmpty ? nil : icon, color: draft.color, type: draft.type,
+        if let original {
+            a.update(original: original, name: draft.name, icon: draft.storedIcon, color: draft.color, type: draft.type,
                      goal: draft.goal, step: draft.step, unit: draft.unit, repeatRule: draft.repeatRule)
         } else {
-            let h = a.create(name: draft.name, icon: icon.isEmpty ? nil : icon, color: draft.color, type: draft.type,
+            let h = a.create(name: draft.name, icon: draft.storedIcon, color: draft.color, type: draft.type,
                              goal: draft.goal, step: draft.step, unit: draft.unit, repeatRule: draft.repeatRule)
             selection = h.id
         }
@@ -178,6 +182,12 @@ struct HabitDraft: Equatable {
     var step: Double = 1
     var unit = ""
     var frequency: Frequency = .daily
+    /// What the habit had when the editor opened: kept unless the user changes that part
+    /// (TickTick icon names and rules the editor can't show, like every 2 days, survive a rename).
+    private var originalRule: String?
+    private var originalFrequency: Frequency?
+    private var originalIcon: String?
+    private var originalIconText = ""
 
     private static let codes = [1: "SU", 2: "MO", 3: "TU", 4: "WE", 5: "TH", 6: "FR", 7: "SA"]
 
@@ -186,6 +196,9 @@ struct HabitDraft: Equatable {
     init(habit: Habit) {
         name = habit.name
         icon = HabitLook.emoji(habit.icon) ?? ""
+        originalIcon = habit.icon
+        originalIconText = icon
+        originalRule = habit.repeatRule
         color = habit.color
         isNumber = habit.type == Habit.companion.TYPE_REAL
         goal = habit.goal
@@ -201,12 +214,21 @@ struct HabitDraft: Equatable {
             let set = Set(days.split(separator: ",").compactMap { code in Self.codes.first { $0.value == code.uppercased() }?.key })
             frequency = set.isEmpty || set.count == 7 ? .daily : .weekdays(set)
         }
+        originalFrequency = frequency
+    }
+
+    /// The icon to store: the original one (even a TickTick icon name) unless the field was edited.
+    var storedIcon: String? {
+        let typed = icon.trimmingCharacters(in: .whitespaces)
+        if originalFrequency != nil, typed == originalIconText { return originalIcon }
+        return typed.isEmpty ? nil : typed
     }
 
     var type: String { isNumber ? Habit.companion.TYPE_REAL : Habit.companion.TYPE_BOOLEAN }
 
     var repeatRule: String {
-        switch frequency {
+        if let originalRule, frequency == originalFrequency { return originalRule }
+        return switch frequency {
         case .daily: "RRULE:FREQ=DAILY;INTERVAL=1"
         case .weekdays(let set): "RRULE:FREQ=WEEKLY;BYDAY=" + [2, 3, 4, 5, 6, 7, 1].filter(set.contains).compactMap { Self.codes[$0] }.joined(separator: ",")
         case .timesAWeek(let n): "RRULE:FREQ=WEEKLY;TT_TIMES=\(n)"

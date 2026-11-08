@@ -97,7 +97,7 @@ object CalendarQueries {
         return countdowns.filter { !it.deleted && it.archivedAt == null && it.showInCalendar }.flatMap { c ->
             val original = Stamp.date(c.date) ?: return@flatMap emptyList()
             val dates = if (c.repeat == "yearly") (first.year..last.year).map { CountdownQueries.onYear(original, it) } else listOf(original)
-            dates.filter { it >= first && it < last }.map { d ->
+            dates.filter { it >= first && it < last && it >= original }.map { d ->
                 CalendarEntry(
                     "${c.id}@${Stamp.of(d)}", "countdown", c.name, d.atStartOfDayIn(zone).toEpochMilliseconds(),
                     d.plus(1, DateTimeUnit.DAY).atStartOfDayIn(zone).toEpochMilliseconds(), true, c.color,

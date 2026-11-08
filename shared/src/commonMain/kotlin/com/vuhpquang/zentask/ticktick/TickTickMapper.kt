@@ -156,6 +156,7 @@ object TickTickMapper {
                 Countdown(
                     id = id(c.id), ticktickId = c.id, name = c.name.orEmpty(), date = c.date ?: 0,
                     type = c.type?.uppercase() ?: "COUNTDOWN", color = c.color, note = c.remark.orEmpty(), sortOrder = c.sortOrder ?: 0,
+                    repeat = if (c.repeatFlag?.contains("YEARLY", ignoreCase = true) == true || c.type?.uppercase() in setOf("BIRTHDAY", "ANNIVERSARY")) "yearly" else "none",
                 ),
             )
         }

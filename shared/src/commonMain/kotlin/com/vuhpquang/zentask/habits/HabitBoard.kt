@@ -26,7 +26,7 @@ data class CountdownCard(val countdown: Countdown, val dateMillis: Long, val day
 
 /** Builds the Habits and Countdown screens from all records in one pass (pure). */
 object HabitBoard {
-    fun rows(habits: List<Habit>, checkins: List<HabitCheckin>, today: LocalDate): List<HabitRow> {
+    fun rows(habits: List<Habit>, checkins: List<HabitCheckin>, today: LocalDate, zone: TimeZone = TimeZone.currentSystemDefault()): List<HabitRow> {
         val byHabit = checkins.filter { !it.deleted }.groupBy { it.habitId }
         val todayStamp = Stamp.of(today)
         return habits.filter { !it.deleted }
@@ -34,16 +34,17 @@ object HabitBoard {
             .map { h ->
                 val mine = byHabit[h.id].orEmpty()
                 val done = mine.filter { it.status == 2 }.mapTo(HashSet()) { it.stamp }
-                val values = mine.filter { it.value > 0 }.associate { it.stamp to it.value }
+                // A day can carry two check-ins (ZenTask's and TickTick's): done if either is, the larger amount.
+                val values = mine.filter { it.value > 0 }.groupBy { it.stamp }.mapValues { (_, cs) -> cs.maxOf { it.value } }
                 HabitRow(
                     habit = h,
-                    stats = HabitStats.of(h, done.mapNotNullTo(HashSet()) { Stamp.date(it) }, today),
+                    stats = HabitStats.of(h, done.mapNotNullTo(HashSet()) { Stamp.date(it) }, today, zone),
                     schedule = HabitSchedule.describe(h),
                     doneStamps = done,
                     values = values,
                     todayValue = values[todayStamp] ?: 0.0,
                     doneToday = todayStamp in done,
-                    dueToday = HabitSchedule.isDue(h, today),
+                    dueToday = HabitSchedule.isDue(h, today, zone),
                     archived = h.archivedAt != null,
                 )
             }
