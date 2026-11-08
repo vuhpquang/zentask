@@ -25,7 +25,7 @@ enum RailTab: Hashable, CaseIterable {
     }
 
     /// Areas built so far; the others show as dimmed until their phase ships.
-    var isAvailable: Bool { self == .tasks || self == .calendar }
+    var isAvailable: Bool { self != .search }
 
     var shortcut: KeyEquivalent {
         switch self {

@@ -92,6 +92,41 @@ enum Theme {
         static let topInset: CGFloat = 52
     }
 
+    /** Habits area (P6). */
+    enum Habits {
+        static let listMin: CGFloat = 420
+        static let listIdeal: CGFloat = 460
+        static let headerButton: CGFloat = 32
+        static let rowIcon: CGFloat = 40
+        static let heroIcon: CGFloat = 64
+        static let dot: CGFloat = 22
+        static let progressHeight: CGFloat = 6
+        static let bigCheck: CGFloat = 52
+        static let checkSymbol: CGFloat = 26
+        static let checkInHeight: CGFloat = 60
+        static let amountField: CGFloat = 80
+        static let addButton: CGFloat = 56
+        static let monthCell: CGFloat = 44
+        static let monthDot: CGFloat = 36
+        static let weekdayChip: CGFloat = 38
+        static let sheetWidth: CGFloat = 440
+        /// Tint behind the top of the detail pane.
+        static let wash: Double = 0.12
+        static let gradient = LinearGradient(colors: [Color(red: 0.36, green: 0.37, blue: 0.91), Color(red: 0.55, green: 0.36, blue: 0.96)], startPoint: .leading, endPoint: .trailing)
+    }
+
+    /** Countdown area (P6). */
+    enum Countdown {
+        static let cardMin: CGFloat = 230
+        static let cardHeight: CGFloat = 190
+        static let icon: CGFloat = 36
+        static let number: CGFloat = 44
+        static let iconFill: Double = 0.22
+        static let scrim: Double = 0.28
+        static let shadow: Double = 0.3
+        static let sheetWidth: CGFloat = 460
+    }
+
     enum Size {
         static let heroIcon: CGFloat = 44
         static let summaryWidth: CGFloat = 420

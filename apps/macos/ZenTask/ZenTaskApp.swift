@@ -5,6 +5,8 @@ struct ZenTaskApp: App {
     @State private var model: AppModel
     @State private var tasks: TasksModel
     @State private var calendar: CalendarModel
+    @State private var habits: HabitsModel
+    @State private var countdowns: CountdownsModel
 
     init() {
         if let dir = ProcessInfo.processInfo.environment["ZENTASK_SNAPSHOT"] {
@@ -16,6 +18,8 @@ struct ZenTaskApp: App {
         let tasks = TasksModel(core: model.core)
         _tasks = State(initialValue: tasks)
         _calendar = State(initialValue: CalendarModel(core: model.core))
+        _habits = State(initialValue: HabitsModel(core: model.core))
+        _countdowns = State(initialValue: CountdownsModel(core: model.core))
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
             tasks.reminders = Reminders(core: model.core)
             model.start()
@@ -28,6 +32,8 @@ struct ZenTaskApp: App {
                 .environment(model)
                 .environment(tasks)
                 .environment(calendar)
+                .environment(habits)
+                .environment(countdowns)
                 .onOpenURL { tasks.open($0) }
         }
         .defaultSize(width: 1100, height: 720)
@@ -65,6 +71,8 @@ struct MainWindow: View {
             Divider().ignoresSafeArea(.container, edges: .top)
             switch tab {
             case .calendar: CalendarView()
+            case .habits: HabitsView()
+            case .countdown: CountdownsView()
             default: TasksView()
             }
         }
