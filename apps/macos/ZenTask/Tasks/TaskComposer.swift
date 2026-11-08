@@ -24,10 +24,27 @@ struct TaskComposer: View {
     @State private var listId: String?
     @State private var priority: Int32 = 0
     @State private var tags: [String] = []
-    @State private var picking: Picker?
+    /// Highlighted suggestion while a `~` / `!` / `#` token is being typed.
+    @State private var highlight = 0
+    /// Esc closes the suggestions for the token being typed (until the text changes).
+    @State private var dismissedToken: String?
     @FocusState private var titleFocused: Bool
 
-    enum Picker: Identifiable { case list, priority, tag; var id: Self { self } }
+    /// A `~list`, `!priority` or `#tag` being typed at the end of the title: its kind, where it starts, the filter text.
+    struct Token: Equatable {
+        enum Kind { case list, priority, tag }
+        let kind: Kind
+        let start: String.Index
+        let query: String
+    }
+
+    struct Suggestion: Identifiable {
+        let id: String
+        let title: String
+        let symbol: String
+        let tint: Color
+        let pick: () -> Void
+    }
 
     var body: some View {
         let parsed = tasks.parse(title)
@@ -59,8 +76,23 @@ struct TaskComposer: View {
                     .font(.title3.weight(.medium))
                     .focused($titleFocused)
                     .onSubmit(add)
-                    .onChange(of: title) { old, new in trigger(old, new) }
-                    .popover(item: $picking, arrowEdge: .bottom) { which in pickerView(which) }
+                    .onChange(of: title) { _, _ in highlight = 0 }
+                    .onKeyPress(.downArrow) { move(1) }
+                    .onKeyPress(.upArrow) { move(-1) }
+                    .onKeyPress(.return) { chooseHighlighted() }
+                    .onKeyPress(.tab) { chooseHighlighted() }
+                    .onKeyPress(.escape) {
+                        guard let t = token else { return .ignored }
+                        dismissedToken = String(title[t.start...])
+                        return .handled
+                    }
+                    .overlay(alignment: .topLeading) {
+                        if let list = visibleSuggestions, !list.isEmpty {
+                            SuggestionList(items: list, highlight: min(highlight, list.count - 1)) { i in choose(list[i]) }
+                                .offset(x: Theme.Composer.suggestionIndent, y: Theme.Composer.suggestionOffset)
+                        }
+                    }
+                    .zIndex(1)
                 TextField("Notes", text: $notes, axis: .vertical)
                     .textFieldStyle(.plain)
                     .foregroundStyle(.secondary)
@@ -90,7 +122,8 @@ struct TaskComposer: View {
                 Spacer()
                 Button("Cancel", role: .cancel, action: done).keyboardShortcut(.cancelAction)
                 Button("Add", action: add)
-                    .keyboardShortcut(.defaultAction)
+                    // Return picks a suggestion while the list is open, so Add only owns Return otherwise.
+                    .keyboardShortcut(visibleSuggestions == nil ? KeyboardShortcut.defaultAction : KeyboardShortcut(.init("\u{0}"), modifiers: []))
                     .buttonStyle(.borderedProminent)
                     .disabled(parsed.title.trimmingCharacters(in: .whitespaces).isEmpty)
             }
@@ -101,42 +134,77 @@ struct TaskComposer: View {
         .onAppear { titleFocused = true }
     }
 
-    // MARK: Triggers
+    // MARK: Quick pick (~ ! #)
 
-    /// A `~`, `!` or `#` typed at the start or after a space opens its picker; the character is removed.
-    private func trigger(_ old: String, _ new: String) {
-        guard new.count == old.count + 1, let last = new.last, ["~", "!", "#"].contains(last) else { return }
-        let before = new.dropLast()
-        guard before.isEmpty || before.last == " " else { return }
-        title = String(before)
-        picking = last == "~" ? .list : last == "!" ? .priority : .tag
+    /// The token being typed: a trigger at the start or after a space, with no space after it yet.
+    private var token: Token? { Self.token(in: title) }
+
+    static func token(in title: String) -> Token? {
+        guard let i = title.lastIndex(where: { $0 == "~" || $0 == "!" || $0 == "#" }) else { return nil }
+        if i > title.startIndex, title[title.index(before: i)] != " " { return nil }
+        let query = String(title[title.index(after: i)...])
+        guard !query.contains(" ") else { return nil }
+        let kind: Token.Kind = title[i] == "~" ? .list : title[i] == "!" ? .priority : .tag
+        return Token(kind: kind, start: i, query: query)
     }
 
-    @ViewBuilder
-    private func pickerView(_ which: Picker) -> some View {
-        switch which {
+    /// The title without the token (and the space before it), ending in one space if anything is left.
+    static func removing(_ t: Token, from title: String) -> String {
+        let rest = String(title[..<t.start]).replacingOccurrences(of: "\\s+$", with: "", options: .regularExpression)
+        return rest.isEmpty ? "" : rest + " "
+    }
+
+    private var visibleSuggestions: [Suggestion]? {
+        guard let t = token, dismissedToken != String(title[t.start...]) else { return nil }
+        return suggestions(for: t)
+    }
+
+    private func suggestions(for t: Token) -> [Suggestion] {
+        let q = SearchOverlay.fold(t.query)
+        let matches = { (name: String) in q.isEmpty || SearchOverlay.fold(name).contains(q) }
+        switch t.kind {
         case .list:
-            PickerList(items: listChoices.map { choice in
-                (choice.1, "list.bullet", Color(hex: tasks.projects.first { $0.id == choice.0 }?.color) ?? .accentColor, (listId ?? "inbox") == choice.0)
-            }) { i in
-                listId = listChoices[i].0
-                picking = nil
-                titleFocused = true
+            return listChoices.filter { matches($0.1) }.map { id, name in
+                Suggestion(id: "l:" + id, title: name, symbol: "list.bullet", tint: Color(hex: tasks.projects.first { $0.id == id }?.color) ?? .accentColor) { listId = id }
             }
         case .priority:
-            PickerList(items: PriorityOption.all.map { ($0.title, "flag.fill", Theme.PriorityColor.color($0.value), $0.value == priority) }) { i in
-                priority = PriorityOption.all[i].value
-                picking = nil
-                titleFocused = true
+            return PriorityOption.all.filter { matches($0.title) }.map { p in
+                Suggestion(id: "p:\(p.value)", title: p.title, symbol: "flag.fill", tint: Theme.PriorityColor.color(p.value)) { priority = p.value }
             }
         case .tag:
-            PickerList(items: tasks.tags.map { ("#" + ($0.label.isEmpty ? $0.name : $0.label), "number", Color(hex: $0.color) ?? .accentColor, tags.contains($0.name)) }) { i in
-                let name = tasks.tags[i].name
-                if !tags.contains(name) { tags.append(name) }
-                picking = nil
-                titleFocused = true
+            var out = tasks.tags.filter { matches($0.name) || matches($0.label) }.map { t in
+                Suggestion(id: "t:" + t.name, title: "#" + (t.label.isEmpty ? t.name : t.label), symbol: "number", tint: Color(hex: t.color) ?? .accentColor) {
+                    if !tags.contains(t.name) { tags.append(t.name) }
+                }
             }
+            let typed = t.query.trimmingCharacters(in: .whitespaces)
+            if !typed.isEmpty, !tasks.tags.contains(where: { SearchOverlay.fold($0.name) == SearchOverlay.fold(typed) }) {
+                out.append(Suggestion(id: "new:" + typed, title: "Create #\(typed)", symbol: "plus", tint: .accentColor) {
+                    if !tags.contains(typed) { tags.append(typed) }
+                })
+            }
+            return out
         }
+    }
+
+    private func move(_ by: Int) -> KeyPress.Result {
+        guard let list = visibleSuggestions, !list.isEmpty else { return .ignored }
+        highlight = (min(highlight, list.count - 1) + by + list.count) % list.count
+        return .handled
+    }
+
+    private func chooseHighlighted() -> KeyPress.Result {
+        guard let list = visibleSuggestions, !list.isEmpty else { return .ignored }
+        choose(list[min(highlight, list.count - 1)])
+        return .handled
+    }
+
+    /// Applies the pick and removes the `~query` text from the title.
+    private func choose(_ s: Suggestion) {
+        s.pick()
+        if let t = token { title = Self.removing(t, from: title) }
+        highlight = 0
+        titleFocused = true
     }
 
     // MARK: Values
@@ -181,5 +249,37 @@ struct TaskComposer: View {
         let n = notes.trimmingCharacters(in: .whitespacesAndNewlines)
         if !n.isEmpty { actions.setContent(id: task.id, content: n) }
         done()
+    }
+}
+
+/// The floating suggestion list under the title (the text field keeps focus; ↑↓ and Return drive it).
+private struct SuggestionList: View {
+    let items: [TaskComposer.Suggestion]
+    let highlight: Int
+    let pick: (Int) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(items.prefix(Theme.Composer.maxSuggestions).enumerated()), id: \.element.id) { i, item in
+                Button { pick(i) } label: {
+                    HStack(spacing: Theme.Space.s) {
+                        Image(systemName: item.symbol).foregroundStyle(item.tint).frame(width: Theme.List.pickerIcon)
+                        Text(item.title).lineLimit(1)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, Theme.Space.s)
+                    .frame(height: Theme.List.pickerRow)
+                    .background(RoundedRectangle(cornerRadius: Theme.Radius.tile - Theme.Space.xs, style: .continuous)
+                        .fill(i == highlight ? AnyShapeStyle(.tint.opacity(Theme.Opacity.chip)) : AnyShapeStyle(.clear)))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(Theme.Space.xs)
+        .frame(width: Theme.Composer.suggestionWidth)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: Theme.Radius.tile, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Theme.Radius.tile, style: .continuous).strokeBorder(.quaternary))
+        .shadow(radius: Theme.Space.s, y: Theme.Space.xxs)
     }
 }

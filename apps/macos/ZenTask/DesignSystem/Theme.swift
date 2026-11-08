@@ -126,6 +126,10 @@ enum Theme {
     enum Composer {
         static let width: CGFloat = 440
         static let bodyHeight: CGFloat = 150
+        static let suggestionWidth: CGFloat = 240
+        static let suggestionOffset: CGFloat = 34
+        static let suggestionIndent: CGFloat = 80
+        static let maxSuggestions = 8
     }
 
     /** Focus timer. */

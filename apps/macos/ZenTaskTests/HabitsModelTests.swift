@@ -200,4 +200,16 @@ final class HabitsModelTests: XCTestCase {
         XCTAssertNil(KeyCombo(stored: "junk"))
         XCTAssertNotEqual(combo.carbonModifiers, 0)
     }
+
+    func testComposerTokensAreFoundAndRemoved() throws {
+        let t = try XCTUnwrap(TaskComposer.token(in: "Hello Test ~Per"))
+        XCTAssertEqual(t.kind, .list)
+        XCTAssertEqual(t.query, "Per")
+        XCTAssertEqual(TaskComposer.removing(t, from: "Hello Test ~Per"), "Hello Test ")
+        XCTAssertEqual(TaskComposer.token(in: "!")?.kind, .priority)
+        XCTAssertEqual(TaskComposer.removing(TaskComposer.token(in: "!")!, from: "!"), "")
+        XCTAssertNil(TaskComposer.token(in: "a~b"), "a trigger must start a word")
+        XCTAssertNil(TaskComposer.token(in: "Call ~Personal now"), "a space ends the token")
+        XCTAssertEqual(TaskComposer.token(in: "Read #bo")?.kind, .tag)
+    }
 }
