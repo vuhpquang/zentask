@@ -12,6 +12,8 @@ sqldelight {
     databases {
         create("ZenTaskDatabase") {
             packageName.set("com.vuhpquang.zentask.db")
+            // json_extract() for indexed-free field lookups (parentId, taskId, repeatTaskId).
+            module(libs.sqldelight.json.get().toString())
         }
     }
 }

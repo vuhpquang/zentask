@@ -34,6 +34,7 @@ final class TasksModelTests: XCTestCase {
         await m.reload()
         XCTAssertTrue(ids(m).isEmpty)
         m.sidebar = .smart(.completed)
+        await m.settle()
         XCTAssertEqual(ids(m), [task.id])
     }
 
@@ -44,6 +45,7 @@ final class TasksModelTests: XCTestCase {
         await m.reload()
         XCTAssertNotNil(m.selection)
         m.sidebar = .smart(.trash)
+        await m.settle()
         XCTAssertNil(m.selection)
         XCTAssertTrue(m.sections.isEmpty)
         XCTAssertEqual(m.count(.smart(.inbox)), 1)

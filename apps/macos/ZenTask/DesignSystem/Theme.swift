@@ -29,10 +29,26 @@ enum Theme {
         }
     }
 
+    enum Opacity {
+        static let field: Double = 0.6
+        static let chip: Double = 0.15
+        static let pill: Double = 0.18
+    }
+
     enum Row {
         static let checkbox: CGFloat = 16
         static let indent: CGFloat = 24
         static let pillRadius: CGFloat = 6
+    }
+
+    /** The always-visible icon rail on the left of the window (spec §11). */
+    enum Rail {
+        static let width: CGFloat = 64
+        static let hit: CGFloat = 44
+        static let icon: CGFloat = 22
+        static let radius: CGFloat = 12
+        /// Clears the window's traffic lights.
+        static let topInset: CGFloat = 52
     }
 
     enum Size {

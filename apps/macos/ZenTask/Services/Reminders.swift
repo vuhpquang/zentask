@@ -3,7 +3,8 @@ import UserNotifications
 @preconcurrency import ZenTaskShared
 
 /// Schedules task reminders as local notifications and handles their actions (Complete, Snooze).
-/// Our requests are prefixed `zt.` so rescheduling replaces exactly ours.
+/// Planned requests are prefixed `zt.` so rescheduling replaces exactly those; snoozes use `zs.` and
+/// survive reschedules.
 @MainActor
 final class Reminders: NSObject, UNUserNotificationCenterDelegate {
     private static let category = "zentask.task"
@@ -72,7 +73,7 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
                 core.actions.complete(id: taskId)
             case Self.snooze:
                 let later = Date().addingTimeInterval(15 * 60)
-                self.center.add(request(id: "zt.\(taskId).snooze", taskId: taskId, title: title, at: later))
+                self.center.add(request(id: "zs.\(taskId)", taskId: taskId, title: title, at: later))
             default:
                 break
             }

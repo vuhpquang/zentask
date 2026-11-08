@@ -133,6 +133,10 @@ class ZenStore(
         db.recordQueries.live(type.name).asFlow().mapToList(Dispatchers.Default)
             .map { rows -> rows.mapNotNull { decode(type, parseFields(it.fields)) } }
 
+    /** Ids of live records of [type] whose [field] equals [value], found by SQLite without decoding every row. */
+    fun <T : Entity> idsWhere(type: EntityType<T>, field: String, value: String): List<String> =
+        db.recordQueries.idsByField(type.name, "$.$field", value).executeAsList()
+
     /** Emits after any change to any record, local or from sync (drives UI reloads). */
     fun recordChanges(): Flow<Unit> = db.recordQueries.live("").asFlow().map { }
 

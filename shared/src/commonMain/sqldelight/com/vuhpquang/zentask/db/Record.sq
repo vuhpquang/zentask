@@ -19,3 +19,7 @@ SELECT * FROM record WHERE entity = ? AND id = ?;
 
 live:
 SELECT * FROM record WHERE entity = ? AND deleted = 0;
+
+-- Live ids of an entity whose JSON field (path like '$.parentId') equals a value.
+idsByField:
+SELECT id FROM record WHERE entity = ? AND deleted = 0 AND json_extract(fields, ?) = ?;

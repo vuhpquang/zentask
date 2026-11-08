@@ -29,6 +29,8 @@ final class TasksModel {
     var sidebar: SidebarItem = .smart(.today) { didSet { recompute(); if oldValue != sidebar { selection = nil } } }
     var selection: String?
     var showCompleted = false
+    /// The task a "Delete permanently" confirmation is open for.
+    var confirmDelete: ZTask?
 
     private(set) var index: TaskIndex?
     private(set) var sections: [TaskSection] = []
@@ -70,14 +72,29 @@ final class TasksModel {
         projects = idx.projects.filter { $0.trashedAt == nil && !$0.deleted }
         tags = idx.tags.filter { !$0.deleted }
         groups = core.projectGroups()
+        counts = core.sidebarCounts(index: idx)
         recompute()
+        await recomputeTask?.value
         if let reminders { await reminders.reschedule(core.plannedReminders(index: idx)) }
     }
 
+    private var recomputeTask: _Concurrency.Task<Void, Never>?
+
+    /// Waits for the pending recompute (tests, snapshots).
+    func settle() async { await recomputeTask?.value }
+
+    /// Sections for the selected list, computed off the main thread (the index is immutable).
     func recompute() {
         guard let index else { return }
-        sections = core.sections(index: index, filter: sidebar.filter)
-        counts = core.sidebarCounts(index: index)
+        let core = self.core
+        let filter = sidebar.filter
+        let item = sidebar
+        recomputeTask?.cancel()
+        recomputeTask = _Concurrency.Task {
+            let result = await _Concurrency.Task.detached(priority: .userInitiated) { core.sections(index: index, filter: filter) }.value
+            guard !_Concurrency.Task.isCancelled, item == self.sidebar, index === self.index else { return }
+            self.sections = result
+        }
     }
 
     // MARK: Lookups
@@ -115,12 +132,18 @@ final class TasksModel {
 
     // MARK: Actions
 
-    func quickAdd(_ text: String) {
-        guard let task = core.quickAdd(text: text, filter: sidebar.filter, projects: projects) else { return }
+    /// Lists quick add may file into: the Inbox and open (not archived) lists.
+    private var quickAddProjects: [Project] { projects.filter { !$0.closed } }
+
+    func quickAdd(_ text: String, ignored: Set<Int> = []) {
+        let skip = Set(ignored.map { KotlinInt(int: Int32($0)) })
+        guard let task = core.quickAdd(text: text, filter: sidebar.filter, projects: quickAddProjects, ignored: skip) else { return }
         selection = task.id
     }
 
-    func parse(_ text: String) -> QuickAdd { core.parseQuickAdd(text: text, projects: projects) }
+    func parse(_ text: String, ignored: Set<Int> = []) -> QuickAdd {
+        core.parseQuickAdd(text: text, projects: quickAddProjects, ignored: Set(ignored.map { KotlinInt(int: Int32($0)) }))
+    }
 
     func toggleComplete(_ task: ZTask) {
         if task.isDone || task.status == -1 { core.actions.uncomplete(id: task.id) } else { core.actions.complete(id: task.id) }

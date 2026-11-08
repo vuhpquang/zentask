@@ -8,9 +8,11 @@ import com.vuhpquang.zentask.model.Task
 import com.vuhpquang.zentask.model.TaskStatus
 import com.vuhpquang.zentask.store.ZenStore
 import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.plus
+import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Clock
 import kotlin.time.Instant
@@ -71,6 +73,7 @@ class TaskActions(
         return task
     }
 
+    @Throws(IllegalStateException::class)
     fun addSubtask(parentId: String, title: String): Task {
         val parent = store.get(tasks, parentId) ?: error("no task $parentId")
         val t = Task(id = Uuid.random().toString(), createdAt = wall(), title = title.trim(), projectId = parent.projectId, parentId = parentId)
@@ -92,10 +95,16 @@ class TaskActions(
             val base = t.dueDate ?: t.startDate
             if (rule != null && base != null && Recurrence.isSupported(rule)) {
                 val fromCompletion = t.repeatFrom == "completion" || t.repeatFrom == "1"
-                val from = if (fromCompletion) now else base
-                val done = store.list(tasks).count { it.repeatTaskId == id }
                 val zoneForTask = t.timeZone?.let { runCatching { TimeZone.of(it) }.getOrNull() } ?: zone()
-                val next = Recurrence.next(rule, Instant.fromEpochMilliseconds(from), zoneForTask, done)
+                // From completion: today's date, but the task's own time of day (midnight for all-day).
+                val from = if (fromCompletion) {
+                    val time = Instant.fromEpochMilliseconds(base).toLocalDateTime(zoneForTask).time
+                    LocalDateTime(Instant.fromEpochMilliseconds(now).toLocalDateTime(zoneForTask).date, time).toInstant(zoneForTask).toEpochMilliseconds()
+                } else {
+                    base
+                }
+                val done = store.idsWhere(tasks, "repeatTaskId", id).size
+                val next = runCatching { Recurrence.next(rule, Instant.fromEpochMilliseconds(from), zoneForTask, done) }.getOrNull()
                 if (next != null) {
                     store.put(
                         tasks,
@@ -143,13 +152,17 @@ class TaskActions(
         }
     }
 
-    /** Permanent delete (tombstone), only for a task already in Trash; takes its subtasks and checklist. */
+    /**
+     * Permanent delete (tombstone), only for a task already in Trash; takes the subtasks that went to
+     * Trash with it (not ones restored since) and its checklist.
+     */
+    @Throws(IllegalStateException::class)
     fun deleteForever(id: String) {
         store.inTransaction {
             val t = store.get(tasks, id) ?: return@inTransaction
             check(t.trashedAt != null) { "Move the task to Trash before deleting it permanently" }
-            (children(id) + t).forEach { victim ->
-                store.list(EntityTypes.checklistItem).filter { it.taskId == victim.id }.forEach { store.delete(EntityTypes.checklistItem, it.id) }
+            (children(id).filter { it.trashedAt == t.trashedAt } + t).forEach { victim ->
+                store.idsWhere(EntityTypes.checklistItem, "taskId", victim.id).forEach { store.delete(EntityTypes.checklistItem, it) }
                 store.delete(tasks, victim.id)
             }
         }
@@ -196,7 +209,7 @@ class TaskActions(
     // ---- checklist ----
 
     fun addItem(taskId: String, title: String): ChecklistItem {
-        val existing = store.list(EntityTypes.checklistItem).filter { it.taskId == taskId }
+        val existing = store.idsWhere(EntityTypes.checklistItem, "taskId", taskId).mapNotNull { store.get(EntityTypes.checklistItem, it) }
         val item = ChecklistItem(
             id = Uuid.random().toString(), createdAt = wall(), taskId = taskId, title = title.trim(),
             sortOrder = (existing.maxOfOrNull { it.sortOrder } ?: -1) + 1,
@@ -224,7 +237,7 @@ class TaskActions(
 
     // ---- helpers ----
 
-    private fun children(id: String): List<Task> = store.list(tasks).filter { it.parentId == id }
+    private fun children(id: String): List<Task> = store.idsWhere(tasks, "parentId", id).mapNotNull { store.get(tasks, it) }
 
     /** Lowercase, trimmed, without `#`, de-duplicated, order kept. */
     private fun normalize(tags: List<String>): List<String> =
@@ -236,7 +249,9 @@ class TaskActions(
         val known = store.list(EntityTypes.tag).mapTo(HashSet()) { it.name.lowercase() }
         val now = wall()
         names.filter { it !in known }.forEach { name ->
-            store.put(EntityTypes.tag, Tag(id = "tag_$name", createdAt = now, name = name, label = name, parent = name.substringBeforeLast('/', "").ifEmpty { null }))
+            // "tag_<name>" may belong to a tag that was renamed since: never overwrite it.
+            val id = "tag_$name".takeIf { store.rawRecord(EntityTypes.tag.name, it) == null } ?: "tag_${Uuid.random()}"
+            store.put(EntityTypes.tag, Tag(id = id, createdAt = now, name = name, label = name, parent = name.substringBeforeLast('/', "").ifEmpty { null }))
         }
     }
 }

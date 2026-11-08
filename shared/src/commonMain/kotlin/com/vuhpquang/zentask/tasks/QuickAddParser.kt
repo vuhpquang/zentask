@@ -35,11 +35,13 @@ data class QuickAdd(
  * Quick add syntax (spec §11): `#tag`, `!high/!medium/!low/!none` (also `!1..!3`, `!cao/!vừa/!thấp`),
  * `^list` (prefix of a list name, ignoring emoji, case and diacritics), and dates in English or
  * Vietnamese ("tomorrow 9am", "mai 3h chiều", "thứ 6", "tuần sau"). A token must start a word, so
- * "C# notes" or "wow!" stay as written. Capitalised "Mai" is a name, not "tomorrow".
+ * "C# notes" or "wow!" stay as written. Capitalised "Mai" is a name, not "tomorrow". Tokens whose
+ * start offset is in `ignored` (chips the user dismissed) are left in the title.
  */
 object QuickAddParser {
     private val WORD = Regex("""\S+""")
-    private val TAG = Regex("""^#([\p{L}\p{N}_\-/]+)$""")
+    /** A tag starts with a letter: "#42" (an issue number) stays text. */
+    private val TAG = Regex("""^#(\p{L}[\p{L}\p{N}_\-/]*)$""")
     private val PRIORITY = mapOf(
         "high" to Priority.HIGH, "1" to Priority.HIGH, "cao" to Priority.HIGH,
         "medium" to Priority.MEDIUM, "med" to Priority.MEDIUM, "2" to Priority.MEDIUM, "vua" to Priority.MEDIUM,
@@ -48,9 +50,9 @@ object QuickAddParser {
     )
     private val WEEKDAYS_EN = mapOf(
         "mon" to DayOfWeek.MONDAY, "monday" to DayOfWeek.MONDAY, "tue" to DayOfWeek.TUESDAY, "tuesday" to DayOfWeek.TUESDAY,
-        "wed" to DayOfWeek.WEDNESDAY, "wednesday" to DayOfWeek.WEDNESDAY, "thu" to DayOfWeek.THURSDAY, "thursday" to DayOfWeek.THURSDAY,
-        "fri" to DayOfWeek.FRIDAY, "friday" to DayOfWeek.FRIDAY, "sat" to DayOfWeek.SATURDAY, "saturday" to DayOfWeek.SATURDAY,
-        "sun" to DayOfWeek.SUNDAY, "sunday" to DayOfWeek.SUNDAY,
+        "wed" to DayOfWeek.WEDNESDAY, "wednesday" to DayOfWeek.WEDNESDAY, "thursday" to DayOfWeek.THURSDAY,
+        // No "sat"/"sun"/"thu": ordinary words ("sat nav", "sun cream", Vietnamese "thu" = collect).
+        "fri" to DayOfWeek.FRIDAY, "friday" to DayOfWeek.FRIDAY, "saturday" to DayOfWeek.SATURDAY, "sunday" to DayOfWeek.SUNDAY,
     )
     private val VI_DAY_NUMBER = mapOf(2 to DayOfWeek.MONDAY, 3 to DayOfWeek.TUESDAY, 4 to DayOfWeek.WEDNESDAY, 5 to DayOfWeek.THURSDAY, 6 to DayOfWeek.FRIDAY, 7 to DayOfWeek.SATURDAY)
     private val TIME_EN = Regex("""^(\d{1,2})(?::(\d{2}))?(am|pm)?$""")
@@ -60,7 +62,7 @@ object QuickAddParser {
         val folded = fold(text.lowercase())
     }
 
-    fun parse(text: String, now: Instant, zone: TimeZone, projects: List<Project>): QuickAdd {
+    fun parse(text: String, now: Instant, zone: TimeZone, projects: List<Project>, ignored: Set<Int> = emptySet()): QuickAdd {
         val words = WORD.findAll(text).map { Word(it.value, it.range.first, it.range.last + 1) }.toList()
         val tokens = mutableListOf<QuickAdd.Token>()
         val tags = mutableListOf<String>()
@@ -73,6 +75,10 @@ object QuickAddParser {
         var i = 0
         while (i < words.size) {
             val w = words[i]
+            if (w.start in ignored) { // the user dismissed this chip: keep the word as text
+                i++
+                continue
+            }
             // #tag
             val tag = TAG.matchEntire(w.text)
             if (tag != null) {
@@ -160,7 +166,7 @@ object QuickAddParser {
             "chu nhat" -> return nextWeekday(today, DayOfWeek.SUNDAY) to 2
             "tuan sau", "tuan toi", "next week" -> return mondayAfter(today) to 2
         }
-        if (lower0 == "thứ" || lower0 == "thu") f(1)?.toIntOrNull()?.let { n -> VI_DAY_NUMBER[n]?.let { return nextWeekday(today, it) to 2 } }
+        if (lower0 == "thứ") f(1)?.toIntOrNull()?.let { n -> VI_DAY_NUMBER[n]?.let { return nextWeekday(today, it) to 2 } }
         if (w0 == "in") {
             val n = f(1)?.toIntOrNull()
             when (f(2)) {

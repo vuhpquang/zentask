@@ -112,4 +112,26 @@ class QuickAddParserTest {
     fun emptyTitleKeepsRawText() {
         assertEquals("#work", p("#work").title)
     }
+
+    @Test
+    fun ambiguousWordsStayText() {
+        assertNull(p("Buy sun cream").due, "sun is not Sunday")
+        assertNull(p("Buy sat nav").due)
+        assertNull(p("thu 2 triệu").due, "unaccented thu is 'collect'")
+        assertEquals(ms("2026-11-09T00:00"), p("Họp thứ 2").due)
+        val bug = p("Fix bug #42")
+        assertTrue(bug.tags.isEmpty())
+        assertEquals("Fix bug #42", bug.title)
+    }
+
+    @Test
+    fun ignoredTokensStayInTheTitle() {
+        val text = "mua hoa mai"
+        val first = p(text)
+        val maiStart = first.tokens.single().start
+        val q = QuickAddParser.parse(text, now, zone, projects, ignored = setOf(maiStart))
+        assertNull(q.due)
+        assertEquals("mua hoa mai", q.title)
+        assertTrue(q.tokens.isEmpty())
+    }
 }

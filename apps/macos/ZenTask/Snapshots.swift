@@ -17,7 +17,7 @@ enum Snapshots {
         ]
         for (name, view, size) in settings { both(view.environment(model), size: size, name: name, dir: dir) }
         wait { await tasks.reload() }
-        both(AnyView(TasksView()).environment(model).environment(tasks), size: windowSize, name: "tasks-empty", dir: dir)
+        both(AnyView(MainWindow()).environment(model).environment(tasks), size: windowSize, name: "tasks-empty", dir: dir)
 
         if let csv = sampleCsv() {
             let core = model.core
@@ -26,16 +26,19 @@ enum Snapshots {
             let shots: [(String, SidebarItem)] = [("tasks-inbox", .smart(.inbox)), ("tasks-all", .smart(.all)), ("tasks-completed", .smart(.completed))]
             for (name, item) in shots {
                 tasks.sidebar = item
-                both(AnyView(TasksView()).environment(model).environment(tasks), size: windowSize, name: name, dir: dir)
+                wait { await tasks.settle() }
+                both(AnyView(MainWindow()).environment(model).environment(tasks), size: windowSize, name: name, dir: dir)
             }
             if let project = tasks.listProjects.first(where: { $0.viewMode == "kanban" }) ?? tasks.listProjects.first {
                 tasks.sidebar = .project(project.id)
-                both(AnyView(TasksView()).environment(model).environment(tasks), size: windowSize, name: "tasks-list", dir: dir)
+                wait { await tasks.settle() }
+                both(AnyView(MainWindow()).environment(model).environment(tasks), size: windowSize, name: "tasks-list", dir: dir)
             }
             tasks.sidebar = .smart(.all)
+            wait { await tasks.settle() }
             if let checklist = tasks.sections.flatMap(\.rows).first(where: { $0.checklistTotal > 0 }) ?? tasks.sections.first?.rows.first {
                 tasks.selection = checklist.task.id
-                both(AnyView(TasksView()).environment(model).environment(tasks), size: windowSize, name: "tasks-detail", dir: dir)
+                both(AnyView(MainWindow()).environment(model).environment(tasks), size: windowSize, name: "tasks-detail", dir: dir)
             }
         }
     }

@@ -7,6 +7,7 @@ import com.vuhpquang.zentask.model.Project
 import com.vuhpquang.zentask.model.Tag
 import com.vuhpquang.zentask.model.Task
 import com.vuhpquang.zentask.model.TaskStatus
+import com.vuhpquang.zentask.store.StoreLock
 import com.vuhpquang.zentask.store.ZenStore
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.DayOfWeek
@@ -56,15 +57,21 @@ class TaskIndex(
     private val projectById = projects.associateBy { it.id }
     private val itemsByTask = items.filter { !it.deleted }.groupBy { it.taskId }
     private val columnsByProject = columns.filter { !it.deleted }.groupBy { it.projectId }
+    private val taskById = this.tasks.associateBy { it.id }
+    private val childrenByParent = this.tasks.filter { it.parentId != null && it.trashedAt == null }.groupBy { it.parentId!! }
+
+    /** Zones by id: `TimeZone.of` may read the tz database, so resolve each id once. */
+    private val zones = HashMap<String, TimeZone?>()
+    private val zoneLock = StoreLock()
 
     /** Every live (not deleted) task, for planners. */
     val allTasks: List<Task> get() = tasks
 
-    fun task(id: String): Task? = tasks.firstOrNull { it.id == id }
+    fun task(id: String): Task? = taskById[id]
 
     fun items(taskId: String): List<ChecklistItem> = itemsByTask[taskId].orEmpty().sortedBy { it.sortOrder }
 
-    fun subtasks(taskId: String): List<Task> = tasks.filter { it.parentId == taskId && it.trashedAt == null }.sortedBy { it.sortOrder }
+    fun subtasks(taskId: String): List<Task> = childrenByParent[taskId].orEmpty().sortedBy { it.sortOrder }
 
     fun rows(filter: TaskFilter, now: Instant, zone: TimeZone): List<TaskRow> {
         val today = now.toLocalDateTime(zone).date
@@ -144,8 +151,12 @@ class TaskIndex(
     /** The task's day: start date (TickTick's "date"), else due; all-day dates read in the task's own zone. */
     fun day(t: Task, zone: TimeZone): LocalDate? {
         val ms = t.startDate ?: t.dueDate ?: return null
-        val z = if (t.isAllDay) t.timeZone?.let { runCatching { TimeZone.of(it) }.getOrNull() } ?: zone else zone
+        val z = if (t.isAllDay) t.timeZone?.let(::zoneOf) ?: zone else zone
         return Instant.fromEpochMilliseconds(ms).toLocalDateTime(z).date
+    }
+
+    private fun zoneOf(id: String): TimeZone? = zoneLock.withLock {
+        zones.getOrPut(id) { runCatching { TimeZone.of(id) }.getOrNull() }
     }
 
     private fun isOverdue(t: Task, now: Instant, today: LocalDate, zone: TimeZone): Boolean {
@@ -163,9 +174,11 @@ class TaskIndex(
         filter == TaskFilter.Smart(SmartList.COMPLETED) || filter == TaskFilter.Smart(SmartList.WONT_DO) ->
             top.sortedByDescending { it.completedAt ?: it.updatedAt }
         filter == TaskFilter.Smart(SmartList.TRASH) -> top.sortedByDescending { it.trashedAt ?: 0 }
-        else -> top.sortedWith(
-            compareBy<Task>({ day(it, zone) == null }, { day(it, zone) }, { !it.isAllDay }, { it.startDate ?: it.dueDate }, { -it.priority }, { it.sortOrder }),
-        )
+        else -> top.map { it to day(it, zone) } // each task's day once, not per comparison
+            .sortedWith(
+                compareBy<Pair<Task, LocalDate?>>({ it.second == null }, { it.second }, { !it.first.isAllDay }, { it.first.startDate ?: it.first.dueDate }, { -it.first.priority }, { it.first.sortOrder }),
+            )
+            .map { it.first }
     }
 
     private fun projectSections(projectId: String, rows: List<TaskRow>): List<TaskSection> {

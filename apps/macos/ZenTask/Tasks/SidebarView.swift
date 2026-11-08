@@ -50,6 +50,7 @@ struct SidebarView: View {
             }
         }
         .listStyle(.sidebar)
+        .environment(\.sidebarRowSize, .large)
         .safeAreaInset(edge: .bottom) { SyncFooter() }
     }
 
@@ -60,6 +61,7 @@ struct SidebarView: View {
 
     private func row(_ title: String, symbol: String, item: SidebarItem) -> some View {
         Label(title, systemImage: symbol)
+            .font(.body)
             .badge(tasks.count(item))
             .tag(item)
     }

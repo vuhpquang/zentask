@@ -91,11 +91,13 @@ class ZenTaskCore(
         is TaskFilter.WithTag -> "tag:${filter.name.lowercase()}"
     }
 
-    fun parseQuickAdd(text: String, projects: List<Project>): QuickAdd = QuickAddParser.parse(text, now(), zone(), projects)
+    /** [ignored]: start offsets of tokens the user dismissed (kept as text). */
+    fun parseQuickAdd(text: String, projects: List<Project>, ignored: Set<Int>): QuickAdd =
+        QuickAddParser.parse(text, now(), zone(), projects, ignored)
 
     /** Creates a task from quick-add text in the list being viewed. */
-    fun quickAdd(text: String, filter: TaskFilter, projects: List<Project>): Task? {
-        val q = parseQuickAdd(text, projects)
+    fun quickAdd(text: String, filter: TaskFilter, projects: List<Project>, ignored: Set<Int>): Task? {
+        val q = parseQuickAdd(text, projects, ignored)
         if (q.title.isBlank()) return null
         return actions.create(q.title, filter, q.projectId, q.priority, q.tags, q.due, q.allDay)
     }

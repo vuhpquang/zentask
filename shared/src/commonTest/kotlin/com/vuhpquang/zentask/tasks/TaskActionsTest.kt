@@ -64,7 +64,7 @@ class TaskActionsTest {
     fun repeatFromCompletionUsesNow() {
         store.put(EntityTypes.task, Task(id = "c", repeatRule = "RRULE:FREQ=DAILY", repeatFrom = "completion", dueDate = ms("2026-11-01T09:00")))
         actions.complete("c")
-        assertEquals(ms("2026-11-09T10:00"), get("c").dueDate)
+        assertEquals(ms("2026-11-09T09:00"), get("c").dueDate, "date from completion, time of day from the task")
     }
 
     @Test
@@ -195,5 +195,33 @@ class TaskActionsTest {
         actions.setPriority("a", Priority.LOW)
         assertEquals("remote", get("a").title)
         assertEquals(Priority.LOW, get("a").priority)
+    }
+
+    @Test
+    fun repeatFromCompletionKeepsAllDayAtMidnight() {
+        store.put(EntityTypes.task, Task(id = "d", repeatRule = "RRULE:FREQ=DAILY", repeatFrom = "completion", isAllDay = true, timeZone = zone.id, dueDate = ms("2026-11-01T00:00")))
+        wall = ms("2026-11-08T15:42")
+        actions.complete("d")
+        assertEquals(ms("2026-11-09T00:00"), get("d").dueDate)
+    }
+
+    @Test
+    fun deleteForeverSparesSubtasksRestoredOnTheirOwn() {
+        store.put(EntityTypes.task, Task(id = "p"))
+        store.put(EntityTypes.task, Task(id = "s", parentId = "p"))
+        actions.trash("p")
+        store.update(EntityTypes.task, "s") { it.copy(trashedAt = null) } // restored from Trash on its own
+        actions.deleteForever("p")
+        assertTrue(get("p").deleted)
+        assertTrue(!get("s").deleted, "the restored subtask survives")
+    }
+
+    @Test
+    fun newTagAfterRenameDoesNotOverwriteTheRenamedOne() {
+        actions.create("a", null, tags = listOf("old"))
+        TagActions(store).rename("old", "new")
+        actions.create("b", null, tags = listOf("old"))
+        val names = store.list(EntityTypes.tag).map { it.name }.toSet()
+        assertEquals(setOf("new", "old"), names)
     }
 }

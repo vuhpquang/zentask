@@ -7,8 +7,8 @@ struct TaskDetailView: View {
     @Environment(TasksModel.self) private var tasks
     let task: ZTask
 
-    @State private var title = ""
-    @State private var notes = ""
+    @State private var draft = DetailDraft(title: "", notes: "")
+    @State private var confirmDelete = false
     @State private var newItem = ""
     @State private var newSubtask = ""
     @State private var newTag = ""
@@ -32,12 +32,17 @@ struct TaskDetailView: View {
             .padding(Theme.Space.xl)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .onAppear {
-            title = task.title
-            notes = task.content.isEmpty ? task.desc : task.content
-        }
+        .onAppear { draft = DetailDraft(title: task.title, notes: currentNotes) }
+        .onChange(of: task.title) { _, _ in follow() }
+        .onChange(of: currentNotes) { _, _ in follow() }
         .onChange(of: focus) { old, _ in commit(old) }
         .onDisappear { commit(.title); commit(.notes) }
+        .confirmationDialog("Delete \"\(task.title)\" permanently?", isPresented: $confirmDelete) {
+            Button("Delete permanently", role: .destructive) { try? tasks.core.actions.deleteForever(id: task.id) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The task, its subtasks in Trash and its checklist are deleted on every device. This can't be undone.")
+        }
     }
 
     // MARK: Sections
@@ -47,7 +52,7 @@ struct TaskDetailView: View {
             Label("In Trash", systemImage: "trash")
             Spacer()
             Button("Restore") { tasks.core.actions.restore(id: task.id) }
-            Button("Delete permanently", role: .destructive) { try? tasks.core.actions.deleteForever(id: task.id) }
+            Button("Delete permanently…", role: .destructive) { confirmDelete = true }
         }
         .padding(Theme.Space.m)
         .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: Theme.Radius.tile, style: .continuous))
@@ -56,7 +61,7 @@ struct TaskDetailView: View {
     private var header: some View {
         HStack(alignment: .firstTextBaseline, spacing: Theme.Space.s) {
             CheckButton(task: task) { tasks.toggleComplete(task) }
-            TextField("Title", text: $title, axis: .vertical)
+            TextField("Title", text: $draft.title, axis: .vertical)
                 .font(.title2.weight(.semibold))
                 .textFieldStyle(.plain)
                 .focused($focus, equals: .title)
@@ -133,7 +138,7 @@ struct TaskDetailView: View {
     }
 
     private var notesEditor: some View {
-        TextField("Notes", text: $notes, axis: .vertical)
+        TextField("Notes", text: $draft.notes, axis: .vertical)
             .textFieldStyle(.plain)
             .lineLimit(3...)
             .focused($focus, equals: .notes)
@@ -196,6 +201,13 @@ struct TaskDetailView: View {
         .foregroundStyle(.tertiary)
     }
 
+    private var currentNotes: String { task.content.isEmpty ? task.desc : task.content }
+
+    private func follow() {
+        let editing: DetailDraft.Field? = switch focus { case .title: .title; case .notes: .notes; default: nil }
+        draft.follow(title: task.title, notes: currentNotes, editing: editing)
+    }
+
     private var dateLabel: String {
         guard let day = tasks.day(of: task) else { return "Add date" }
         return DateText.short(day: day, task: task)
@@ -207,11 +219,11 @@ struct TaskDetailView: View {
         let actions = tasks.core.actions
         switch field {
         case .title:
-            let t = title.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !t.isEmpty && t != task.title { actions.rename(id: task.id, title: t) }
+            if let t = draft.titleToSave(current: task.title) { actions.rename(id: task.id, title: t) }
+            draft.saved(.title)
         case .notes:
-            let current = task.content.isEmpty ? task.desc : task.content
-            if notes != current { actions.setContent(id: task.id, content: notes) }
+            if let n = draft.notesToSave(current: currentNotes) { actions.setContent(id: task.id, content: n) }
+            draft.saved(.notes)
         case .item:
             let t = newItem.trimmingCharacters(in: .whitespaces)
             if !t.isEmpty { _ = actions.addItem(taskId: task.id, title: t); newItem = "" }

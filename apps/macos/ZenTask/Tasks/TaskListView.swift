@@ -4,21 +4,17 @@ import SwiftUI
 struct TaskListView: View {
     @Environment(TasksModel.self) private var tasks
     @FocusState private var quickAddFocused: Bool
-    @State private var draft = ""
 
     var body: some View {
         @Bindable var tasks = tasks
         VStack(spacing: 0) {
             if !isReadOnlyList {
-                QuickAddField(text: $draft, focused: $quickAddFocused) { text in
-                    tasks.quickAdd(text)
-                    draft = ""
-                }
+                QuickAddField(focused: $quickAddFocused) { text, ignored in tasks.quickAdd(text, ignored: ignored) }
                 .padding(.horizontal, Theme.Space.l)
                 .padding(.vertical, Theme.Space.s)
             }
             List(selection: $tasks.selection) {
-                ForEach(tasks.sections, id: \.title) { section in
+                ForEach(Array(tasks.sections.enumerated()), id: \.offset) { _, section in
                     if section.isCompleted {
                         Section(isExpanded: $tasks.showCompleted) {
                             rows(section)
@@ -46,6 +42,18 @@ struct TaskListView: View {
             .onDeleteCommand { tasks.trashSelected() }
         }
         .navigationTitle(tasks.title)
+        .confirmationDialog(
+            "Delete \"\(tasks.confirmDelete?.title ?? "")\" permanently?",
+            isPresented: Binding(get: { tasks.confirmDelete != nil }, set: { if !$0 { tasks.confirmDelete = nil } })
+        ) {
+            Button("Delete permanently", role: .destructive) {
+                if let t = tasks.confirmDelete { try? tasks.core.actions.deleteForever(id: t.id) }
+                tasks.confirmDelete = nil
+            }
+            Button("Cancel", role: .cancel) { tasks.confirmDelete = nil }
+        } message: {
+            Text("The task, its subtasks in Trash and its checklist are deleted on every device. This can't be undone.")
+        }
         .focusedSceneValue(\.focusQuickAdd) { quickAddFocused = true }
     }
 
@@ -172,7 +180,7 @@ struct TagPill: View {
         Text(name)
             .padding(.horizontal, Theme.Space.xs + Theme.Space.xxs)
             .padding(.vertical, Theme.Space.xxs / 2)
-            .background((Color(hex: color) ?? .secondary).opacity(0.18), in: RoundedRectangle(cornerRadius: Theme.Row.pillRadius, style: .continuous))
+            .background((Color(hex: color) ?? .secondary).opacity(Theme.Opacity.pill), in: RoundedRectangle(cornerRadius: Theme.Row.pillRadius, style: .continuous))
             .foregroundStyle(.primary)
     }
 }
@@ -185,9 +193,9 @@ struct TaskMenu: View {
     var body: some View {
         if task.trashedAt != nil {
             Button("Restore") { tasks.core.actions.restore(id: task.id) }
-            Button("Delete permanently", role: .destructive) { try? tasks.core.actions.deleteForever(id: task.id) }
+            Button("Delete permanently…", role: .destructive) { tasks.confirmDelete = task }
         } else {
-            Button(task.isDone ? "Mark as not done" : "Complete") { tasks.toggleComplete(task) }
+            Button(task.isDone || task.status == -1 ? "Reopen" : "Complete") { tasks.toggleComplete(task) }
             Button("Won't do") { tasks.core.actions.wontDo(id: task.id) }
             Menu("Priority") {
                 ForEach(PriorityOption.all, id: \.value) { p in

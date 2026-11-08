@@ -22,7 +22,7 @@ struct ZenTaskApp: App {
 
     var body: some Scene {
         WindowGroup {
-            TasksView()
+            MainWindow()
                 .environment(model)
                 .environment(tasks)
         }
@@ -46,5 +46,19 @@ struct TaskCommands: Commands {
                 .keyboardShortcut("n")
                 .disabled(focusQuickAdd == nil)
         }
+    }
+}
+
+/// Rail + the selected area.
+struct MainWindow: View {
+    @State private var tab: RailTab = .tasks
+
+    var body: some View {
+        HStack(spacing: 0) {
+            AppRail(tab: $tab)
+            Divider()
+            TasksView()
+        }
+        .ignoresSafeArea(.container, edges: .top)
     }
 }
