@@ -448,6 +448,8 @@ private struct EntryDetail: View {
                     Button("Remove date") { tasks.core.actions.setDue(id: entry.id, due: nil, allDay: false) }
                 }
                 .controlSize(.large)
+            } else if entry.kind == "countdown" {
+                Label("A countdown · edit it in Countdown (⌘4)", systemImage: "hourglass").font(.caption).foregroundStyle(.secondary)
             } else {
                 Label("From your calendar (read-only)", systemImage: "calendar").font(.caption).foregroundStyle(.secondary)
             }

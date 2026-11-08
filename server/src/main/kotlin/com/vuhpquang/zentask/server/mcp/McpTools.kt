@@ -1,9 +1,13 @@
 package com.vuhpquang.zentask.server.mcp
 
+import com.vuhpquang.zentask.habits.HabitBoard
+import com.vuhpquang.zentask.habits.HabitRow
+import com.vuhpquang.zentask.habits.Stamp
 import com.vuhpquang.zentask.lists.FilterRule
 import com.vuhpquang.zentask.lists.SortOrder
 import com.vuhpquang.zentask.model.EntityTypes
 import com.vuhpquang.zentask.model.Filter
+import com.vuhpquang.zentask.model.Habit
 import com.vuhpquang.zentask.model.Project
 import com.vuhpquang.zentask.model.Task
 import com.vuhpquang.zentask.model.TaskStatus
@@ -330,6 +334,129 @@ object McpTools {
                     ),
                 )
             },
+            Tool(
+                "list_habits",
+                "Habits with their schedule, streaks and today's check-in.",
+                schema("include_archived" to bool("Also archived habits"), "timezone" to str("IANA zone, default Asia/Ho_Chi_Minh")),
+                writes = false,
+            ) { a, ctx, zone ->
+                val today = Clock.System.now().toLocalDateTime(zone).date
+                val rows = HabitBoard.rows(ctx.store.list(EntityTypes.habit), ctx.store.list(EntityTypes.habitCheckin), today)
+                    .filter { a.bool("include_archived") == true || !it.archived }
+                ToolResult(json(buildJsonObject { putJsonArray("habits") { rows.forEach { add(habitJson(it)) } } }))
+            },
+            Tool(
+                "create_habit",
+                "Create a habit. Default: every day, done or not. Give goal (+unit) for an amount; days or times_a_week for the schedule.",
+                schema(
+                    "name" to str("Name"), "goal" to int("Daily amount to reach, e.g. 8 (makes it an amount habit)"),
+                    "unit" to str("Unit of the amount, e.g. cups"), "step" to int("Amount one check-in adds (default 1)"),
+                    "days" to strArray("Weekdays: MO TU WE TH FR SA SU"), "times_a_week" to int("N times a week on any days"),
+                    "icon" to str("An emoji"), "color" to str("#RRGGBB"),
+                    required = listOf("name"),
+                ),
+                writes = true,
+            ) { a, ctx, _ ->
+                val goal = a.int("goal")
+                val days = a.strings("days").map { it.trim().uppercase().take(2) }
+                if (days.any { it !in WEEKDAYS }) throw ToolError("days must be among MO TU WE TH FR SA SU")
+                val times = a.int("times_a_week")?.also { if (it !in 1..7) throw ToolError("times_a_week must be 1 to 7") }
+                val rule = when {
+                    times != null -> "RRULE:FREQ=WEEKLY;TT_TIMES=$times"
+                    days.isNotEmpty() -> "RRULE:FREQ=WEEKLY;BYDAY=" + WEEKDAYS.filter { it in days }.joinToString(",")
+                    else -> "RRULE:FREQ=DAILY;INTERVAL=1"
+                }
+                if (goal != null && goal <= 0) throw ToolError("goal must be more than 0")
+                val h = ctx.habits.create(
+                    title(a.req("name")), a.str("icon")?.take(8), a.str("color")?.let(::color),
+                    if (goal != null) Habit.TYPE_REAL else Habit.TYPE_BOOLEAN, (goal ?: 1).toDouble(),
+                    (a.int("step")?.takeIf { it > 0 } ?: 1).toDouble(), a.str("unit")?.take(30).orEmpty(), rule,
+                )
+                ToolResult("Created habit ${h.name} (${h.id})", changed = listOf(h.id))
+            },
+            Tool(
+                "check_in_habit",
+                "Check in a habit for a day (default today). Yes/no habits become done (calling twice keeps them done); " +
+                    "amount habits add `amount` (default their step). undo=true clears the day.",
+                schema(
+                    "habit" to str("Habit name or id"), "date" to str("ISO date, default today"), "amount" to int("Amount to add (amount habits)"),
+                    "undo" to bool("Clear the day instead"), "timezone" to str("IANA zone, default Asia/Ho_Chi_Minh"),
+                    required = listOf("habit"),
+                ),
+                writes = true,
+            ) { a, ctx, zone ->
+                val key = a.req("habit")
+                val h = ctx.store.list(EntityTypes.habit).filter { !it.deleted }
+                    .let { all -> all.firstOrNull { it.id == key } ?: all.firstOrNull { it.name.equals(key, ignoreCase = true) } ?: all.singleOrNull { QuickAddParser.fold(it.name.lowercase()).contains(QuickAddParser.fold(key.lowercase())) } }
+                    ?: throw ToolError("No habit named \"$key\". Call list_habits for the names")
+                val today = Clock.System.now().toLocalDateTime(zone).date
+                val day = a.str("date")?.let { s -> runCatching { LocalDate.parse(s.trim()) }.getOrElse { throw ToolError("Can't read the date \"$s\". Use 2026-11-09") } } ?: today
+                if (day > today) throw ToolError("Can't check in a future day")
+                val before = ctx.habits.checkin(h.id, day)
+                when {
+                    a.bool("undo") == true -> ctx.habits.clear(h.id, day)
+                    h.type == Habit.TYPE_REAL -> ctx.habits.checkIn(h.id, day, a.int("amount")?.toDouble())
+                    before?.status != 2 -> ctx.habits.checkIn(h.id, day, null)
+                }
+                val after = ctx.habits.checkin(h.id, day)
+                val row = HabitBoard.rows(listOf(ctx.store.get(EntityTypes.habit, h.id)!!), ctx.store.list(EntityTypes.habitCheckin), today).single()
+                ToolResult(json(habitJson(row)), changed = listOfNotNull(after?.id ?: before?.id))
+            },
+            Tool(
+                "list_countdowns",
+                "Countdowns (days until or since a date; birthdays and anniversaries repeat yearly), soonest first.",
+                schema("include_archived" to bool("Also archived ones"), "timezone" to str("IANA zone, default Asia/Ho_Chi_Minh")),
+                writes = false,
+            ) { a, ctx, zone ->
+                val today = Clock.System.now().toLocalDateTime(zone).date
+                val cards = HabitBoard.countdowns(ctx.store.list(EntityTypes.countdown), today, zone)
+                    .filter { a.bool("include_archived") == true || it.countdown.archivedAt == null }
+                ToolResult(
+                    json(
+                        buildJsonObject {
+                            putJsonArray("countdowns") {
+                                cards.forEach { c ->
+                                    add(
+                                        buildJsonObject {
+                                            put("id", c.countdown.id); put("name", c.countdown.name)
+                                            put("type", c.countdown.type.lowercase())
+                                            put("date", Instant.fromEpochMilliseconds(c.dateMillis).toLocalDateTime(zone).date.toString())
+                                            put("days_left", c.daysLeft)
+                                            if (c.countdown.repeat == "yearly") put("yearly", true)
+                                            if (c.years > 0) put("years", c.years)
+                                            if (c.countdown.note.isNotEmpty()) put("note", c.countdown.note)
+                                            if (c.countdown.archivedAt != null) put("archived", true)
+                                        },
+                                    )
+                                }
+                            }
+                        },
+                    ),
+                )
+            },
+            Tool(
+                "create_countdown",
+                "Create a countdown to (or since) a date. Birthdays and anniversaries repeat yearly unless yearly=false.",
+                schema(
+                    "name" to str("Name"), "date" to str("ISO date, e.g. 2027-01-20 (a birth date for birthdays)"),
+                    "type" to enumStr("Kind", "countdown", "birthday", "anniversary", "holiday"),
+                    "yearly" to bool("Repeat every year"), "note" to str("Note"), "color" to str("#RRGGBB"),
+                    "show_in_calendar" to bool("Show on the calendar (default true)"),
+                    required = listOf("name", "date"),
+                ),
+                writes = true,
+            ) { a, ctx, _ ->
+                val raw = a.req("date")
+                val d = runCatching { LocalDate.parse(raw.trim()) }.getOrElse { throw ToolError("Can't read the date \"$raw\". Use 2027-01-20") }
+                val type = (a.str("type") ?: "countdown").uppercase()
+                if (type !in listOf("COUNTDOWN", "BIRTHDAY", "ANNIVERSARY", "HOLIDAY")) throw ToolError("type must be countdown, birthday, anniversary or holiday")
+                val yearly = a.bool("yearly") ?: (type == "BIRTHDAY" || type == "ANNIVERSARY")
+                val c = ctx.countdowns.create(
+                    title(a.req("name")), Stamp.of(d), type, if (yearly) "yearly" else "none", a.str("color")?.let(::color), null,
+                    notes(a.str("note").orEmpty()), a.bool("show_in_calendar") ?: true,
+                )
+                ToolResult("Created countdown ${c.name} (${c.id})", changed = listOf(c.id))
+            },
             Tool("list_lists", "All lists with their folder and open-task count.", schema(), writes = false) { _, ctx, zone ->
                 val counts = ctx.index.counts(Clock.System.now(), zone)
                 val groups = ctx.store.list(EntityTypes.projectGroup).associate { it.id to it.name }
@@ -403,6 +530,21 @@ object McpTools {
     }
 
     fun byName(name: String): Tool? = all.firstOrNull { it.name == name }
+
+    private val WEEKDAYS = listOf("MO", "TU", "WE", "TH", "FR", "SA", "SU")
+
+    private fun habitJson(r: HabitRow): JsonObject = buildJsonObject {
+        put("id", r.habit.id); put("name", r.habit.name)
+        put("schedule", r.schedule)
+        if (r.habit.type == Habit.TYPE_REAL) {
+            put("goal", r.habit.goal); put("unit", r.habit.unit); put("today_value", r.todayValue)
+        }
+        put("done_today", r.doneToday)
+        put("due_today", r.dueToday)
+        put("streak", r.stats.currentStreak); put("longest_streak", r.stats.longestStreak); put("streak_unit", r.stats.unit)
+        put("total_days", r.stats.totalDays)
+        if (r.archived) put("archived", true)
+    }
 
     // ---- handlers ----
 
@@ -653,7 +795,10 @@ object McpTools {
      * smart list, folder, checklist item), as stored.
      */
     internal fun snapshot(ctx: McpReplica.Context, ids: List<String>): JsonObject = buildJsonObject {
-        val kinds = listOf(EntityTypes.task, EntityTypes.project, EntityTypes.column, EntityTypes.filter, EntityTypes.projectGroup, EntityTypes.checklistItem, EntityTypes.tag)
+        val kinds = listOf(
+            EntityTypes.task, EntityTypes.project, EntityTypes.column, EntityTypes.filter, EntityTypes.projectGroup, EntityTypes.checklistItem, EntityTypes.tag,
+            EntityTypes.habit, EntityTypes.habitCheckin, EntityTypes.countdown,
+        )
         ids.distinct().forEach { id ->
             val raw = kinds.firstNotNullOfOrNull { k -> ctx.store.rawRecord(k.name, id)?.let { k.name to it } }
             put(id, raw?.let { (kind, r) -> buildJsonObject { put("kind", kind); put("fields", JsonObject(r.fields)) } } ?: JsonNull)

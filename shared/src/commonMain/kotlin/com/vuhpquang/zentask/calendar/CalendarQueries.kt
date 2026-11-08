@@ -16,10 +16,10 @@ import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Instant
 
-/** One thing on the calendar: a Google/iCal event (read-only) or a dated task. */
+/** One thing on the calendar: a Google/iCal event (read-only), a dated task, or a countdown. */
 data class CalendarEntry(
     val id: String,
-    /** "event" or "task". */
+    /** "event", "task" or "countdown". */
     val kind: String,
     val title: String,
     val start: Long,

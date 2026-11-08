@@ -370,7 +370,7 @@ Chỉ dùng khi chưa lấy được cookie. Trong TickTick, vào **Settings →
 
 ## 6. Kết nối Claude Code (MCP) với ZenTask
 
-Server ZenTask có endpoint MCP tại `https://zentask-api.vuhpquang.com/mcp`. Claude dùng nó để tìm, thêm, sửa, hoàn thành và xoá task, tag. Thay đổi do AI làm xuất hiện trên Mac sau lần sync kế tiếp.
+Server ZenTask có endpoint MCP tại `https://zentask-api.vuhpquang.com/mcp`. Claude dùng nó để tìm, thêm, sửa, hoàn thành và xoá task, tag, list; xem lịch; xem và check-in habit; xem và tạo countdown. Thay đổi do AI làm xuất hiện trên Mac sau lần sync kế tiếp.
 
 > AI dùng một **token riêng** như một thiết bị, thu hồi được bất cứ lúc nào. "Xoá" mặc định là đưa vào Trash; AI chỉ xoá hẳn được task đã nằm trong Trash. Mọi thay đổi qua MCP được ghi nhật ký trên server (bảng `mcp_audit`).
 
@@ -405,6 +405,8 @@ Trong Claude Code, gõ chẳng hạn:
 - "Hôm nay tôi có task gì trong ZenTask?"
 - "Thêm task gọi ngân hàng ngày mai 9h, priority cao, tag #finance"
 - "Đánh dấu xong task gọi ngân hàng"
+- "Hôm nay tôi đã uống được 3 cốc nước" (check-in habit kiểu số lượng)
+- "Còn bao nhiêu ngày tới sinh nhật mẹ?"
 
 Sau đó, trên Mac, bấm sync ở góc dưới sidebar (hoặc đợi vài giây) để thấy thay đổi.
 

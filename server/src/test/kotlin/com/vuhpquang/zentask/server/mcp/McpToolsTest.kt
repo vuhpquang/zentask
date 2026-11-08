@@ -381,4 +381,39 @@ class McpToolsTest {
         db2.close()
         assertEquals(listOf("Standup"), obj(client.tool(token, "list_events", """{"from":"2026-11-09","to":"2026-11-09"}""").first)["events"]!!.jsonArray.map { it.jsonObject["title"]!!.jsonPrimitive.content })
     }
+
+    @Test
+    fun habitAndCountdownTools() = testApplication {
+        server()
+        val token = client.loginToken()
+        client.tool(token, "list_tags") // start the app (creates the replica)
+        val (made, err) = client.tool(token, "create_countdown", """{"name":"Trip","date":"2027-01-20"}""")
+        assertFalse(err, made)
+        val (bday, err2) = client.tool(token, "create_countdown", """{"name":"Mom","date":"1960-11-10","type":"birthday"}""")
+        assertFalse(err2, bday)
+        val cds = obj(client.tool(token, "list_countdowns").first)["countdowns"]!!.jsonArray.map { it.jsonObject }
+        assertEquals(listOf("Mom", "Trip"), cds.map { it["name"]!!.jsonPrimitive.content }, "soonest first")
+        assertEquals(true, cds[0]["yearly"]!!.jsonPrimitive.boolean, "birthdays repeat")
+        assertTrue(cds[0]["days_left"]!!.jsonPrimitive.int >= 0)
+        assertTrue(client.tool(token, "create_countdown", """{"name":"Bad","date":"soon"}""").second)
+
+        assertTrue(client.tool(token, "check_in_habit", """{"habit":"Nope"}""").second, "unknown habit is an error")
+        val (h, herr) = client.tool(token, "create_habit", """{"name":"Water","goal":8,"unit":"cups"}""")
+        assertFalse(herr, h)
+        client.tool(token, "create_habit", """{"name":"Read","days":["MO","WE"]}""")
+        val (c1, e1) = client.tool(token, "check_in_habit", """{"habit":"water","amount":3}""")
+        assertFalse(e1, c1)
+        assertEquals(3.0, obj(c1)["today_value"]!!.jsonPrimitive.content.toDouble())
+        client.tool(token, "check_in_habit", """{"habit":"Read","date":"2026-11-02"}""")
+        client.tool(token, "check_in_habit", """{"habit":"Read","date":"2026-11-02"}""") // twice = still done, not undone
+        val habits = obj(client.tool(token, "list_habits").first)["habits"]!!.jsonArray.map { it.jsonObject }
+        val read = habits.single { it["name"]!!.jsonPrimitive.content == "Read" }
+        assertEquals("Mon, Wed", read["schedule"]!!.jsonPrimitive.content)
+        assertEquals(1, read["total_days"]!!.jsonPrimitive.int)
+        val (undo, ue) = client.tool(token, "check_in_habit", """{"habit":"Read","date":"2026-11-02","undo":true}""")
+        assertFalse(ue, undo)
+        assertEquals(0, obj(client.tool(token, "list_habits").first)["habits"]!!.jsonArray.map { it.jsonObject }.single { it["name"]!!.jsonPrimitive.content == "Read" }["total_days"]!!.jsonPrimitive.int)
+        val audit = ServerDb(dir.resolve("zentask.db")).let { d -> d.auditRows().also { d.close() } }
+        assertTrue(audit.any { (tool, changes) -> tool == "check_in_habit" && changes.contains("habitCheckin") }, audit.toString())
+    }
 }

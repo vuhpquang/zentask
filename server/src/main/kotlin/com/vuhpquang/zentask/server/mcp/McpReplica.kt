@@ -1,5 +1,7 @@
 package com.vuhpquang.zentask.server.mcp
 
+import com.vuhpquang.zentask.habits.CountdownActions
+import com.vuhpquang.zentask.habits.HabitActions
 import com.vuhpquang.zentask.lists.ListActions
 import com.vuhpquang.zentask.server.store.ServerDb
 import com.vuhpquang.zentask.server.sync.rejection
@@ -26,7 +28,14 @@ class McpReplica(
     file: Path,
     private val wall: () -> Long = System::currentTimeMillis,
 ) : AutoCloseable {
-    class Context(val store: ZenStore, val actions: TaskActions, val tags: TagActions, val lists: ListActions) {
+    class Context(
+        val store: ZenStore,
+        val actions: TaskActions,
+        val tags: TagActions,
+        val lists: ListActions,
+        val habits: HabitActions,
+        val countdowns: CountdownActions,
+    ) {
         val index: TaskIndex by lazy { TaskIndex.load(store) }
     }
 
@@ -38,12 +47,14 @@ class McpReplica(
     private val actions = TaskActions(store, wall) { zone }
     private val tagActions = TagActions(store)
     private val listActions = ListActions(store, wall)
+    private val habitActions = HabitActions(store, wall)
+    private val countdownActions = CountdownActions(store, wall)
     private val mutex = Mutex()
 
     suspend fun <T> transact(block: (Context) -> T): T = mutex.withLock {
         withContext(Dispatchers.IO) {
             pull()
-            val result = block(Context(store, actions, tagActions, listActions))
+            val result = block(Context(store, actions, tagActions, listActions, habitActions, countdownActions))
             push()
             pull() // advance the checkpoint past our own writes (so a restored server is noticed)
             result

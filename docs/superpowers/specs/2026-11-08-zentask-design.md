@@ -1,6 +1,6 @@
 # ZenTask — Thiết kế tổng thể
 
-Ngày: 2026-11-08 · Trạng thái: P0, P1, P2, P3, P3b, P4, P5 xong (plan trong `docs/superpowers/plans/`)
+Ngày: 2026-11-08 · Trạng thái: P0, P1, P2, P3, P3b, P4, P5, P6 xong (plan trong `docs/superpowers/plans/`)
 
 ## 1. Ý định
 
@@ -171,7 +171,7 @@ Các quyết định dưới đây là của người viết thiết kế; chủ
   - Task (cùng P3): `search_tasks` (list, tag, priority, khoảng ngày, trạng thái, từ khoá), `get_task`, `create_task`, `update_task` (sửa từng trường), `complete_task` (task lặp lại xử lý giống app, mục 7.1), `trash_task` / `restore_task`, `delete_task`.
   - Tag: `list_tags`, `create_tag`, `update_tag`, `delete_tag`.
   - P4: `list_projects`, `create_project`, `update_project`, `delete_project`, column, filter.
-  - P6: `list_habits`, `check_in_habit`, countdown CRUD.
+  - P6: `list_habits`, `create_habit`, `check_in_habit` (yes/no: gọi lại vẫn là xong, không đảo trạng thái; `undo` để xoá ngày), `list_countdowns`, `create_countdown`. Sửa/xoá habit và countdown làm trong app.
   - P5: `list_events` (chỉ đọc).
 - **An toàn** (vì "mất dữ liệu" là anti-goal):
   - "Xoá" mặc định là đưa vào Trash. Xoá vĩnh viễn chỉ khi gọi `delete_task` với `permanent: true`.

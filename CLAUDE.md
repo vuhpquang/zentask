@@ -53,6 +53,9 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
   - `lists/` — `ListActions` (lists/folders/sections, trash+restore by shared timestamp, Inbox protected,
     `SortOrder` gaps of 2^32 with renumber on exhaustion), `FilterRule` (custom smart lists, JSON in
     `Filter.rule`), `ViewOptions` (per-list sort/group, synced as Preference `view.<key>`).
+  - `habits/` — `HabitSchedule` (TickTick rule formats: daily, BYDAY, `TT_TIMES=n` a week), `HabitStats`
+    (day or week streaks), `HabitActions` (check-in id `chk_<habitId>_<yyyyMMdd>`, toggle or accumulate),
+    `CountdownQueries`/`CountdownActions` (yearly repeats, 29 Feb → 28), `HabitBoard` (rows/cards for the UIs and MCP).
   - `calendar/` — `CalendarQueries` (Day/Week/Month content: visible events + dated tasks, all-day row,
     timed entries clipped per day with overlap columns). Calendar records are server-owned; which
     calendars show is the Preference `calendar.hidden`.
@@ -80,6 +83,9 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
   icon rail, ⌘1–5) + the area. List management: `Tasks/ListSheets.swift` (sheets), sidebar context menus,
   drag and drop with task-id String payloads validated in `TasksModel.drop`. `Calendar/` (rail ⌘2):
   `CalendarModel` + `CalendarView` (Week/Day grid, Month, Unscheduled panel); Settings → Calendars.
+  `Habits/` (rail ⌘3): `HabitsModel` + `HabitsView` (list with a 7-day strip | detail with check-in, stats,
+  month map) + `HabitEditor`. `Countdowns/` (rail ⌘4): `CountdownsModel` + `CountdownsView` (card grid, editor).
+  Countdowns with "show in calendar" appear as all-day entries.
   In Swift, write `_Concurrency.Task { }` in files that import ZenTaskShared (Kotlin `Task` shadows it).
   UI snapshots: `ZENTASK_SNAPSHOT=/tmp/shots build/DerivedData/Build/Products/Debug/ZenTask.app/Contents/MacOS/ZenTask`.
 - `scripts/` — `lib/env.sh` (sourced by all), build, release, deploy, signing, icon.
