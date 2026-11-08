@@ -49,6 +49,8 @@ import androidx.compose.material.icons.outlined.Circle
 import androidx.compose.material.icons.outlined.FilterAlt
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.DropdownMenu
@@ -465,15 +467,32 @@ fun TaskDetailScreen(app: ZenApp, taskId: String, close: () -> Unit) {
         LaunchedEffect(index) { if (index != null) close() }
         return
     }
-    var title by remember(taskId) { mutableStateOf(task.title) }
-    var notes by remember(taskId) { mutableStateOf(task.content) }
+    // Drafts of the two text fields, each with the value it was loaded from. Only a field the user changed
+    // is written, so a newer title or note synced from another device is never reverted by an untouched field;
+    // an untouched field follows the synced value. Saved while typing (debounced), on stop and on leaving.
+    var title by rememberSaveable(taskId) { mutableStateOf(task.title) }
+    var titleBase by rememberSaveable(taskId) { mutableStateOf(task.title) }
+    var notes by rememberSaveable(taskId) { mutableStateOf(task.content) }
+    var notesBase by rememberSaveable(taskId) { mutableStateOf(task.content) }
     var picking by remember { mutableStateOf<String?>(null) }
     var newItem by remember { mutableStateOf("") }
     var newSub by remember { mutableStateOf("") }
+    if (title == titleBase && task.title != titleBase) { title = task.title; titleBase = task.title }
+    if (notes == notesBase && task.content != notesBase) { notes = task.content; notesBase = task.content }
     fun commit() {
         val t = title.trim()
-        if (t.isNotEmpty() && t != task.title) app.core.actions.rename(task.id, t)
-        if (notes != task.content) app.core.actions.setContent(task.id, notes)
+        if (title != titleBase && t.isNotEmpty()) { app.core.actions.rename(taskId, t); titleBase = title }
+        if (notes != notesBase) { app.core.actions.setContent(taskId, notes); notesBase = notes }
+    }
+    LaunchedEffect(title, notes) {
+        kotlinx.coroutines.delay(800)
+        commit()
+    }
+    val lifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current.lifecycle
+    androidx.compose.runtime.DisposableEffect(taskId, lifecycle) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, e -> if (e == androidx.lifecycle.Lifecycle.Event.ON_STOP) commit() }
+        lifecycle.addObserver(observer)
+        onDispose { lifecycle.removeObserver(observer); commit() }
     }
     Scaffold(
         topBar = {
@@ -497,7 +516,8 @@ fun TaskDetailScreen(app: ZenApp, taskId: String, close: () -> Unit) {
                     colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent),
                 )
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp)) {
+            @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp)) {
                 val day = index?.let { app.core.taskDayMillis(it, task) }
                 AssistChip(onClick = { picking = "date" }, label = { Text(day?.let { dateText(it, task) } ?: "Add date") }, leadingIcon = { Icon(Icons.Filled.CalendarMonth, null) })
                 Box {
@@ -517,6 +537,7 @@ fun TaskDetailScreen(app: ZenApp, taskId: String, close: () -> Unit) {
                         for (p in liveLists(index)) DropdownMenuItem(text = { Text(p.name) }, onClick = { app.core.actions.move(task.id, p.id); picking = null })
                     }
                 }
+                if (day != null) ReminderChip(app, task, expanded = picking == "reminder", open = { picking = "reminder" }, close = { picking = null })
             }
             OutlinedTextField(
                 value = notes, onValueChange = { notes = it }, label = { Text("Notes") },
@@ -549,7 +570,35 @@ fun TaskDetailScreen(app: ZenApp, taskId: String, close: () -> Unit) {
         }
     }
     if (picking == "date") DueDialog(app, task) { picking = null }
-    androidx.compose.runtime.DisposableEffect(taskId) { onDispose { commit() } }
+}
+
+/** Reminders for a dated task: the shared presets for timed or all-day tasks, toggled on and off. */
+@Composable
+private fun ReminderChip(app: ZenApp, task: Task, expanded: Boolean, open: () -> Unit, close: () -> Unit) {
+    val presets = if (task.isAllDay) com.vuhpquang.zentask.tasks.ReminderPresets.allDay else com.vuhpquang.zentask.tasks.ReminderPresets.timed
+    val label = when (task.reminders.size) {
+        0 -> "Reminder"
+        1 -> com.vuhpquang.zentask.tasks.ReminderPresets.title(task.reminders[0]) ?: "1 reminder"
+        else -> "${task.reminders.size} reminders"
+    }
+    Box {
+        AssistChip(onClick = open, label = { Text(label, maxLines = 1) }, leadingIcon = {
+            Icon(if (task.reminders.isEmpty()) Icons.Outlined.NotificationsNone else Icons.Filled.Notifications, null)
+        })
+        DropdownMenu(expanded = expanded, onDismissRequest = close) {
+            for ((trigger, title) in presets) {
+                val on = trigger in task.reminders
+                DropdownMenuItem(
+                    text = { Text(title) },
+                    leadingIcon = { Icon(if (on) Icons.Filled.CheckCircle else Icons.Outlined.Circle, null, tint = MaterialTheme.colorScheme.primary) },
+                    onClick = { app.core.actions.setReminders(task.id, if (on) task.reminders - trigger else task.reminders + trigger) },
+                )
+            }
+            if (task.reminders.isNotEmpty()) {
+                DropdownMenuItem(text = { Text("No reminder") }, onClick = { app.core.actions.setReminders(task.id, emptyList()); close() })
+            }
+        }
+    }
 }
 
 fun priorityTitle(p: Int) = when (p) { 5 -> "High"; 3 -> "Medium"; 1 -> "Low"; else -> "Priority" }

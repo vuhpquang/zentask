@@ -99,7 +99,7 @@ fun CalendarScreen(app: ZenApp) {
     var day by rememberSaveable { mutableStateOf(LocalDate.now(zone).toEpochDay()) }
     val selected = LocalDate.ofEpochDay(day)
     val monday = selected.minusDays((selected.dayOfWeek.value - 1).toLong())
-    val week = remember(revision, monday) { app.core.calendarDays(midnight(monday), 7) }
+    val week = loaded(revision, monday) { app.core.calendarDays(midnight(monday), 7) } ?: return
     val today = LocalDate.now(zone)
     Scaffold(topBar = {
         TopAppBar(
@@ -174,8 +174,8 @@ private fun AgendaCard(app: ZenApp, e: CalendarEntry) {
 @Composable
 fun HabitsScreen(app: ZenApp) {
     val revision by app.revision.collectAsState()
-    val rows = remember(revision) { app.core.habitRows().filter { !it.archived } }
-    val week = remember(revision) { app.core.habitWeek() }
+    val rows = loaded(revision) { app.core.habitRows().filter { !it.archived } } ?: emptyList()
+    val week = loaded(revision) { app.core.habitWeek() } ?: emptyList()
     val today = app.core.todayStamp()
     Scaffold(topBar = { TopAppBar(title = { Text("Habits") }) }) { padding ->
         LazyColumn(Modifier.padding(padding).padding(horizontal = 16.dp)) {
@@ -245,7 +245,7 @@ private fun Ring(progress: Float, modifier: Modifier, color: Color = MaterialThe
 @Composable
 fun CountdownScreen(app: ZenApp) {
     val revision by app.revision.collectAsState()
-    val cards = remember(revision) { app.core.countdownCards().filter { it.countdown.archivedAt == null } }
+    val cards = loaded(revision) { app.core.countdownCards().filter { it.countdown.archivedAt == null } } ?: return
     Scaffold(topBar = { TopAppBar(title = { Text("Countdown") }) }) { padding ->
         if (cards.isEmpty()) {
             Box(Modifier.padding(padding).fillMaxSize(), contentAlignment = Alignment.Center) { Text("No countdowns yet", color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -287,41 +287,31 @@ private fun Color.compositeOver(background: Color): Color {
 @Composable
 fun FocusScreen(app: ZenApp) {
     val revision by app.revision.collectAsState()
-    val stats = remember(revision) { app.core.focusStats() }
-    var stopwatch by rememberSaveable { mutableStateOf(false) }
-    var startedAt by rememberSaveable { mutableLongStateOf(0L) }
+    val stats = loaded(revision) { app.core.focusStats() } ?: return
+    val stopwatch by app.focusStopwatch.collectAsState()
+    val startedAt by app.focusStartedAt.collectAsState()
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    val plan = PomodoroPlan()
     val running = startedAt > 0
     LaunchedEffect(running) { while (running) { now = System.currentTimeMillis(); delay(1000) } }
-    val elapsed = if (running) (now - startedAt) / 1000 else 0
-    val length = plan.focusMinutes * 60L
-    if (running && !stopwatch && elapsed >= length) {
-        LaunchedEffect(startedAt) {
-            app.core.focusActions.record(startedAt, startedAt + length * 1000, FocusRecord.KIND_POMO, null, "")
-            startedAt = 0
-        }
-    }
+    val elapsed = if (running) ((now - startedAt) / 1000).coerceAtLeast(0) else 0
+    val length = app.pomoMillis / 1000
     Scaffold(topBar = { TopAppBar(title = { Text("Focus") }) }) { padding ->
         LazyColumn(Modifier.padding(padding).padding(horizontal = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             item {
                 SingleChoiceSegmentedButtonRow(Modifier.padding(vertical = 8.dp)) {
-                    SegmentedButton(selected = !stopwatch, onClick = { if (!running) stopwatch = false }, shape = SegmentedButtonDefaults.itemShape(0, 2)) { Text("Pomo") }
-                    SegmentedButton(selected = stopwatch, onClick = { if (!running) stopwatch = true }, shape = SegmentedButtonDefaults.itemShape(1, 2)) { Text("Stopwatch") }
+                    SegmentedButton(selected = !stopwatch, onClick = { app.setFocusStopwatch(false) }, shape = SegmentedButtonDefaults.itemShape(0, 2)) { Text("Pomo") }
+                    SegmentedButton(selected = stopwatch, onClick = { app.setFocusStopwatch(true) }, shape = SegmentedButtonDefaults.itemShape(1, 2)) { Text("Stopwatch") }
                 }
                 Box(Modifier.size(260.dp).padding(16.dp), contentAlignment = Alignment.Center) {
-                    Ring(if (stopwatch) (if (running) 1f else 0f) else elapsed.toFloat() / length, Modifier.fillMaxSize())
-                    val shown = if (stopwatch) elapsed else length - elapsed
+                    Ring(if (stopwatch) (if (running) 1f else 0f) else (elapsed.toFloat() / length).coerceAtMost(1f), Modifier.fillMaxSize())
+                    val shown = if (stopwatch) elapsed else (length - elapsed).coerceAtLeast(0)
                     Text("%02d:%02d".format(shown / 60, shown % 60), fontSize = 52.sp, fontWeight = FontWeight.Light)
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     if (!running) {
-                        Button(onClick = { startedAt = System.currentTimeMillis(); now = startedAt }) { Text("Start") }
+                        Button(onClick = { now = System.currentTimeMillis(); app.startFocus() }) { Text("Start") }
                     } else {
-                        OutlinedButton(onClick = {
-                            if (stopwatch) app.core.focusActions.recordOrNull(startedAt, System.currentTimeMillis(), FocusRecord.KIND_STOPWATCH, null, "")
-                            startedAt = 0
-                        }) { Text(if (stopwatch) "Stop and save" else "Stop") }
+                        OutlinedButton(onClick = { app.stopFocus() }) { Text(if (stopwatch) "Stop and save" else "Stop") }
                     }
                 }
                 Row(Modifier.fillMaxWidth().padding(top = 24.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -437,3 +427,13 @@ fun SearchScreen(app: ZenApp, open: (String) -> Unit, close: () -> Unit) {
         }
     }
 }
+
+/**
+ * Reads data off the main thread whenever [keys] change (a data revision, a week…), keeping the previous
+ * value on screen while the next one loads. Null only before the first load.
+ */
+@Composable
+private fun <T> loaded(vararg keys: Any?, load: () -> T): T? =
+    androidx.compose.runtime.produceState<T?>(null, *keys) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { load() }
+    }.value

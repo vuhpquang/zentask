@@ -453,3 +453,11 @@ Cách 2, không cần cáp: gửi file APK sang điện thoại (Google Drive, T
 1. Mở ZenTask → ☰ → Settings.
 2. Nhập mật khẩu server ZenTask (cái ở bước 2.1) → Sign in.
 3. Dữ liệu từ Mac tải về sau vài giây. Mỗi điện thoại là một thiết bị riêng (xem/thu hồi như bước 6.4).
+
+### 7.4 Nhắc nhở và widget
+
+1. Lần đầu mở app, chọn **Cho phép** thông báo (cần để nhắc nhở hiện lên).
+2. Trên Galaxy (One UI): Cài đặt → Ứng dụng → ZenTask → Pin → chọn **Không hạn chế**, nếu không máy có thể
+   trì hoãn nhắc nhở khi đang tiết kiệm pin.
+3. Widget: giữ ngón tay trên màn hình chính → Widget → tìm "ZenTask" → kéo widget **Today** ra màn hình.
+   Bấm ô vuông để hoàn thành task, bấm tên task để mở app.

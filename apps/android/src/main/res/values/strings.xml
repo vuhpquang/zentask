@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">ZenTask</string>
+    <string name="widget_today">Today</string>
+    <string name="widget_today_description">Today\'s tasks; tick to complete</string>
 </resources>

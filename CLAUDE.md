@@ -118,7 +118,13 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
   compileSdk 37, versionCode from `VERSION`. `ZenTaskApplication` sets `AndroidPlatform.context`; `ZenApp` owns
   `ZenTaskCore` (DB `zentask.db`), the server token (SharedPreferences), `index`/`revision` StateFlows and sync.
   UI: `MainActivity` (bottom bar Tasks/Calendar/Habits/Countdown/Focus), `ui/TasksScreen.kt` (drawer, list,
-  quick add, detail), `ui/OtherScreens.kt`, `ui/Theme.kt`. Release APK is signed with the Mac's debug key.
+  quick add, detail), `ui/OtherScreens.kt`, `ui/Theme.kt`. Detail text fields keep drafts with the value they
+  were loaded from and write only changed fields (debounced, on stop, on leave), so synced edits aren't reverted.
+  `Reminders.kt`: exact alarms from `core.plannedReminders` (armed id=fireAt kept in prefs, only changes re-armed,
+  a 12 h re-plan alarm, `BootReceiver` re-arms after reboot/update), notification with a Done action; also the
+  pomo end alarm. The Focus timer lives in `ZenApp` (prefs `focus.*`), not in the screen. `TodayWidget.kt`: Glance
+  home-screen widget (Today list, tick to complete), reloads on `ZenApp.revision`. Screens read data off the main
+  thread with `loaded(keys) { … }`. Release APK is signed with the Mac's debug key.
   Build: `./gradlew :android:assembleDebug`; test on the emulator (`emulator -avd Medium_API37_1 -no-window`,
   drive with `adb shell input`, `adb exec-out screencap -p`). Install steps for the phone: setup-guide §7.
 - `scripts/` — `lib/env.sh` (sourced by all), build, release, deploy, signing, icon.

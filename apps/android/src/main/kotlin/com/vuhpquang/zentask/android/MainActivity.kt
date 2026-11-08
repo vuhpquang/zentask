@@ -1,6 +1,8 @@
 package com.vuhpquang.zentask.android
 
 import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -42,11 +44,31 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         val zen = (application as ZenTaskApplication).zen
-        requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
+        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
+        }
+        // Not on a restore or a launch from Recents: those replay the original intent of an old notification.
+        if (savedInstanceState == null && intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY == 0) handle(intent)
         setContent {
             val mode by zen.themeMode.collectAsState()
             ZenTaskTheme(mode) { ZenTaskRoot(zen) }
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handle(intent)
+    }
+
+    /** A tapped reminder opens its task. */
+    private fun handle(intent: Intent?) {
+        val id = intent?.getStringExtra(EXTRA_OPEN_TASK) ?: return
+        intent.removeExtra(EXTRA_OPEN_TASK)
+        (application as ZenTaskApplication).zen.openTask.value = id
+    }
+
+    companion object {
+        const val EXTRA_OPEN_TASK = "openTask"
     }
 }
 
@@ -62,6 +84,10 @@ private enum class Area(val title: String, val icon: ImageVector) {
 private fun ZenTaskRoot(zen: ZenApp) {
     var area by rememberSaveable { mutableStateOf(Area.Tasks) }
     var page by rememberSaveable { mutableStateOf<String?>(null) } // "settings", "search", "task:<id>"
+    val openTask by zen.openTask.collectAsState()
+    androidx.compose.runtime.LaunchedEffect(openTask) {
+        openTask?.let { page = "task:$it"; zen.openTask.value = null }
+    }
     when {
         page == "settings" -> { SettingsScreen(zen) { page = null }; return }
         page == "search" -> { SearchScreen(zen, open = { page = "task:$it" }) { page = null }; return }

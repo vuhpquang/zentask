@@ -10,6 +10,7 @@ class ZenTaskApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         AndroidPlatform.context = this
+        Reminders.createChannel(this)
         zen = ZenApp(this).also { it.start() }
     }
 }

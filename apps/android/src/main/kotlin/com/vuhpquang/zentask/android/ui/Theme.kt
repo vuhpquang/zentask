@@ -31,7 +31,7 @@ object ZenColors {
     }
 }
 
-private val light = lightColorScheme(
+internal val light = lightColorScheme(
     primary = ZenColors.accentLight,
     secondary = ZenColors.violet,
     tertiary = Color(0xFF2E9E88),
@@ -40,7 +40,7 @@ private val light = lightColorScheme(
     surfaceContainer = Color(0xFFF1F1F8),
 )
 
-private val dark = darkColorScheme(
+internal val dark = darkColorScheme(
     primary = ZenColors.accentDark,
     secondary = Color(0xFFB59CFF),
     tertiary = Color(0xFF5CC8B0),
