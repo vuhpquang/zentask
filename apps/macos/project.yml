@@ -38,6 +38,12 @@ targets:
       configs:
         Debug:
           PRODUCT_BUNDLE_IDENTIFIER: com.vuhpquang.zentask.dev
+    info:
+      path: ZenTask/Info.plist
+      properties:
+        CFBundleURLTypes:
+          - CFBundleURLName: com.vuhpquang.zentask.task-link
+            CFBundleURLSchemes: [zentask]
   ZenTaskTests:
     type: bundle.unit-test
     platform: macOS

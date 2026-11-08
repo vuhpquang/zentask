@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// ZenTask design tokens: spacing on a 2/4/8 scale, radii, sizes. Views use these, never literals.
@@ -19,6 +20,15 @@ enum Theme {
 
     /** Priority colours (ZenTask's own): system colours, so they resolve per appearance. */
     enum PriorityColor {
+        static func nsColor(_ priority: Int32) -> NSColor {
+            switch priority {
+            case 5: .systemRed
+            case 3: .systemOrange
+            case 1: .systemBlue
+            default: .secondaryLabelColor
+            }
+        }
+
         static func color(_ priority: Int32) -> Color {
             switch priority {
             case 5: .red

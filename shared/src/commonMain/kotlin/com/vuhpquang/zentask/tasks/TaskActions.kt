@@ -89,6 +89,36 @@ class TaskActions(
         return t
     }
 
+    /**
+     * A new open copy just below the original: same list, fields, tags, checklist (unticked) and
+     * subtasks. The copy is ZenTask's own (no TickTick id).
+     */
+    fun duplicate(id: String): Task {
+        lateinit var copy: Task
+        store.inTransaction {
+            val t = store.get(tasks, id) ?: error("no task $id")
+            val now = wall()
+            copy = t.copy(
+                id = Uuid.random().toString(), createdAt = now, updatedAt = now, status = TaskStatus.OPEN, completedAt = null,
+                ticktickId = null, repeatTaskId = null, trashedAt = null, pinnedAt = null, sortOrder = t.sortOrder + 1,
+            )
+            store.put(tasks, copy)
+            store.idsWhere(EntityTypes.checklistItem, "taskId", id).mapNotNull { store.get(EntityTypes.checklistItem, it) }.forEach { item ->
+                store.put(
+                    EntityTypes.checklistItem,
+                    item.copy(id = Uuid.random().toString(), createdAt = now, taskId = copy.id, status = TaskStatus.OPEN, completedAt = null, ticktickId = null),
+                )
+            }
+            children(id).filter { it.trashedAt == null }.forEach { sub ->
+                store.put(
+                    tasks,
+                    sub.copy(id = Uuid.random().toString(), createdAt = now, parentId = copy.id, status = TaskStatus.OPEN, completedAt = null, ticktickId = null),
+                )
+            }
+        }
+        return copy
+    }
+
     // ---- status ----
 
     /**

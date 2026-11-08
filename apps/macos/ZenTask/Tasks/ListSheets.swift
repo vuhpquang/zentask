@@ -3,7 +3,7 @@ import SwiftUI
 
 /// Colours offered for lists and tags (ZenTask's own palette; stored as #RRGGBB).
 enum Palette {
-    static let colors = ["#2E9E88", "#3B82F6", "#8B5CF6", "#EC4899", "#EF4444", "#F59E0B", "#84CC16", "#64748B"]
+    static let colors = ["#5B5FE9", "#3B82F6", "#8B5CF6", "#EC4899", "#EF4444", "#F59E0B", "#2E9E88", "#64748B"]
 }
 
 /// Routes a ListSheet to its view.

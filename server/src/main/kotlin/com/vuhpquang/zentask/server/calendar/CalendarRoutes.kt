@@ -82,8 +82,8 @@ private fun page(title: String, message: String) = """<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ZenTask — $title</title>
 <style>
-:root{color-scheme:light dark;--bg:#f6f8f7;--fg:#1d2a27;--accent:#288a79}
-@media (prefers-color-scheme:dark){:root{--bg:#141a19;--fg:#e6efec;--accent:#52c2a6}}
+:root{color-scheme:light dark;--bg:#f6f8f7;--fg:#1d2a27;--accent:#5b5fe9}
+@media (prefers-color-scheme:dark){:root{--bg:#141a19;--fg:#e6efec;--accent:#8b8cff}}
 body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--fg);font:16px/1.5 -apple-system,system-ui,sans-serif}
 main{max-width:420px;padding:32px;text-align:center}h1{color:var(--accent);font-size:24px;margin:0 0 8px}
 </style></head><body><main><h1>$title</h1><p>$message</p></main></body></html>"""

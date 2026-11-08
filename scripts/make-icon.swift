@@ -1,4 +1,4 @@
-// Renders the ZenTask logo: a brush-stroke ensō whose gap is closed by a check mark, on a jade squircle.
+// Renders the ZenTask logo: a brush-stroke ensō whose gap is closed by a check mark, on a blue→violet squircle.
 //   swift scripts/make-icon.swift <AppIcon.appiconset> [logo.png]
 // Writes every macOS icon size + Contents.json, and optionally a 1024 px logo PNG.
 import AppKit
@@ -12,10 +12,13 @@ func rgb(_ r: CGFloat, _ g: CGFloat, _ b: CGFloat, _ a: CGFloat = 1) -> NSColor 
     NSColor(srgbRed: r / 255, green: g / 255, blue: b / 255, alpha: a)
 }
 
-// Palette (ZenTask's own): jade background, warm rice-paper ink.
-let jadeTop = rgb(52, 168, 140)
-let jadeBottom = rgb(14, 92, 86)
-let ink = rgb(250, 247, 238)
+// Palette (ZenTask's own): blue → violet background, near-white ink.
+let blue = rgb(59, 130, 246)
+let indigo = rgb(99, 102, 241)
+let violet = rgb(139, 92, 246)
+let deep = rgb(76, 29, 149)
+let ink = rgb(255, 255, 255)
+let inkShade = rgb(224, 231, 255)
 
 /// Polygon of a stroke along an arc whose width follows `width(t)`, t in 0...1.
 func brushArc(center c: NSPoint, radius r: CGFloat, from a0: CGFloat, to a1: CGFloat,
@@ -61,23 +64,39 @@ func render(_ px: Int) -> Data {
     shadow.shadowBlurRadius = s * 0.025
     shadow.shadowOffset = NSSize(width: 0, height: -s * 0.01)
     shadow.set()
-    jadeBottom.setFill()
+    deep.setFill()
     squircle.fill()
     NSGraphicsContext.restoreGraphicsState()
 
-    // Background gradient + top glow.
-    NSGradient(starting: jadeTop, ending: jadeBottom)!.draw(in: squircle, angle: -90)
+    // Diagonal blue → indigo → violet, a deeper violet corner, a soft light from the top-left.
+    NSGradient(colors: [blue, indigo, violet], atLocations: [0, 0.5, 1], colorSpace: .sRGB)!.draw(in: squircle, angle: -45)
     NSGraphicsContext.saveGraphicsState()
     squircle.addClip()
-    let glowCenter = NSPoint(x: body.midX, y: body.maxY)
-    NSGradient(colors: [NSColor.white.withAlphaComponent(0.22), NSColor.white.withAlphaComponent(0)])!
-        .draw(fromCenter: glowCenter, radius: 0, toCenter: glowCenter, radius: body.width * 0.75, options: [])
+    let corner = NSPoint(x: body.maxX, y: body.minY)
+    NSGradient(colors: [deep.withAlphaComponent(0.55), deep.withAlphaComponent(0)])!
+        .draw(fromCenter: corner, radius: 0, toCenter: corner, radius: body.width * 0.8, options: [])
+    let glowCenter = NSPoint(x: body.minX + body.width * 0.3, y: body.maxY)
+    NSGradient(colors: [NSColor.white.withAlphaComponent(0.30), NSColor.white.withAlphaComponent(0)])!
+        .draw(fromCenter: glowCenter, radius: 0, toCenter: glowCenter, radius: body.width * 0.8, options: [])
+    // Thin inner highlight along the edge.
+    let rim = NSBezierPath(roundedRect: body.insetBy(dx: s * 0.006, dy: s * 0.006), xRadius: body.width * 0.22, yRadius: body.width * 0.22)
+    rim.lineWidth = s * 0.006
+    NSColor.white.withAlphaComponent(0.22).setStroke()
+    rim.stroke()
+    NSGraphicsContext.restoreGraphicsState()
+
+    // A faint halo behind the mark.
+    NSGraphicsContext.saveGraphicsState()
+    squircle.addClip()
+    let mid = NSPoint(x: body.midX, y: body.midY)
+    NSGradient(colors: [NSColor.white.withAlphaComponent(0.16), NSColor.white.withAlphaComponent(0)])!
+        .draw(fromCenter: mid, radius: 0, toCenter: mid, radius: body.width * 0.42, options: [])
     NSGraphicsContext.restoreGraphicsState()
 
     // Ink with a faint shadow for depth.
     NSGraphicsContext.saveGraphicsState()
     let inkShadow = NSShadow()
-    inkShadow.shadowColor = NSColor.black.withAlphaComponent(0.18)
+    inkShadow.shadowColor = deep.withAlphaComponent(0.45)
     inkShadow.shadowBlurRadius = s * 0.012
     inkShadow.shadowOffset = NSSize(width: 0, height: -s * 0.006)
     inkShadow.set()
@@ -97,7 +116,10 @@ func render(_ px: Int) -> Data {
         let swell = 0.86 + 0.14 * sin(t * .pi * 0.9)
         return maxW * swell * pow(enter, 0.6) * pow(exit, 0.8) + s * 0.004
     }
-    enso.fill()
+    NSGraphicsContext.saveGraphicsState()
+    enso.addClip()
+    NSGradient(starting: ink, ending: inkShade)!.draw(in: enso.bounds, angle: -90)
+    NSGraphicsContext.restoreGraphicsState()
 
     // Check mark: short stroke, then a long stroke that exits through the ensō's gap.
     let check = NSBezierPath()

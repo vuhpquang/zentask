@@ -224,4 +224,24 @@ class TaskActionsTest {
         val names = store.list(EntityTypes.tag).map { it.name }.toSet()
         assertEquals(setOf("new", "old"), names)
     }
+
+    @Test
+    fun duplicateCopiesTaskChecklistAndSubtasksAsOpen() {
+        store.put(EntityTypes.task, Task(id = "a", title = "Pack", projectId = "work", priority = Priority.HIGH, tags = listOf("trip"), status = TaskStatus.COMPLETED, completedAt = 5, ticktickId = "tt1", sortOrder = 10))
+        actions.addItem("a", "Shoes")
+        actions.toggleItem(store.list(EntityTypes.checklistItem).single().id)
+        actions.addSubtask("a", "Book hotel")
+        val copy = actions.duplicate("a")
+        assertTrue(copy.id != "a")
+        assertEquals("Pack", copy.title)
+        assertEquals("work", copy.projectId)
+        assertEquals(Priority.HIGH, copy.priority)
+        assertEquals(listOf("trip"), copy.tags)
+        assertEquals(TaskStatus.OPEN, copy.status)
+        assertNull(copy.completedAt)
+        assertNull(copy.ticktickId, "a copy is ZenTask's own, never touched by TickTick sync")
+        val items = store.list(EntityTypes.checklistItem).filter { it.taskId == copy.id }
+        assertEquals(listOf("Shoes" to TaskStatus.OPEN), items.map { it.title to it.status })
+        assertEquals(listOf("Book hotel"), all().filter { it.parentId == copy.id }.map { it.title })
+    }
 }

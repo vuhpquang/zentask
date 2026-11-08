@@ -28,6 +28,7 @@ struct ZenTaskApp: App {
                 .environment(model)
                 .environment(tasks)
                 .environment(calendar)
+                .onOpenURL { tasks.open($0) }
         }
         .defaultSize(width: 1100, height: 720)
         .commands { TaskCommands() }

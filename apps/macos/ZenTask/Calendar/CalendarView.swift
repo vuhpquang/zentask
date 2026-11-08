@@ -342,12 +342,14 @@ private struct EntryBlock: View {
         .onTapGesture { showing = true }
         .popover(isPresented: $showing) { EntryDetail(entry: entry) }
         .modifier(DraggableTask(entry: entry))
+        .contextMenu { if isTask, let t = tasks.index?.task(id: entry.id) { TaskMenu(task: t) } }
     }
 }
 
 /// A one-line chip (all-day row, month cells).
 private struct EntryChip: View {
     @Environment(CalendarModel.self) private var cal
+    @Environment(TasksModel.self) private var tasks
     let entry: CalendarEntry
     let compact: Bool
     @State private var showing = false
@@ -374,6 +376,7 @@ private struct EntryChip: View {
         .onTapGesture { showing = true }
         .popover(isPresented: $showing) { EntryDetail(entry: entry) }
         .modifier(DraggableTask(entry: entry))
+        .contextMenu { if isTask, let t = tasks.index?.task(id: entry.id) { TaskMenu(task: t) } }
     }
 }
 

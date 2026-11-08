@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 @preconcurrency import ZenTaskShared
 
@@ -255,26 +256,81 @@ struct TagPill: View {
     }
 }
 
-/// Right-click menu for a task.
+/// Right-click menu for a task, laid out like TickTick's: a row of date shortcuts, a row of priority
+/// flags, then Won't do, Move to, Tags, Duplicate, Copy link and Delete.
 struct TaskMenu: View {
     @Environment(TasksModel.self) private var tasks
     let task: ZTask
 
     var body: some View {
+        let actions = tasks.core.actions
         if task.trashedAt != nil {
-            Button("Restore") { tasks.core.actions.restore(id: task.id) }
+            Button("Restore") { actions.restore(id: task.id) }
             Button("Delete permanently…", role: .destructive) { tasks.confirmDelete = task }
         } else {
-            Button(task.isDone || task.status == -1 ? "Reopen" : "Complete") { tasks.toggleComplete(task) }
-            Button("Won't do") { tasks.core.actions.wontDo(id: task.id) }
-            Menu("Priority") {
-                ForEach(PriorityOption.all, id: \.value) { p in
-                    Button(p.title) { tasks.core.actions.setPriority(id: task.id, priority: p.value) }
+            Section("Date") {
+                ControlGroup {
+                    Button { setDay(0) } label: { Label("Today", systemImage: "sun.max") }
+                    Button { setDay(1) } label: { Label("Tomorrow", systemImage: "sunrise") }
+                    Button { setDay(7) } label: { Label("Next week", systemImage: "calendar.badge.plus") }
+                    Button { tasks.selection = task.id; tasks.requestDateEdit = task.id } label: { Label("Pick a date…", systemImage: "calendar") }
+                    Button { actions.setDue(id: task.id, due: nil, allDay: false) } label: { Label("No date", systemImage: "xmark.square") }
                 }
+                .controlGroupStyle(.palette)
+            }
+            Section("Priority") {
+                ControlGroup {
+                    ForEach(PriorityOption.all, id: \.value) { p in
+                        Button { actions.setPriority(id: task.id, priority: p.value) } label: {
+                            Label { Text(p.title) } icon: { Symbols.tinted(p.value == 0 ? "flag" : "flag.fill", Theme.PriorityColor.nsColor(p.value)) }
+                        }
+                    }
+                }
+                .controlGroupStyle(.palette)
             }
             Divider()
-            Button("Move to Trash", role: .destructive) { tasks.core.actions.trash(id: task.id) }
+            if task.isDone || task.status == -1 {
+                Button { actions.uncomplete(id: task.id) } label: { Label("Reopen", systemImage: "arrow.uturn.backward.circle") }
+            } else {
+                Button { tasks.toggleComplete(task) } label: { Label("Complete", systemImage: "checkmark.circle") }
+                Button { actions.wontDo(id: task.id) } label: { Label("Won't do", systemImage: "xmark.circle") }
+            }
+            Menu {
+                Button("Inbox") { actions.move(id: task.id, projectId: "inbox") }
+                ForEach(tasks.listProjects, id: \.id) { p in Button(p.name) { actions.move(id: task.id, projectId: p.id) } }
+            } label: { Label("Move to", systemImage: "arrow.right.square") }
+            Menu {
+                ForEach(tasks.tags, id: \.id) { tag in
+                    Toggle(isOn: Binding(get: { task.tags.contains(tag.name) }, set: { on in
+                        actions.setTags(id: task.id, tags: on ? task.tags + [tag.name] : task.tags.filter { $0 != tag.name })
+                    })) { Text("#" + tag.name) }
+                }
+                if tasks.tags.isEmpty { Text("No tags yet") }
+            } label: { Label("Tags", systemImage: "tag") }
+            Divider()
+            Button { tasks.selection = actions.duplicate(id: task.id).id } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString("zentask://task/\(task.id)", forType: .string)
+            } label: { Label("Copy link", systemImage: "link") }
+            Divider()
+            Button(role: .destructive) { actions.trash(id: task.id) } label: { Label("Delete", systemImage: "trash") }
         }
+    }
+
+    private func setDay(_ offset: Int) {
+        let day = Calendar.current.date(byAdding: .day, value: offset, to: Calendar.current.startOfDay(for: .now))!
+        tasks.core.actions.setDue(id: task.id, due: KotlinLong(value: Int64(day.timeIntervalSince1970 * 1000)), allDay: true)
+    }
+}
+
+/// SF Symbols that keep their colour inside menus (NSMenu draws SwiftUI images as templates).
+enum Symbols {
+    static func tinted(_ name: String, _ color: NSColor) -> Image {
+        let config = NSImage.SymbolConfiguration(paletteColors: [color])
+        let image = NSImage(systemSymbolName: name, accessibilityDescription: nil)?.withSymbolConfiguration(config) ?? NSImage()
+        image.isTemplate = false
+        return Image(nsImage: image)
     }
 }
 

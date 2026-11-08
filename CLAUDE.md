@@ -1,7 +1,7 @@
 # ZenTask — notes for Claude
 
 ZenTask is the owner's personal task manager, a TickTick replacement with its own name and look
-(jade ensō logo, never TickTick's branding). Kotlin Multiplatform core + SwiftUI macOS app + Ktor
+(blue→violet ensō logo, accent #5B5FE9 light / #8B8CFF dark — never TickTick's branding). Kotlin Multiplatform core + SwiftUI macOS app + Ktor
 server. Repo `vuhpquang/zentask`, branch `main` (also the release branch — commit and push straight
 to it, no need to ask). Bundle id `com.vuhpquang.zentask` (`.dev` for Debug), macOS 26+, arm64.
 Server: `zentask-api.vuhpquang.com` on vps1 (Docker, Cloudflare Tunnel → `127.0.0.1:3100`).

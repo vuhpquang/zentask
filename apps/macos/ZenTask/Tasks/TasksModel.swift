@@ -56,6 +56,15 @@ final class TasksModel {
     /// The smart list a delete confirmation is open for.
     var confirmDeleteFilter: Filter?
     var sheet: ListSheet?
+    /// A context-menu "Pick a date…" asks the detail pane to open its date popover for this task.
+    var requestDateEdit: String?
+
+    /// Opens a `zentask://task/<id>` link: shows the task in All (or Trash).
+    func open(_ url: URL) {
+        guard url.scheme == "zentask", url.host() == "task", let id = url.pathComponents.dropFirst().first, let task = index?.task(id: id) else { return }
+        sidebar = task.trashedAt != nil ? .smart(.trash) : .project(task.projectId)
+        selection = id
+    }
     private(set) var options = ViewOptions(sort: "", group: "", showCompleted: false)
 
     private(set) var index: TaskIndex?

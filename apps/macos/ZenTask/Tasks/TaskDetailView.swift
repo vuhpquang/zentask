@@ -34,7 +34,11 @@ struct TaskDetailView: View {
             .frame(maxWidth: Theme.Detail.maxWidth, alignment: .leading)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .onAppear { draft = DetailDraft(title: task.title, notes: currentNotes) }
+        .onAppear {
+            draft = DetailDraft(title: task.title, notes: currentNotes)
+            takeDateRequest()
+        }
+        .onChange(of: tasks.requestDateEdit) { _, _ in takeDateRequest() }
         .onChange(of: task.title) { _, _ in follow() }
         .onChange(of: currentNotes) { _, _ in follow() }
         .onChange(of: focus) { old, _ in commit(old) }
@@ -244,6 +248,12 @@ struct TaskDetailView: View {
         }
         .font(.caption)
         .foregroundStyle(.tertiary)
+    }
+
+    private func takeDateRequest() {
+        guard tasks.requestDateEdit == task.id else { return }
+        tasks.requestDateEdit = nil
+        editingDate = true
     }
 
     private var currentNotes: String { task.content.isEmpty ? task.desc : task.content }
