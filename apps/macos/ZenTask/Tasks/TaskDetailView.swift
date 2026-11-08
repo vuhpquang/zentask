@@ -16,6 +16,9 @@ struct TaskDetailView: View {
     @State private var editingDate = false
     @State private var pickingPriority = false
     @State private var pickingList = false
+    /// Shown at once when picked (the synced value follows after the index reloads).
+    @State private var pickedPriority: Int32?
+    @State private var pickedList: String?
     @FocusState private var focus: Field?
 
     private enum Field { case title, notes, item, subtask, tag }
@@ -41,6 +44,8 @@ struct TaskDetailView: View {
         }
         .onChange(of: tasks.requestDateEdit) { _, _ in takeDateRequest() }
         .onChange(of: task.title) { _, _ in follow() }
+        .onChange(of: task.priority) { _, _ in pickedPriority = nil }
+        .onChange(of: task.projectId) { _, _ in pickedList = nil }
         .onChange(of: currentNotes) { _, _ in follow() }
         .onChange(of: focus) { old, _ in commit(old) }
         .onDisappear { commit(.title); commit(.notes) }
@@ -91,25 +96,28 @@ struct TaskDetailView: View {
                 .popover(isPresented: $editingDate) { DueEditor(task: task) }
 
                 Button { pickingPriority = true } label: {
-                    Chip(text: PriorityOption.title(task.priority), symbol: "flag.fill", tint: Theme.PriorityColor.color(task.priority), filled: task.priority > 0)
+                    let p = pickedPriority ?? task.priority
+                    Chip(text: PriorityOption.title(p), symbol: "flag.fill", tint: Theme.PriorityColor.color(p), filled: p > 0)
                 }
                 .buttonStyle(.plain)
                 .popover(isPresented: $pickingPriority) {
-                    PickerList(items: PriorityOption.all.map { ($0.title, "flag.fill", Theme.PriorityColor.color($0.value), $0.value == task.priority) }) { i in
-                        tasks.core.actions.setPriority(id: task.id, priority: PriorityOption.all[i].value)
+                    PickerList(items: PriorityOption.all.map { ($0.title, "flag.fill", Theme.PriorityColor.color($0.value), $0.value == (pickedPriority ?? task.priority)) }) { i in
+                        pickedPriority = PriorityOption.all[i].value
                         pickingPriority = false
+                        tasks.core.actions.setPriority(id: task.id, priority: PriorityOption.all[i].value)
                     }
                 }
 
                 Button { pickingList = true } label: {
-                    Chip(text: tasks.projectName(task.projectId), symbol: "list.bullet", tint: listTint, filled: true)
+                    Chip(text: tasks.projectName(pickedList ?? task.projectId), symbol: "list.bullet", tint: listTint, filled: true)
                 }
                 .buttonStyle(.plain)
                 .popover(isPresented: $pickingList) {
                     let targets = [("inbox", "Inbox", Color.accentColor)] + tasks.listProjects.map { ($0.id, $0.name, Color(hex: $0.color) ?? .accentColor) }
-                    PickerList(items: targets.map { ($0.1, "list.bullet", $0.2, $0.0 == task.projectId) }) { i in
-                        tasks.core.actions.move(id: task.id, projectId: targets[i].0)
+                    PickerList(items: targets.map { ($0.1, "list.bullet", $0.2, $0.0 == (pickedList ?? task.projectId)) }) { i in
+                        pickedList = targets[i].0
                         pickingList = false
+                        tasks.core.actions.move(id: task.id, projectId: targets[i].0)
                     }
                 }
 
@@ -302,7 +310,7 @@ struct TaskDetailView: View {
 
 /// Date popover: quick picks (today, tomorrow, next week, tonight), a month, an optional time, reminders,
 /// repeat, then Clear or OK.
-private struct DueEditor: View {
+struct DueEditor: View {
     @Environment(TasksModel.self) private var tasks
     @Environment(\.dismiss) private var dismiss
     let task: ZTask
@@ -456,7 +464,7 @@ private struct DueEditor: View {
 }
 
 /// "…" in the task detail: the actions TickTick keeps there.
-private struct TaskMoreMenu: View {
+struct TaskMoreMenu: View {
     @Environment(TasksModel.self) private var tasks
     let task: ZTask
     let addSubtask: () -> Void

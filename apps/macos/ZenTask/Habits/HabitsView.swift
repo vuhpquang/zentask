@@ -26,7 +26,8 @@ struct HabitsView: View {
             }
             .frame(width: Theme.Habits.detailWidth)
         }
-        .onAppear { habits.start() }
+        .onAppear { habits.start(); habits.setVisible(true) }
+        .onDisappear { habits.setVisible(false) }
         .sheet(item: Binding(get: { habits.sheet }, set: { habits.sheet = $0 })) { sheet in
             HabitEditor(editing: sheet).environment(habits)
         }

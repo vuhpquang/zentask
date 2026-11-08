@@ -73,7 +73,8 @@ struct CalendarPanel: View {
             }
             .environment(cal)
         }
-        .onAppear { cal.start() }
+        .onAppear { cal.start(); cal.setVisible(true) }
+        .onDisappear { cal.setVisible(false) }
     }
 }
 

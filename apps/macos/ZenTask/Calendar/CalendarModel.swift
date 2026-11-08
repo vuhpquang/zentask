@@ -40,10 +40,28 @@ final class CalendarModel {
 
     var mode: Mode = .week { didSet { _Concurrency.Task { await reload() } } }
     var anchor: Date = .now { didSet { _Concurrency.Task { await reload() } } }
+    /// How many days Multi-Day shows, and weeks Multi-Week shows (remembered on this Mac).
+    var multiDays: Int = UserDefaults.standard.object(forKey: "calendar.multiDays") as? Int ?? 5 {
+        didSet { UserDefaults.standard.set(multiDays, forKey: "calendar.multiDays"); if mode == .multiDay { _Concurrency.Task { await reload() } } }
+    }
+    var multiWeeks: Int = UserDefaults.standard.object(forKey: "calendar.multiWeeks") as? Int ?? 2 {
+        didSet { UserDefaults.standard.set(multiWeeks, forKey: "calendar.multiWeeks"); if mode == .multiWeek { _Concurrency.Task { await reload() } } }
+    }
     private(set) var days: [CalendarDay] = []
     private var started = false
     private var generation = 0
     private var pending: _Concurrency.Task<Void, Never>?
+    /// Whether the screen showing this model is on screen (set by the view).
+    @ObservationIgnored private var visible = false
+    @ObservationIgnored private var stale = false
+
+    func setVisible(_ on: Bool) {
+        visible = on
+        if on && stale {
+            stale = false
+            _Concurrency.Task { await reload() }
+        }
+    }
 
     /// Height of one hour in the grid; pinch or ⌘-scroll to zoom.
     var hourHeight: CGFloat = Theme.Calendar.hourHeight
@@ -52,6 +70,26 @@ final class CalendarModel {
 
     func zoom(by factor: CGFloat) {
         hourHeight = min(Theme.Calendar.maxHourHeight, max(Theme.Calendar.minHourHeight, hourHeight * factor))
+    }
+
+    /// Where a task being dragged over the grid would land (placeholder), by day column.
+    struct DropHover: Equatable { let dayStart: Int64; let minute: Int }
+    /// A time range being dragged out on empty grid space (then the new-task card for it).
+    struct NewRange: Equatable { let dayStart: Int64; let start: Int; let end: Int }
+
+    var dropHover: DropHover?
+    var newRange: NewRange?
+    var composingRange = false
+    /// Esc pressed during a range drag: ignore the rest of that gesture.
+    @ObservationIgnored var rangeCancelled = false
+
+    /// Esc (or the drag ending somewhere else): drop placeholders and an unfinished range.
+    func cancelDrags() {
+        dropHover = nil
+        if !composingRange, newRange != nil {
+            newRange = nil
+            rangeCancelled = true
+        }
     }
 
     /// What to show and how to colour it (synced Preference `calendar.view`).
@@ -97,6 +135,8 @@ final class CalendarModel {
         _Concurrency.Task {
             for await _ in core.recordChanges {
                 // Coalesce bursts (a sync page) into one reload.
+                // Hidden screens only note that they're stale and reload when shown.
+                guard visible else { stale = true; continue }
                 pending?.cancel()
                 pending = _Concurrency.Task {
                     try? await _Concurrency.Task.sleep(for: .milliseconds(120))
@@ -121,9 +161,9 @@ final class CalendarModel {
             let gridStart = calendar.dateInterval(of: .weekOfYear, for: monthStart)?.start ?? monthStart
             return (gridStart, 42) // always 6 weeks
         case .multiDay:
-            return (day, 5)
+            return (day, multiDays)
         case .multiWeek:
-            return (calendar.dateInterval(of: .weekOfYear, for: day)?.start ?? day, 14)
+            return (calendar.dateInterval(of: .weekOfYear, for: day)?.start ?? day, 7 * multiWeeks)
         case .year:
             let start = calendar.dateInterval(of: .year, for: day)?.start ?? day
             let days = calendar.range(of: .day, in: .year, for: day)?.count ?? 365
@@ -163,9 +203,9 @@ final class CalendarModel {
     private func step(_ n: Int) -> Date {
         switch mode {
         case .day: calendar.date(byAdding: .day, value: n, to: anchor) ?? anchor
-        case .multiDay: calendar.date(byAdding: .day, value: 5 * n, to: anchor) ?? anchor
+        case .multiDay: calendar.date(byAdding: .day, value: multiDays * n, to: anchor) ?? anchor
         case .week, .agenda: calendar.date(byAdding: .weekOfYear, value: n, to: anchor) ?? anchor
-        case .multiWeek: calendar.date(byAdding: .weekOfYear, value: 2 * n, to: anchor) ?? anchor
+        case .multiWeek: calendar.date(byAdding: .weekOfYear, value: multiWeeks * n, to: anchor) ?? anchor
         case .month: calendar.date(byAdding: .month, value: n, to: anchor) ?? anchor
         case .year: calendar.date(byAdding: .year, value: n, to: anchor) ?? anchor
         }

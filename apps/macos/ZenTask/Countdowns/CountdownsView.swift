@@ -58,7 +58,8 @@ struct CountdownsView: View {
                 }
             }
         }
-        .onAppear { countdowns.start() }
+        .onAppear { countdowns.start(); countdowns.setVisible(true) }
+        .onDisappear { countdowns.setVisible(false) }
         .sheet(item: $countdowns.sheet) { sheet in
             CountdownEditor(editing: sheet).environment(countdowns)
         }

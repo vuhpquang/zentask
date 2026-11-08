@@ -86,6 +86,7 @@ struct MainWindow: View {
             }
         }
         .environment(\.searchOpen, searching)
+        .environment(\.openTask) { id in open(nil, id) }
         .onOpenURL { url in
             // zentask://task/<id> (Copy link): show it in Tasks whatever area is open.
             guard url.scheme == "zentask", url.host() == "task", let id = url.pathComponents.dropFirst().first else { return }

@@ -25,6 +25,17 @@ final class CountdownsModel {
 
     private var started = false
     private var pending: _Concurrency.Task<Void, Never>?
+    /// Whether the screen showing this model is on screen (set by the view).
+    @ObservationIgnored private var visible = false
+    @ObservationIgnored private var stale = false
+
+    func setVisible(_ on: Bool) {
+        visible = on
+        if on && stale {
+            stale = false
+            _Concurrency.Task { await reload() }
+        }
+    }
 
     init(core: ZenTaskCore, calendar: Calendar = CalendarModel.mondayFirst()) {
         self.core = core
@@ -40,6 +51,8 @@ final class CountdownsModel {
         }
         _Concurrency.Task {
             for await _ in core.recordChanges {
+                // Hidden screens only note that they're stale and reload when shown.
+                guard visible else { stale = true; continue }
                 pending?.cancel()
                 pending = _Concurrency.Task {
                     try? await _Concurrency.Task.sleep(for: .milliseconds(80))

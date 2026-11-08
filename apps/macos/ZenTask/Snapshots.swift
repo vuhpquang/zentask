@@ -44,6 +44,9 @@ enum Snapshots {
             }
             both(AnyView(MatrixView(openTask: { _ in })).environment(model).environment(tasks), size: windowSize, name: "matrix", dir: dir)
             both(AnyView(TaskComposer(start: .allDay(.now)) {}).environment(tasks), size: CGSize(width: 440, height: 300), name: "composer", dir: dir)
+            if let sample = tasks.index?.allTasks.first(where: { !$0.content.isEmpty && $0.isOpen }) {
+                both(AnyView(TaskQuickEditor(taskId: sample.id)).environment(tasks), size: CGSize(width: 440, height: 320), name: "calendar-task-card", dir: dir)
+            }
             both(AnyView(HotkeySettings().frame(width: Theme.Size.settingsWidth)), size: CGSize(width: 540, height: 560), name: "settings-hotkeys", dir: dir)
             both(AnyView(SearchOverlay(open: { _, _ in }, close: {})).environment(tasks), size: CGSize(width: 600, height: 340), name: "search", dir: dir)
             tasks.sidebar = .smart(.all)

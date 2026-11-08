@@ -51,4 +51,52 @@ final class CalendarModelTests: XCTestCase {
         await m.reload()
         XCTAssertEqual(m.days.first?.allDay.map(\.title), ["Call"])
     }
+
+    func testEscCancelsDragPlaceholdersButNotAnOpenCard() {
+        let m = model(at: "2026-11-08T05:00:00Z")
+        m.dropHover = .init(dayStart: 1, minute: 600)
+        m.newRange = .init(dayStart: 1, start: 540, end: 600)
+        m.cancelDrags()
+        XCTAssertNil(m.dropHover)
+        XCTAssertNil(m.newRange)
+        XCTAssertTrue(m.rangeCancelled, "the rest of the gesture is ignored")
+        m.rangeCancelled = false
+        m.newRange = .init(dayStart: 1, start: 540, end: 600)
+        m.composingRange = true
+        m.cancelDrags()
+        XCTAssertNotNil(m.newRange, "the new-task card stays open")
+    }
+
+    func testMultiDayAndMultiWeekLengths() {
+        let saved = (UserDefaults.standard.object(forKey: "calendar.multiDays"), UserDefaults.standard.object(forKey: "calendar.multiWeeks"))
+        defer {
+            UserDefaults.standard.set(saved.0, forKey: "calendar.multiDays")
+            UserDefaults.standard.set(saved.1, forKey: "calendar.multiWeeks")
+        }
+        let m = model(at: "2026-11-08T05:00:00Z")
+        m.mode = .multiDay
+        m.multiDays = 3
+        XCTAssertEqual(m.range.count, 3)
+        let before = m.range.first
+        m.next()
+        XCTAssertEqual(m.calendar.dateComponents([.day], from: before, to: m.range.first).day, 3)
+        m.mode = .multiWeek
+        m.multiWeeks = 4
+        XCTAssertEqual(m.range.count, 28)
+    }
+
+    func testHiddenCalendarReloadsOnlyWhenShown() async throws {
+        let m = model(at: "2026-11-08T05:00:00Z")
+        m.mode = .day
+        m.start()
+        await m.reload()
+        m.setVisible(false)
+        _ = m.core.actions.create(title: "Later", filter: nil, projectId: nil, priority: nil, tags: [],
+                                  due: KotlinLong(value: Int64(m.calendar.startOfDay(for: m.anchor).timeIntervalSince1970 * 1000)), allDay: true)
+        try await _Concurrency.Task.sleep(for: .milliseconds(300))
+        XCTAssertTrue(m.days.first?.allDay.isEmpty ?? true, "no reload while hidden")
+        m.setVisible(true)
+        for _ in 0..<30 where m.days.first?.allDay.isEmpty ?? true { try await _Concurrency.Task.sleep(for: .milliseconds(20)) }
+        XCTAssertEqual(m.days.first?.allDay.map(\.title), ["Later"])
+    }
 }

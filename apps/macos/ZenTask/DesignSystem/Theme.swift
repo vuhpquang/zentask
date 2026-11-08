@@ -52,6 +52,7 @@ enum Theme {
         static let minHourHeight: CGFloat = 28
         static let maxHourHeight: CGFloat = 160
         static let modeMenuWidth: CGFloat = 130
+        static let modePickerWidth: CGFloat = 300
         static let dot: CGFloat = 7
         static let popoverWidth: CGFloat = 300
         static let labelNudge: CGFloat = 7

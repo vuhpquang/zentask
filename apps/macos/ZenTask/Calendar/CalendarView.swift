@@ -10,6 +10,7 @@ struct CalendarView: View {
     @AppStorage("calendar.showSideBar") private var showSideBar = false
     @State private var addingTask = false
     @State private var showingOptions = false
+    @State private var pickingMode = false
 
     var body: some View {
         @Bindable var cal = cal
@@ -39,9 +40,12 @@ struct CalendarView: View {
         }
         .onAppear {
             cal.start(); tasks.start()
+            cal.setVisible(true)
+            NSApp.windows.forEach { $0.acceptsMouseMovedEvents = true }
             installMonitors()
         }
         .onDisappear {
+            cal.setVisible(false)
             monitors.forEach(NSEvent.removeMonitor)
             monitors = []
         }
@@ -58,6 +62,22 @@ struct CalendarView: View {
             MainActor.assumeIsolated { model.zoom(by: 1 + delta) }
             return nil
         }) { monitors.append(zoom) }
+        // A drag cancelled with Esc never tells the drop target; the next ordinary mouse event clears the placeholder.
+        // Esc during a range drag cancels the range.
+        if let ends = NSEvent.addLocalMonitorForEvents(matching: [.keyDown, .mouseMoved, .leftMouseUp, .leftMouseDown], handler: { event in
+            let isEsc = event.type == .keyDown && event.keyCode == 53
+            let isKey = event.type == .keyDown
+            let swallow = MainActor.assumeIsolated { () -> Bool in
+                if isKey {
+                    guard isEsc, model.dropHover != nil || (model.newRange != nil && !model.composingRange) else { return false }
+                    withMotion { model.cancelDrags() }
+                    return true
+                }
+                if model.dropHover != nil { withMotion { model.dropHover = nil } }
+                return false
+            }
+            return swallow ? nil : event
+        }) { monitors.append(ends) }
         if let flags = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged, handler: { event in
             let down = event.modifierFlags.contains(.option)
             MainActor.assumeIsolated { if model.optionDown != down { model.optionDown = down } }
@@ -93,23 +113,14 @@ struct CalendarView: View {
                     .keyboardShortcut(.rightArrow, modifiers: .command)
                     .help("Next")
             }
-            Menu {
-                ForEach(CalendarModel.Mode.allCases) { mode in
-                    if mode == .multiDay { Divider() }
-                    Button {
-                        cal.mode = mode
-                    } label: {
-                        if cal.mode == mode { Label(mode.rawValue, systemImage: "checkmark") } else { Text(mode.rawValue) }
-                        if let detail = mode.detail { Text(detail) }
-                    }
-                    .modifier(LetterShortcut(mode: mode))
+            Button { pickingMode.toggle() } label: {
+                HStack(spacing: Theme.Space.xs) {
+                    Text(cal.mode.rawValue).fontWeight(.medium)
+                    Image(systemName: "chevron.down").font(.caption2.weight(.bold))
                 }
-            } label: {
-                Text(cal.mode.rawValue).fontWeight(.medium)
             }
-            .menuStyle(.button)
-            .fixedSize()
             .help("View: D Day · W Week · M Month · Y Year · A Agenda (or 1–5)")
+            .popover(isPresented: $pickingMode, arrowEdge: .bottom) { ModePicker { pickingMode = false }.environment(cal) }
             Menu {
                 Button("View options…", systemImage: "slider.horizontal.3") { showingOptions = true }
                 Toggle("Arrange tasks", systemImage: "sidebar.right", isOn: Binding(get: { showPanel }, set: { v in
@@ -232,14 +243,11 @@ struct WeekGrid: View {
 private struct DayColumn: View {
     @Environment(CalendarModel.self) private var cal
     let day: CalendarDay
-    /// Where a dragged task would land (snapped minute), while a drag hovers this column.
-    @State private var dropMinute: Int?
-    /// A range being dragged out on empty space, then the new-task card for it.
-    @State private var draft: (start: Int, end: Int)?
-    @State private var composing = false
 
     var body: some View {
+        @Bindable var cal = cal
         let snap = Theme.Calendar.snapMinutes
+        let range = cal.newRange?.dayStart == day.dayStart ? cal.newRange : nil
         ZStack(alignment: .topLeading) {
             VStack(spacing: 0) {
                 ForEach(0..<24, id: \.self) { _ in
@@ -251,11 +259,16 @@ private struct DayColumn: View {
             .gesture(
                 DragGesture(minimumDistance: 4)
                     .onChanged { v in
+                        guard !cal.rangeCancelled, !cal.composingRange else { return }
                         let a = minute(at: v.startLocation.y), b = minute(at: v.location.y)
-                        let lo = min(a, b), hi = max(max(a, b), lo + snap)
-                        if draft?.start != lo || draft?.end != hi { withMotion { draft = (lo, min(hi, 24 * 60)) } }
+                        let lo = min(a, b), hi = min(max(max(a, b), lo + snap), 24 * 60)
+                        let next = CalendarModel.NewRange(dayStart: day.dayStart, start: lo, end: hi)
+                        if cal.newRange != next { withMotion { cal.newRange = next } }
                     }
-                    .onEnded { _ in composing = draft != nil },
+                    .onEnded { _ in
+                        if cal.rangeCancelled { cal.rangeCancelled = false; return }
+                        if cal.newRange?.dayStart == day.dayStart { cal.composingRange = true }
+                    },
             )
             GeometryReader { geo in
                 ForEach(day.timed, id: \.entry.id) { placed in
@@ -266,21 +279,21 @@ private struct DayColumn: View {
                 }
             }
             if cal.calendar.isDateInToday(cal.date(of: day)) { NowLine(hourHeight: cal.hourHeight) }
-            if let m = dropMinute {
-                GhostBlock(start: m, end: m + Theme.Calendar.taskMinutes, dayStart: cal.date(of: day), hourHeight: cal.hourHeight)
+            if let hover = cal.dropHover, hover.dayStart == day.dayStart {
+                GhostBlock(start: hover.minute, end: hover.minute + Theme.Calendar.taskMinutes, dayStart: cal.date(of: day), hourHeight: cal.hourHeight)
                     .allowsHitTesting(false)
             }
-            if let d = draft {
-                GhostBlock(start: d.start, end: d.end, dayStart: cal.date(of: day), hourHeight: cal.hourHeight)
-                    .popover(isPresented: $composing, arrowEdge: .trailing) {
-                        TaskComposer(start: .span(time(d.start), time(d.end))) { composing = false }
+            if let r = range {
+                GhostBlock(start: r.start, end: r.end, dayStart: cal.date(of: day), hourHeight: cal.hourHeight)
+                    .popover(isPresented: Binding(get: { cal.composingRange && cal.newRange == r }, set: { if !$0 { cal.composingRange = false } }), arrowEdge: .trailing) {
+                        TaskComposer(start: .span(time(r.start), time(r.end))) { cal.composingRange = false }
                     }
             }
         }
         .frame(height: 24 * cal.hourHeight)
         .overlay(alignment: .leading) { Divider() }
-        .onDrop(of: [.plainText], delegate: ColumnDrop(model: cal, dayStart: day.dayStart, hourHeight: cal.hourHeight, minute: $dropMinute))
-        .onChange(of: composing) { _, open in if !open { withMotion { draft = nil } } }
+        .onDrop(of: [.plainText], delegate: ColumnDrop(model: cal, dayStart: day.dayStart, hourHeight: cal.hourHeight))
+        .onChange(of: cal.composingRange) { _, open in if !open, range != nil { withMotion { cal.newRange = nil } } }
     }
 
     /// The minute under a y position, snapped to the 15-minute grid.
@@ -323,7 +336,11 @@ private struct ColumnDrop: DropDelegate {
     let model: CalendarModel
     let dayStart: Int64
     let hourHeight: CGFloat
-    @Binding var minute: Int?
+
+    private func show(_ m: Int?) {
+        let next = m.map { CalendarModel.DropHover(dayStart: dayStart, minute: $0) }
+        if model.dropHover != next { withMotion { model.dropHover = next } }
+    }
 
     private func snapped(_ info: DropInfo) -> Int {
         let snap = Theme.Calendar.snapMinutes
@@ -334,20 +351,21 @@ private struct ColumnDrop: DropDelegate {
 
     func validateDrop(info: DropInfo) -> Bool { info.hasItemsConforming(to: [.plainText]) }
 
-    func dropEntered(info: DropInfo) { withMotion { minute = snapped(info) } }
+    func dropEntered(info: DropInfo) { show(snapped(info)) }
 
     func dropUpdated(info: DropInfo) -> DropProposal? {
-        let m = snapped(info)
-        if m != minute { withMotion { minute = m } }
+        show(snapped(info))
         return DropProposal(operation: .move)
     }
 
-    func dropExited(info: DropInfo) { withMotion { minute = nil } }
+    func dropExited(info: DropInfo) {
+        if model.dropHover?.dayStart == dayStart { show(nil) }
+    }
 
     func performDrop(info: DropInfo) -> Bool {
         let m = snapped(info)
         let model = self.model, dayStart = self.dayStart
-        withMotion { minute = nil }
+        show(nil)
         let providers = info.itemProviders(for: [.plainText])
         guard !providers.isEmpty else { return false }
         for provider in providers {
@@ -558,12 +576,45 @@ struct DraggableTask: ViewModifier {
 }
 
 /// Menu item shortcut: the mode's letter (D, W, M, Y, A).
-private struct LetterShortcut: ViewModifier {
-    @Environment(\.searchOpen) private var searchOpen
-    let mode: CalendarModel.Mode
+/// The view picker: each mode with its key; Multi-Day and Multi-Week have − / + for how many days or weeks.
+private struct ModePicker: View {
+    @Environment(CalendarModel.self) private var cal
+    let done: () -> Void
 
-    func body(content: Content) -> some View {
-        if let keys = mode.keys, !searchOpen { content.keyboardShortcut(KeyEquivalent(keys.letter), modifiers: []) } else { content }
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.xxs) {
+            ForEach(CalendarModel.Mode.allCases) { mode in
+                if mode == .multiDay { Divider().padding(.vertical, Theme.Space.xs) }
+                HStack(spacing: Theme.Space.s) {
+                    Button { cal.mode = mode; done() } label: {
+                        HStack {
+                            Image(systemName: "checkmark").opacity(cal.mode == mode ? 1 : 0).foregroundStyle(.tint)
+                            Text(mode.rawValue)
+                            Spacer(minLength: Theme.Space.l)
+                            if let keys = mode.keys {
+                                Text("\(String(keys.letter).uppercased()) / \(String(keys.number))").font(.callout.monospaced()).foregroundStyle(.secondary)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    if mode == .multiDay {
+                        Stepper(value: Binding(get: { cal.multiDays }, set: { cal.multiDays = $0; cal.mode = .multiDay }), in: 2...14) {
+                            Text("\(cal.multiDays) days").monospacedDigit().foregroundStyle(.secondary)
+                        }
+                        .fixedSize()
+                    } else if mode == .multiWeek {
+                        Stepper(value: Binding(get: { cal.multiWeeks }, set: { cal.multiWeeks = $0; cal.mode = .multiWeek }), in: 2...6) {
+                            Text("\(cal.multiWeeks) weeks").monospacedDigit().foregroundStyle(.secondary)
+                        }
+                        .fixedSize()
+                    }
+                }
+                .frame(minHeight: Theme.List.pickerRow)
+            }
+        }
+        .padding(Theme.Space.m)
+        .frame(width: Theme.Calendar.modePickerWidth)
     }
 }
 
@@ -581,6 +632,8 @@ private struct ModeShortcuts: View {
             ForEach(CalendarModel.Mode.allCases.filter { $0.keys != nil }) { mode in
                 Button("") { cal.mode = mode }
                     .keyboardShortcut(KeyEquivalent(mode.keys!.number), modifiers: [])
+                Button("") { cal.mode = mode }
+                    .keyboardShortcut(KeyEquivalent(mode.keys!.letter), modifiers: [])
             }
         }
         .opacity(0)
@@ -594,6 +647,14 @@ struct EntryDetail: View {
     let entry: CalendarEntry
 
     var body: some View {
+        if entry.kind == "task", tasks.index?.task(id: entry.id) != nil {
+            TaskQuickEditor(taskId: entry.id)
+        } else {
+            info
+        }
+    }
+
+    private var info: some View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
             Text(entry.title.isEmpty ? "Untitled" : entry.title).font(.title3.weight(.semibold))
             Label(timeText, systemImage: "clock").foregroundStyle(.secondary)
