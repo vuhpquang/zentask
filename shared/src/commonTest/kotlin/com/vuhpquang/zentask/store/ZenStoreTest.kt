@@ -2,6 +2,7 @@ package com.vuhpquang.zentask.store
 
 import com.vuhpquang.zentask.model.CalendarEvent
 import com.vuhpquang.zentask.model.EntityTypes
+import com.vuhpquang.zentask.model.toFields
 import com.vuhpquang.zentask.model.Priority
 import com.vuhpquang.zentask.model.Task
 import com.vuhpquang.zentask.sync.Hlc
@@ -256,5 +257,23 @@ class ZenStoreTest {
         assertTrue(rec.clocks.values.all { Hlc.parse(it)!!.millis <= wall + 3_600_000L }, "${rec.clocks}")
         assertEquals(JsonPrimitive("x"), rec.fields["title"])
         assertEquals(listOf("t1"), store.pending(100).map { it.record.id })
+    }
+
+    @Test
+    fun listOverlappingReadsOnlyTheWindow() {
+        val store = ZenStore(createSqlDriver(null)) { 1L }
+        fun ev(id: String, start: Long, end: Long) {
+            val type = com.vuhpquang.zentask.model.EntityTypes.calendarEvent
+            val fields = type.toFields(com.vuhpquang.zentask.model.CalendarEvent(id = id, start = start, end = end))
+            val clock = com.vuhpquang.zentask.sync.Hlc(1, 0, "server").encode()
+            store.applyRemote(listOf(com.vuhpquang.zentask.sync.SyncRecord(type.name, id, fields, fields.mapValues { clock })))
+        }
+        ev("before", 0, 100)
+        ev("inside", 150, 160)
+        ev("across", 50, 500)
+        ev("after", 300, 400)
+        ev("zero", 120, 120)
+        val got = store.listOverlapping(com.vuhpquang.zentask.model.EntityTypes.calendarEvent, 110, 200).map { it.id }.toSet()
+        kotlin.test.assertEquals(setOf("inside", "across", "zero"), got)
     }
 }

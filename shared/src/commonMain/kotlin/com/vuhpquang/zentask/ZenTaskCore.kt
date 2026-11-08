@@ -35,6 +35,8 @@ import com.vuhpquang.zentask.habits.HabitRow
 import com.vuhpquang.zentask.habits.Stamp
 import com.vuhpquang.zentask.lists.FilterRule
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.plus
+import kotlinx.datetime.DateTimeUnit
 import com.vuhpquang.zentask.model.CalendarAccount
 import com.vuhpquang.zentask.model.CalendarSource
 import com.vuhpquang.zentask.model.ZenJson
@@ -233,8 +235,12 @@ class ZenTaskCore(
     fun calendarDays(firstDayMillis: Long, count: Int): List<CalendarDay> {
         val z = zone()
         val first = Instant.fromEpochMilliseconds(firstDayMillis).toLocalDateTime(z).date
+        // Only events near the window are decoded (two days of margin for all-day events read in another zone).
+        val margin = 2 * 86_400_000L
+        val from = first.atStartOfDayIn(z).toEpochMilliseconds() - margin
+        val until = first.plus(count, DateTimeUnit.DAY).atStartOfDayIn(z).toEpochMilliseconds() + margin
         return CalendarQueries.days(
-            store.list(EntityTypes.calendarEvent), store.list(EntityTypes.calendarSource), store.list(EntityTypes.calendarAccount),
+            store.listOverlapping(EntityTypes.calendarEvent, from, until), store.list(EntityTypes.calendarSource), store.list(EntityTypes.calendarAccount),
             store.list(EntityTypes.task), first, count, z, hiddenCalendars(), store.list(EntityTypes.countdown),
             calendarView(), store.list(EntityTypes.habit), store.list(EntityTypes.habitCheckin), store.list(EntityTypes.project),
         )

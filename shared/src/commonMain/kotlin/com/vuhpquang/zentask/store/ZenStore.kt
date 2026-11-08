@@ -132,7 +132,14 @@ class ZenStore(
 
     /** Live (not deleted) records; rows this client can't decode are skipped, never dropped. */
     fun <T : Entity> list(type: EntityType<T>): List<T> =
-        db.recordQueries.live(type.name).executeAsList().mapNotNull { decode(type, parseFields(it.fields)) }
+        db.recordQueries.live(type.name).executeAsList().mapNotNull { cached(type, it.id, it.fields) }
+
+    /**
+     * Live records whose `start`..`end` fields overlap [from]..[until] (epoch millis), filtered by SQLite so a
+     * calendar window decodes only its own events, not every event ever synced.
+     */
+    fun <T : Entity> listOverlapping(type: EntityType<T>, from: Long, until: Long): List<T> =
+        db.recordQueries.liveOverlapping(type.name, until, from).executeAsList().mapNotNull { cached(type, it.id, it.fields) }
 
     fun <T : Entity> observe(type: EntityType<T>): Flow<List<T>> =
         db.recordQueries.live(type.name).asFlow().mapToList(Dispatchers.Default)
@@ -269,6 +276,24 @@ class ZenStore(
 
     private fun setMeta(key: String, value: String) {
         db.syncMetaQueries.put(key, value)
+    }
+
+    /**
+     * Decoded values by (entity, id), reused while the row's JSON text is unchanged: after one edit, a reload
+     * decodes one record instead of every record of the type. Entities are immutable data classes.
+     */
+    private val decoded = HashMap<String, Pair<String, Entity>>()
+    private val decodedLock = StoreLock()
+
+    private fun <T : Entity> cached(type: EntityType<T>, id: String, fields: String): T? {
+        val key = type.name + "/" + id
+        decodedLock.withLock { decoded[key] }?.let { (text, value) ->
+            @Suppress("UNCHECKED_CAST")
+            if (text == fields) return value as T
+        }
+        val value = decode(type, parseFields(fields)) ?: return null
+        decodedLock.withLock { decoded[key] = fields to value }
+        return value
     }
 
     private fun <T : Entity> decode(type: EntityType<T>, fields: Map<String, JsonElement>): T? =

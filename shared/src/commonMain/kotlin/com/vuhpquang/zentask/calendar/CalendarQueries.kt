@@ -97,6 +97,11 @@ object CalendarQueries {
         projects: List<Project> = emptyList(),
     ): List<CalendarDay> {
         val listColor = projects.associate { it.id to it.color }
+        // Tasks far outside the window can't show; skip them before any time-zone work (margin: all-day zones).
+        val windowFrom = first.atStartOfDayIn(zone).toEpochMilliseconds() - 2 * 86_400_000L
+        val windowTo = first.plus(count, DateTimeUnit.DAY).atStartOfDayIn(zone).toEpochMilliseconds() + 2 * 86_400_000L
+        val zones = HashMap<String, TimeZone>()
+        val zoneOf = { id: String? -> id?.let { zones.getOrPut(it) { runCatching { TimeZone.of(it) }.getOrNull() ?: zone } } ?: zone }
         val wanted = { t: Task ->
             (options.lists.isEmpty() && options.tags.isEmpty()) ||
                 t.projectId in options.lists || t.tags.any { tag -> options.tags.any { it.equals(tag, ignoreCase = true) } }
@@ -106,7 +111,7 @@ object CalendarQueries {
         val entries = events.filter { !it.deleted && it.sourceId in visible }.map { e ->
             if (e.isAllDay) {
                 // All-day = calendar dates: read them in the event's zone, place them on the same dates here.
-                val z = e.timeZone?.let { runCatching { TimeZone.of(it) }.getOrNull() } ?: zone
+                val z = zoneOf(e.timeZone)
                 val firstDay = Instant.fromEpochMilliseconds(e.start).toLocalDateTime(z).date
                 val endDay = Instant.fromEpochMilliseconds(maxOf(e.end, e.start + 1)).toLocalDateTime(z).date
                 val lastExclusive = if (endDay > firstDay) endDay else firstDay.plus(1, DateTimeUnit.DAY)
@@ -117,8 +122,11 @@ object CalendarQueries {
             } else {
                 CalendarEntry(e.id, "event", e.title, e.start, maxOf(e.end, e.start), false, visible[e.sourceId]?.color, location = e.location)
             }
-        } + tasks.filter { !it.deleted && it.trashedAt == null && it.status != -1 && wanted(it) && (options.showCompleted || !it.isDone) }
-            .mapNotNull { t -> taskEntry(t, zone)?.let { e -> if (options.colorBy == "list") e.copy(color = listColor[t.projectId]) else e } } +
+        } + tasks.filter { t ->
+            val at = t.startDate ?: t.dueDate
+            at != null && at >= windowFrom && at <= windowTo && !t.deleted && t.trashedAt == null && t.status != -1 && wanted(t) && (options.showCompleted || !t.isDone)
+        }
+            .mapNotNull { t -> taskEntry(t, zone, zoneOf(t.timeZone))?.let { e -> if (options.colorBy == "list") e.copy(color = listColor[t.projectId]) else e } } +
             (if (options.showCountdowns) countdownEntries(countdowns, first, count, zone) else emptyList()) +
             (if (options.showHabits) habitEntries(habits, checkins, first, count, zone).filter { options.showCompleted || !it.done } else emptyList())
 
@@ -169,12 +177,11 @@ object CalendarQueries {
         }
     }
 
-    private fun taskEntry(t: Task, zone: TimeZone): CalendarEntry? {
+    private fun taskEntry(t: Task, zone: TimeZone, own: TimeZone): CalendarEntry? {
         val start = t.startDate ?: t.dueDate ?: return null
         if (t.isAllDay) {
             // All-day tasks are stored as local midnight in their own zone: keep that calendar day.
-            val z = t.timeZone?.let { runCatching { TimeZone.of(it) }.getOrNull() } ?: zone
-            val day = Instant.fromEpochMilliseconds(start).toLocalDateTime(z).date
+            val day = Instant.fromEpochMilliseconds(start).toLocalDateTime(own).date
             val s = day.atStartOfDayIn(zone).toEpochMilliseconds()
             return CalendarEntry(t.id, "task", t.title, s, day.plus(1, DateTimeUnit.DAY).atStartOfDayIn(zone).toEpochMilliseconds(), true, null, t.isDone, priority = t.priority)
         }
