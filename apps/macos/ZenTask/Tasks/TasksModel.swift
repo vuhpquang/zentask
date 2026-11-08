@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Observation
 @preconcurrency import ZenTaskShared
 
@@ -10,6 +11,28 @@ enum SidebarItem: Hashable {
     case project(String)
     case tag(String)
     case custom(String)
+
+    /// A stable string for remembering a choice ("smart:TODAY", "project:<id>", "tag:x", "custom:<id>").
+    var storageKey: String {
+        switch self {
+        case .smart(let list): "smart:\(list.name)"
+        case .project(let id): "project:\(id)"
+        case .tag(let name): "tag:\(name)"
+        case .custom(let id): "custom:\(id)"
+        }
+    }
+
+    init?(storageKey: String) {
+        let parts = storageKey.split(separator: ":", maxSplits: 1).map(String.init)
+        guard parts.count == 2 else { return nil }
+        switch parts[0] {
+        case "smart": guard let list = TasksModel.allSmart.first(where: { $0.name == parts[1] }) else { return nil }; self = .smart(list)
+        case "project": self = .project(parts[1])
+        case "tag": self = .tag(parts[1])
+        case "custom": self = .custom(parts[1])
+        default: return nil
+        }
+    }
 
     var filter: TaskFilter {
         switch self {
@@ -65,7 +88,24 @@ final class TasksModel {
         sidebar = task.trashedAt != nil ? .smart(.trash) : .project(task.projectId)
         selection = id
     }
-    private(set) var options = ViewOptions(sort: "", group: "", showCompleted: false)
+    private(set) var options = ViewOptions(sort: "", group: "", showCompleted: false, order: "", hideCompleted: false, hideDetails: false)
+
+    /// Collapsed groups ("<list key>|<section key>"), remembered on this Mac.
+    private(set) var collapsed: Set<String> = Set(UserDefaults.standard.stringArray(forKey: "tasks.collapsed") ?? [])
+    /// The sidebar column (☰ in the list header toggles it).
+    var columnVisibility: NavigationSplitViewVisibility = .all
+    /// The calendar panel beside the task detail.
+    var showCalendarPanel: Bool = UserDefaults.standard.bool(forKey: "tasks.calendarPanel") {
+        didSet { UserDefaults.standard.set(showCalendarPanel, forKey: "tasks.calendarPanel") }
+    }
+
+    func isCollapsed(_ section: TaskSection, in scope: String) -> Bool { collapsed.contains("\(scope)|\(section.key)") }
+
+    func toggleCollapsed(_ section: TaskSection, in scope: String) {
+        let key = "\(scope)|\(section.key)"
+        if collapsed.contains(key) { collapsed.remove(key) } else { collapsed.insert(key) }
+        UserDefaults.standard.set(Array(collapsed).sorted(), forKey: "tasks.collapsed")
+    }
 
     private(set) var index: TaskIndex?
     private(set) var sections: [TaskSection] = []
@@ -125,8 +165,9 @@ final class TasksModel {
     var trashedProjects: [Project] { (index?.projects ?? []).filter { $0.trashedAt != nil && !$0.deleted } }
     var currentProject: Project? { if case .project(let id) = sidebar { return projects.first { $0.id == id } }; return nil }
 
-    func setSort(_ sort: String) { saveOptions(ViewOptions(sort: sort, group: options.group, showCompleted: options.showCompleted)) }
-    func setGroup(_ group: String) { saveOptions(ViewOptions(sort: options.sort, group: group, showCompleted: options.showCompleted)) }
+    func setSort(_ sort: String) { saveOptions(options.with(sort: sort)) }
+    func setGroup(_ group: String) { saveOptions(options.with(group: group)) }
+    func setOptions(_ o: ViewOptions) { saveOptions(o) }
 
     private func saveOptions(_ o: ViewOptions) {
         core.setViewOptions(filter: sidebar.filter, options: o)
@@ -152,8 +193,10 @@ final class TasksModel {
 
     // MARK: Lookups
 
-    var title: String {
-        switch sidebar {
+    var title: String { title(of: sidebar) }
+
+    func title(of item: SidebarItem) -> String {
+        switch item {
         case .smart(let list): Self.title(list)
         case .project(let id): projects.first { $0.id == id }?.name ?? "List"
         case .tag(let name): "#" + name
@@ -273,7 +316,7 @@ final class TasksModel {
         selection = nil
     }
 
-    static let allSmart: [SmartList] = [.today, .tomorrow, .next7Days, .inbox, .all, .completed, .wontDo, .trash]
+    nonisolated static let allSmart: [SmartList] = [.today, .tomorrow, .next7Days, .inbox, .all, .completed, .wontDo, .trash]
 
     /// Sidebar visibility from Settings → Smart lists (Show / Show if not empty / Hide).
     func shows(_ list: SmartList) -> Bool {
@@ -313,4 +356,12 @@ final class TasksModel {
 
 extension ZTask {
     var isDone: Bool { status == 2 || status == 1 }
+}
+
+extension ViewOptions {
+    /// A copy with some fields changed (Kotlin data classes have no default arguments in Swift).
+    func with(sort: String? = nil, group: String? = nil, order: String? = nil, hideCompleted: Bool? = nil, hideDetails: Bool? = nil) -> ViewOptions {
+        ViewOptions(sort: sort ?? self.sort, group: group ?? self.group, showCompleted: showCompleted, order: order ?? self.order,
+                    hideCompleted: hideCompleted ?? self.hideCompleted, hideDetails: hideDetails ?? self.hideDetails)
+    }
 }

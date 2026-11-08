@@ -6,6 +6,7 @@ struct CalendarView: View {
     @Environment(CalendarModel.self) private var cal
     @Environment(TasksModel.self) private var tasks
     @State private var monitors: [Any] = []
+    @AppStorage("calendar.showPanel") private var showPanel = true
 
     var body: some View {
         @Bindable var cal = cal
@@ -16,13 +17,16 @@ struct CalendarView: View {
                 switch cal.mode {
                 case .month, .multiWeek: MonthGrid()
                 case .year: YearGrid()
-                case .agenda: AgendaList()
+                case .agenda: AgendaTimeline()
                 default: WeekGrid()
                 }
             }
-            Divider()
-            UnscheduledPanel()
-                .frame(width: Theme.Calendar.panelWidth)
+            if showPanel {
+                Divider()
+                TaskPanel(close: { withAnimation(Theme.List.foldAnimation) { showPanel = false } })
+                    .frame(width: Theme.Panel.tasksWidth)
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
         }
         .onAppear {
             cal.start(); tasks.start()
@@ -84,6 +88,12 @@ struct CalendarView: View {
             .menuStyle(.button)
             .fixedSize()
             .help("View: D Day · W Week · M Month · Y Year · A Agenda (or 1–5)")
+            Button {
+                withAnimation(Theme.List.foldAnimation) { showPanel.toggle() }
+            } label: {
+                Image(systemName: "sidebar.right").symbolVariant(showPanel ? .fill : .none)
+            }
+            .help(showPanel ? "Hide the task panel" : "Show the task panel to arrange tasks")
         }
         .controlSize(.large)
         .padding(.horizontal, Theme.Space.l)
@@ -93,7 +103,7 @@ struct CalendarView: View {
 
 // MARK: - Week / Day
 
-private struct WeekGrid: View {
+struct WeekGrid: View {
     @Environment(CalendarModel.self) private var cal
     @State private var pinchBase: CGFloat = 1
 
@@ -234,7 +244,7 @@ private struct NowLine: View {
 
 // MARK: - Month
 
-private struct MonthGrid: View {
+struct MonthGrid: View {
     @Environment(CalendarModel.self) private var cal
 
     var body: some View {
@@ -306,7 +316,7 @@ private struct MonthCell: View {
 // MARK: - Entries
 
 /// Events take their calendar's colour; tasks their priority colour (grey for none).
-private func entryColor(_ entry: CalendarEntry) -> Color {
+func entryColor(_ entry: CalendarEntry) -> Color {
     if entry.kind == "task" { return entry.priority == 0 ? Color.gray : Theme.PriorityColor.color(Int32(entry.priority)) }
     return Color(hex: entry.color) ?? .accentColor
 }
@@ -381,7 +391,7 @@ private struct EntryChip: View {
 }
 
 /// Checkbox shown on task entries while ⌥ is held; clicking completes / reopens.
-private struct TaskCheck: View {
+struct TaskCheck: View {
     @Environment(TasksModel.self) private var tasks
     let entry: CalendarEntry
 
@@ -397,7 +407,7 @@ private struct TaskCheck: View {
 }
 
 /// Only tasks can be dragged (events are read-only).
-private struct DraggableTask: ViewModifier {
+struct DraggableTask: ViewModifier {
     let entry: CalendarEntry
 
     func body(content: Content) -> some View {
@@ -431,7 +441,7 @@ private struct ModeShortcuts: View {
 }
 
 /// Popover: a task can be completed or opened; an event is read-only.
-private struct EntryDetail: View {
+struct EntryDetail: View {
     @Environment(TasksModel.self) private var tasks
     let entry: CalendarEntry
 
@@ -515,88 +525,6 @@ private struct MiniMonth: View {
                     .disabled(!inMonth)
                 }
             }
-        }
-    }
-}
-
-// MARK: - Agenda
-
-private struct AgendaList: View {
-    @Environment(CalendarModel.self) private var cal
-
-    var body: some View {
-        let days = cal.days.filter { !$0.allDay.isEmpty || !$0.timed.isEmpty }
-        if days.isEmpty {
-            ContentUnavailableView("Nothing in the next 30 days", systemImage: "calendar")
-        } else {
-            List {
-                ForEach(days, id: \.dayStart) { day in
-                    Section(cal.date(of: day).formatted(.dateTime.weekday(.wide).day().month(.wide))) {
-                        ForEach(Array(day.allDay) + day.timed.map(\.entry), id: \.id) { entry in
-                            HStack(spacing: Theme.Space.m) {
-                                Text(entry.allDay ? "All day" : Date(timeIntervalSince1970: Double(entry.start) / 1000).formatted(date: .omitted, time: .shortened))
-                                    .font(.callout.monospacedDigit()).foregroundStyle(.secondary)
-                                    .frame(width: Theme.Calendar.timeGutter + Theme.Space.l, alignment: .leading)
-                                EntryChip(entry: entry, compact: false)
-                            }
-                            .padding(.vertical, Theme.Space.xxs)
-                        }
-                    }
-                }
-            }
-            .listStyle(.inset)
-        }
-    }
-}
-
-// MARK: - Unscheduled panel
-
-/// Tasks of a chosen list (or all lists) without a date, to drag onto the calendar.
-private struct UnscheduledPanel: View {
-    @Environment(TasksModel.self) private var tasks
-    @AppStorage("calendar.panelList") private var listId = ""
-
-    var body: some View {
-        let rows = (tasks.index?.allTasks ?? []).filter {
-            $0.isOpen && $0.trashedAt == nil && $0.startDate == nil && $0.dueDate == nil && $0.parentId == nil &&
-                (listId.isEmpty || $0.projectId == listId)
-        }
-        VStack(alignment: .leading, spacing: 0) {
-            Picker(selection: $listId) {
-                Label("All lists", systemImage: "square.stack").tag("")
-                Label("Inbox", systemImage: "tray").tag("inbox")
-                Divider()
-                ForEach(tasks.listProjects, id: \.id) { p in
-                    Label { Text(p.name) } icon: { Image(systemName: "list.bullet") }.tag(p.id)
-                }
-            } label: {
-                EmptyView()
-            }
-            .pickerStyle(.menu)
-            .labelsHidden()
-            .controlSize(.large)
-            .padding(.horizontal, Theme.Space.l)
-            .padding(.top, Theme.Space.l)
-            HStack {
-                Text("No date").font(.headline)
-                Spacer()
-                Text("\(rows.count)").foregroundStyle(.secondary).monospacedDigit()
-            }
-            .padding(.horizontal, Theme.Space.l)
-            .padding(.top, Theme.Space.m)
-            Text("Drag a task onto the calendar to give it a time").font(.caption).foregroundStyle(.secondary)
-                .padding(.horizontal, Theme.Space.l).padding(.bottom, Theme.Space.s)
-            List(rows.prefix(300), id: \.id) { task in
-                HStack(spacing: Theme.Space.s) {
-                    Image(systemName: "square").foregroundStyle(Theme.PriorityColor.color(task.priority))
-                    Text(task.title).lineLimit(2)
-                }
-                .padding(.vertical, Theme.Space.xxs)
-                .draggable(task.id)
-                .contextMenu { TaskMenu(task: task) }
-            }
-            .listStyle(.inset)
-            .overlay { if rows.isEmpty { ContentUnavailableView("Nothing without a date", systemImage: "checkmark.circle") } }
         }
     }
 }

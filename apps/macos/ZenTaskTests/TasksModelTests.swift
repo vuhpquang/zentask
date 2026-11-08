@@ -140,4 +140,50 @@ final class TasksModelTests: XCTestCase {
         XCTAssertTrue(m.shows(.trash))
         XCTAssertTrue(m.shows(.inbox))
     }
+
+    func testSidebarItemKeysRoundTrip() {
+        for item in [SidebarItem.smart(.next7Days), .project("p1"), .tag("work"), .custom("f:1")] {
+            XCTAssertEqual(SidebarItem(storageKey: item.storageKey), item)
+        }
+        XCTAssertNil(SidebarItem(storageKey: "nonsense"))
+    }
+
+    func testFoldingAGroupIsRememberedPerList() async throws {
+        let saved = UserDefaults.standard.stringArray(forKey: "tasks.collapsed")
+        defer { UserDefaults.standard.set(saved, forKey: "tasks.collapsed") }
+        let m = TasksModel(core: ZenTaskCore.companion.open(dbPath: nil))
+        _ = m.core.actions.create(title: "A", filter: nil, projectId: nil, priority: nil, tags: [], due: nil, allDay: true)
+        m.sidebar = .smart(.all)
+        await m.reload()
+        m.setOptions(m.options.with(sort: "priority", group: "list", order: "desc", hideDetails: true))
+        await m.settle()
+        XCTAssertEqual(m.core.viewOptions(filter: SidebarItem.smart(.all).filter).order, "desc", "options are saved")
+        XCTAssertTrue(m.options.hideDetails)
+        let section = try XCTUnwrap(m.sections.first)
+        XCTAssertEqual(section.key, "list:inbox")
+        XCTAssertFalse(m.isCollapsed(section, in: "smart:ALL"))
+        m.toggleCollapsed(section, in: "smart:ALL")
+        XCTAssertTrue(m.isCollapsed(section, in: "smart:ALL"))
+        XCTAssertFalse(m.isCollapsed(section, in: "smart:TODAY"), "per list")
+        XCTAssertTrue(TasksModel(core: m.core).isCollapsed(section, in: "smart:ALL"), "remembered")
+        m.toggleCollapsed(section, in: "smart:ALL")
+    }
+
+    func testTaskPanelShowsOnlyUndatedWhenAsked() async throws {
+        let m = TasksModel(core: ZenTaskCore.companion.open(dbPath: nil))
+        _ = m.core.actions.create(title: "Undated", filter: nil, projectId: nil, priority: nil, tags: [], due: nil, allDay: true)
+        _ = m.core.actions.create(title: "Dated", filter: nil, projectId: nil, priority: nil, tags: [], due: KotlinLong(value: Int64(Date.now.timeIntervalSince1970 * 1000)), allDay: true)
+        await m.reload()
+        let keys = ["calendar.panel.item", "calendar.panel.options", "calendar.panel.undated"]
+        let saved = keys.map { UserDefaults.standard.object(forKey: $0) }
+        defer { for (k, v) in zip(keys, saved) { UserDefaults.standard.set(v, forKey: k) } }
+        let panel = TaskPanelState()
+        panel.item = .smart(.all)
+        panel.onlyUndated = false
+        await panel.recompute(m)
+        XCTAssertEqual(Set(panel.sections.flatMap(\.rows).map(\.task.title)), ["Undated", "Dated"])
+        panel.onlyUndated = true
+        await panel.recompute(m)
+        XCTAssertEqual(panel.sections.flatMap(\.rows).map(\.task.title), ["Undated"])
+    }
 }

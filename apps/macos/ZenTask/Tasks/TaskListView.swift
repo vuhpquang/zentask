@@ -9,6 +9,25 @@ struct TaskListView: View {
     var body: some View {
         @Bindable var tasks = tasks
         VStack(spacing: 0) {
+            ListHeader(
+                item: Binding(get: { tasks.sidebar }, set: { tasks.sidebar = $0 }),
+                options: tasks.options,
+                setOptions: { tasks.setOptions($0) },
+                toggleSidebar: {
+                    withAnimation(Theme.List.foldAnimation) { tasks.columnVisibility = tasks.columnVisibility == .detailOnly ? .all : .detailOnly }
+                }
+            ) {
+                if let project = tasks.currentProject {
+                    Divider()
+                    Button("Add section…", systemImage: "rectangle.split.1x2") { tasks.sheet = .newSection(project.id) }
+                }
+                Divider()
+                Toggle("Calendar beside tasks", systemImage: "calendar", isOn: Binding(get: { tasks.showCalendarPanel }, set: { v in
+                    withAnimation(Theme.List.foldAnimation) { tasks.showCalendarPanel = v }
+                }))
+            }
+            .padding(.horizontal, Theme.Space.l)
+            .padding(.top, Theme.Space.m)
             if !isReadOnlyList {
                 QuickAddField(focused: $quickAddFocused) { text, ignored in tasks.quickAdd(text, ignored: ignored) }
                 .padding(.horizontal, Theme.Space.l)
@@ -29,28 +48,24 @@ struct TaskListView: View {
                         }
                     }
                 }
-                ForEach(Array(tasks.sections.enumerated()), id: \.offset) { _, section in
-                    if section.isCompleted {
-                        Section(isExpanded: $tasks.showCompleted) {
+                ForEach(tasks.sections, id: \.key) { section in
+                    Section {
+                        if section.isCompleted {
+                            GroupHeaderRow(title: section.title, count: section.rows.count, collapsed: !tasks.showCompleted) { tasks.showCompleted.toggle() }
+                            if tasks.showCompleted { rows(section) }
+                        } else if section.title.isEmpty {
                             rows(section)
-                        } header: {
-                            Text("\(section.title) · \(section.rows.count)")
-                        }
-                    } else {
-                        Section {
-                            rows(section)
-                        } header: {
-                            if !section.title.isEmpty {
-                                Text(section.title)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .dropDestination(for: String.self) { ids, _ in tasks.drop(ids, intoColumn: section.columnId) }
-                                    .contextMenu {
-                                        if let columnId = section.columnId {
-                                            Button("Rename section…") { tasks.sheet = .renameSection(columnId, section.title) }
-                                            Button("Delete section") { tasks.core.listActions.deleteColumn(id: columnId) }
-                                        }
+                        } else {
+                            let folded = tasks.isCollapsed(section, in: scope)
+                            GroupHeaderRow(title: section.title, count: section.rows.count, collapsed: folded) { tasks.toggleCollapsed(section, in: scope) }
+                                .dropDestination(for: String.self) { ids, _ in tasks.drop(ids, intoColumn: section.columnId) }
+                                .contextMenu {
+                                    if let columnId = section.columnId {
+                                        Button("Rename section…") { tasks.sheet = .renameSection(columnId, section.title) }
+                                        Button("Delete section") { tasks.core.listActions.deleteColumn(id: columnId) }
                                     }
-                            }
+                                }
+                            if !folded { rows(section) }
                         }
                     }
                 }
@@ -68,35 +83,7 @@ struct TaskListView: View {
             .onDeleteCommand { tasks.trashSelected() }
         }
         .navigationTitle(tasks.title)
-        .toolbar {
-            ToolbarItem {
-                Menu {
-                    Picker("Sort by", selection: Binding(get: { tasks.options.sort }, set: { tasks.setSort($0) })) {
-                        Text("Default").tag("")
-                        Text("Date").tag("date")
-                        Text("Priority").tag("priority")
-                        Text("Title").tag("title")
-                        Text("Manual").tag("manual")
-                    }
-                    Picker("Group by", selection: Binding(get: { tasks.options.group }, set: { tasks.setGroup($0) })) {
-                        Text("Default").tag("")
-                        Text("Date").tag("date")
-                        Text("Priority").tag("priority")
-                        Text("List").tag("list")
-                        Text("Tag").tag("tag")
-                        if case .project = tasks.sidebar { Text("Section").tag("column") }
-                        Text("None").tag("none")
-                    }
-                    if let project = tasks.currentProject {
-                        Divider()
-                        Button("Add section…") { tasks.sheet = .newSection(project.id) }
-                    }
-                } label: {
-                    Label("View options", systemImage: "arrow.up.arrow.down")
-                }
-                .help("Sort and group")
-            }
-        }
+        .toolbar(removing: .title)
         .confirmationDialog(
             "Delete \"\(tasks.confirmDelete?.title ?? "")\" permanently?",
             isPresented: Binding(get: { tasks.confirmDelete != nil }, set: { if !$0 { tasks.confirmDelete = nil } })
@@ -112,6 +99,9 @@ struct TaskListView: View {
         .focusedSceneValue(\.focusQuickAdd) { quickAddFocused = true }
     }
 
+    /// Collapsed groups are remembered per list.
+    private var scope: String { tasks.sidebar.storageKey }
+
     private var isReadOnlyList: Bool {
         if case .smart(let list) = tasks.sidebar { return list == .completed || list == .wontDo || list == .trash }
         return false
@@ -120,13 +110,15 @@ struct TaskListView: View {
     @ViewBuilder
     private func rows(_ section: TaskSection) -> some View {
         ForEach(section.rows, id: \.task.id) { row in
-            TaskRowView(task: row.task, row: row, showProject: showsProject)
+            TaskRowView(task: row.task, row: row, showProject: showsProject, details: !tasks.options.hideDetails)
                 .tag(row.task.id)
                 .draggable(row.task.id)
+                .listRowBackground(Color(hex: section.color).map { GroupBar(color: $0) })
             // Subtasks are their own rows: selectable, reachable with the arrow keys, draggable alone.
             ForEach(row.subtasks, id: \.id) { sub in
-                TaskRowView(task: sub, row: nil, showProject: false)
+                TaskRowView(task: sub, row: nil, showProject: false, details: !tasks.options.hideDetails)
                     .padding(.leading, Theme.Row.indent)
+                    .listRowBackground(Color(hex: section.color).map { GroupBar(color: $0) })
                     .tag(sub.id)
                     .draggable(sub.id)
             }
@@ -174,6 +166,7 @@ struct TaskRowView: View {
     let task: ZTask
     let row: TaskRow?
     let showProject: Bool
+    var details = true
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: Theme.Space.m) {
@@ -184,6 +177,9 @@ struct TaskRowView: View {
                     .strikethrough(task.isDone)
                     .foregroundStyle(task.isDone || task.status == -1 ? .secondary : .primary)
                     .lineLimit(2)
+                if details, let preview = TaskRowView.preview(task) {
+                    Text(preview).font(.callout).foregroundStyle(.secondary).lineLimit(1)
+                }
                 if hasMeta { meta }
             }
             Spacer(minLength: 0)
@@ -192,6 +188,15 @@ struct TaskRowView: View {
         .padding(.horizontal, Theme.Space.xs)
         .contentShape(Rectangle())
         .contextMenu { TaskMenu(task: task) }
+    }
+
+    /// The first non-empty line of the notes (or a checklist's description), without Markdown marks.
+    static func preview(_ task: ZTask) -> String? {
+        let text = task.kind == "CHECKLIST" && !task.desc.isEmpty ? task.desc : task.content
+        let line = text.split(whereSeparator: \.isNewline).lazy
+            .map { $0.trimmingCharacters(in: .whitespaces).trimmingCharacters(in: CharacterSet(charactersIn: "#>*-• ")) }
+            .first { !$0.isEmpty }
+        return line.map { String($0.prefix(200)) }
     }
 
     private var hasMeta: Bool {

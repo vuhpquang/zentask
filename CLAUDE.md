@@ -86,6 +86,11 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
   `Habits/` (rail ⌘3): `HabitsModel` + `HabitsView` (list with a 7-day strip | detail with check-in, stats,
   month map) + `HabitEditor`. `Countdowns/` (rail ⌘4): `CountdownsModel` + `CountdownsView` (card grid, editor).
   Countdowns with "show in calendar" appear as all-day entries.
+  Task list chrome (`Tasks/ListChrome.swift`): `ListHeader` (☰ sidebar, list picker popover, `SortMenu` group/sort/
+  order, "…" hide completed/details), `GroupHeaderRow` (collapsible groups, keyed by `TaskSection.key`, remembered in
+  UserDefaults `tasks.collapsed`), `GroupBar` (list colour). `Calendar/CalendarPanels.swift`: `CalendarPanel` beside
+  the task detail (own `PanelCalendar`/`CalendarModel`: Day, Agenda, Month), `AgendaTimeline` (also the main Agenda
+  mode), `TaskPanel` beside the Calendar (own list/options in UserDefaults `calendar.panel.*`, drag onto the grid).
   In Swift, write `_Concurrency.Task { }` in files that import ZenTaskShared (Kotlin `Task` shadows it).
   UI snapshots: `ZENTASK_SNAPSHOT=/tmp/shots build/DerivedData/Build/Products/Debug/ZenTask.app/Contents/MacOS/ZenTask`.
 - `scripts/` — `lib/env.sh` (sourced by all), build, release, deploy, signing, icon.

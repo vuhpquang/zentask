@@ -11,6 +11,7 @@ enum Snapshots {
         let model = AppModel(core: ZenTaskCore.companion.open(dbPath: nil),
                              keychain: Keychain(service: "com.vuhpquang.zentask.snapshot"))
         let tasks = TasksModel(core: model.core)
+        let panel = PanelCalendar(core: model.core)
         let settings: [(String, AnyView, CGSize)] = [
             ("settings-account", AnyView(AccountSettings().frame(width: Theme.Size.settingsWidth)), CGSize(width: 540, height: 300)),
             ("settings-ticktick", AnyView(TickTickSettings().frame(width: Theme.Size.settingsWidth)), CGSize(width: 540, height: 520)),
@@ -18,7 +19,7 @@ enum Snapshots {
         ]
         for (name, view, size) in settings { both(view.environment(model), size: size, name: name, dir: dir) }
         wait { await tasks.reload() }
-        both(AnyView(MainWindow()).environment(model).environment(tasks), size: windowSize, name: "tasks-empty", dir: dir)
+        both(AnyView(MainWindow()).environment(model).environment(tasks).environment(panel), size: windowSize, name: "tasks-empty", dir: dir)
 
         calendarShots(model, tasks, dir: dir)
         habitShots(model, tasks, dir: dir)
@@ -30,12 +31,12 @@ enum Snapshots {
             for (name, item) in shots {
                 tasks.sidebar = item
                 wait { await tasks.settle() }
-                both(AnyView(MainWindow()).environment(model).environment(tasks), size: windowSize, name: name, dir: dir)
+                both(AnyView(MainWindow()).environment(model).environment(tasks).environment(panel), size: windowSize, name: name, dir: dir)
             }
             if let project = tasks.listProjects.first(where: { $0.viewMode == "kanban" }) ?? tasks.listProjects.first {
                 tasks.sidebar = .project(project.id)
                 wait { await tasks.settle() }
-                both(AnyView(MainWindow()).environment(model).environment(tasks), size: windowSize, name: "tasks-list", dir: dir)
+                both(AnyView(MainWindow()).environment(model).environment(tasks).environment(panel), size: windowSize, name: "tasks-list", dir: dir)
             }
             tasks.sheet = nil
             for (name, view) in [("sheet-list", AnyView(ListEditor(project: nil))), ("sheet-filter", AnyView(FilterEditor(filter: nil)))] {
@@ -45,7 +46,18 @@ enum Snapshots {
             wait { await tasks.settle() }
             if let checklist = tasks.sections.flatMap(\.rows).first(where: { $0.checklistTotal > 0 }) ?? tasks.sections.first?.rows.first {
                 tasks.selection = checklist.task.id
-                both(AnyView(MainWindow()).environment(model).environment(tasks), size: windowSize, name: "tasks-detail", dir: dir)
+                both(AnyView(MainWindow()).environment(model).environment(tasks).environment(panel), size: windowSize, name: "tasks-detail", dir: dir)
+                // List grouped by list with one group folded, and the calendar panel open.
+                let cal = CalendarModel(core: model.core)
+                tasks.setOptions(tasks.options.with(sort: "priority", group: "list"))
+                wait { await tasks.settle() }
+                if let second = tasks.sections.dropFirst().first { tasks.toggleCollapsed(second, in: tasks.sidebar.storageKey) }
+                tasks.showCalendarPanel = true
+                wait { await panel.cal.reload() }
+                both(AnyView(MainWindow()).environment(model).environment(tasks).environment(panel).environment(cal), size: CGSize(width: 1500, height: 820), name: "tasks-panel", dir: dir)
+                tasks.showCalendarPanel = false
+                if let second = tasks.sections.dropFirst().first { tasks.toggleCollapsed(second, in: tasks.sidebar.storageKey) }
+                tasks.setOptions(tasks.options.with(sort: "", group: ""))
             }
         }
     }
@@ -57,10 +69,10 @@ enum Snapshots {
         let day = Calendar.current.startOfDay(for: .now)
         SampleData.shared.addCalendar(core: core, dayStart: Int64(day.timeIntervalSince1970 * 1000))
         wait { await tasks.reload(); await cal.reload() }
-        for mode in [CalendarModel.Mode.week, .month] {
+        for mode in [CalendarModel.Mode.week, .month, .agenda] {
             cal.mode = mode
             wait { await cal.reload() }
-            both(AnyView(CalendarView()).environment(model).environment(tasks).environment(cal), size: windowSize, name: "calendar-\(mode.rawValue.lowercased())", dir: dir)
+            both(AnyView(CalendarView()).environment(model).environment(tasks).environment(cal).environment(PanelCalendar(core: core)), size: windowSize, name: "calendar-\(mode.rawValue.lowercased())", dir: dir)
         }
         both(AnyView(CalendarSettings().frame(width: Theme.Size.settingsWidth)).environment(model).environment(cal), size: CGSize(width: 540, height: 420), name: "settings-calendars", dir: dir)
     }

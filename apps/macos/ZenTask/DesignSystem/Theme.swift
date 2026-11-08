@@ -92,6 +92,27 @@ enum Theme {
         static let topInset: CGFloat = 52
     }
 
+    /** Task list chrome (header, picker, groups) shared by the main list and the panels. */
+    enum List {
+        static let headerButton: CGFloat = 30
+        static let pickerWidth: CGFloat = 260
+        static let pickerHeight: CGFloat = 520
+        static let pickerRow: CGFloat = 32
+        static let pickerIcon: CGFloat = 20
+        static let barWidth: CGFloat = 3
+        static let foldAnimation: Animation = .snappy(duration: 0.28)
+    }
+
+    /** Side panels (calendar beside the tasks, task list beside the calendar). */
+    enum Panel {
+        static let calendarWidth: CGFloat = 340
+        static let tasksWidth: CGFloat = 320
+        static let agendaDay: CGFloat = 34
+        static let agendaTime: CGFloat = 48
+        static let agendaDot: CGFloat = 9
+        static let agendaBar: CGFloat = 3
+    }
+
     /** Habits area (P6). */
     enum Habits {
         static let listMin: CGFloat = 420
