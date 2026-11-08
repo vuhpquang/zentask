@@ -89,6 +89,7 @@ class ZenTaskCore(
         is TaskFilter.Smart -> "smart:${filter.list.name}"
         is TaskFilter.InProject -> "project:${filter.id}"
         is TaskFilter.WithTag -> "tag:${filter.name.lowercase()}"
+        is TaskFilter.Custom -> "filter:${filter.id}"
     }
 
     /** [ignored]: start offsets of tokens the user dismissed (kept as text). */

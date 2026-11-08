@@ -2,7 +2,10 @@ package com.vuhpquang.zentask.tasks
 
 import com.vuhpquang.zentask.model.ChecklistItem
 import com.vuhpquang.zentask.model.Column
+import com.vuhpquang.zentask.lists.FilterRule
+import com.vuhpquang.zentask.lists.ViewOptions
 import com.vuhpquang.zentask.model.EntityTypes
+import com.vuhpquang.zentask.model.Filter
 import com.vuhpquang.zentask.model.Project
 import com.vuhpquang.zentask.model.Tag
 import com.vuhpquang.zentask.model.Task
@@ -25,6 +28,8 @@ sealed interface TaskFilter {
     data class Smart(val list: SmartList) : TaskFilter
     data class InProject(val id: String) : TaskFilter
     data class WithTag(val name: String) : TaskFilter
+    /** A custom smart list (`Filter` record). */
+    data class Custom(val id: String) : TaskFilter
 }
 
 /** One top-level task in a list, with its visible subtasks and checklist progress. */
@@ -52,7 +57,10 @@ class TaskIndex(
     items: List<ChecklistItem>,
     columns: List<Column>,
     val tags: List<Tag>,
+    filters: List<Filter> = emptyList(),
 ) {
+    val filters: List<Filter> = filters.filter { !it.deleted }
+    private val rules: Map<String, FilterRule?> = this.filters.associate { it.id to FilterRule.parse(it.rule) }
     private val tasks = tasks.filter { !it.deleted }
     private val projectById = projects.associateBy { it.id }
     private val itemsByTask = items.filter { !it.deleted }.groupBy { it.taskId }
@@ -92,9 +100,10 @@ class TaskIndex(
         }
     }
 
-    fun sections(filter: TaskFilter, now: Instant, zone: TimeZone): List<TaskSection> {
-        val rows = rows(filter, now, zone)
+    fun sections(filter: TaskFilter, now: Instant, zone: TimeZone, options: ViewOptions = ViewOptions()): List<TaskSection> {
         val today = now.toLocalDateTime(zone).date
+        if (options.sort.isNotEmpty() || options.group.isNotEmpty()) return customSections(filter, now, zone, options, today)
+        val rows = rows(filter, now, zone)
         return when (filter) {
             is TaskFilter.InProject -> projectSections(filter.id, rows)
             is TaskFilter.Smart -> when (filter.list) {
@@ -102,7 +111,37 @@ class TaskIndex(
                 else -> dateSections(rows.filter { !it.task.isDone }, today, zone) + completed(rows)
             }
             is TaskFilter.WithTag -> dateSections(rows.filter { !it.task.isDone }, today, zone) + completed(rows)
+            is TaskFilter.Custom -> dateSections(rows, today, zone)
         }
+    }
+
+    /** Sections with an explicit sort/group choice (per-list view options). */
+    private fun customSections(filter: TaskFilter, now: Instant, zone: TimeZone, o: ViewOptions, today: LocalDate): List<TaskSection> {
+        val rows = rows(filter, now, zone)
+        val open = rows.filter { !it.task.isDone }
+        val sorted = when (o.sort) {
+            "priority" -> open.sortedWith(compareBy<TaskRow>({ -it.task.priority }, { day(it.task, zone) == null }, { day(it.task, zone) }, { it.task.startDate ?: it.task.dueDate }))
+            "title" -> open.sortedBy { it.task.title.lowercase() }
+            "manual" -> open.sortedBy { it.task.sortOrder }
+            else -> open // the default order is by date
+        }
+        val groups: List<TaskSection> = when (o.group) {
+            "priority" -> listOf(5 to "High", 3 to "Medium", 1 to "Low", 0 to "None")
+                .map { (p, title) -> TaskSection(title, sorted.filter { it.task.priority == p }) }
+            "list" -> sorted.groupBy { it.task.projectId }.entries
+                .sortedWith(compareBy({ projectById[it.key]?.sortOrder ?: Long.MAX_VALUE }, { projectById[it.key]?.name.orEmpty() }))
+                .map { (id, list) -> TaskSection(projectById[id]?.name ?: "Inbox", list) }
+            "tag" -> {
+                val byTag = LinkedHashMap<String, MutableList<TaskRow>>()
+                sorted.forEach { r -> byTag.getOrPut(r.task.tags.firstOrNull()?.let { "#$it" } ?: "No tag") { mutableListOf() } += r }
+                byTag.entries.sortedBy { if (it.key == "No tag") "\uFFFF" else it.key }.map { TaskSection(it.key, it.value) }
+            }
+            "column" -> if (filter is TaskFilter.InProject) projectSections(filter.id, sorted) else listOf(TaskSection("", sorted))
+            "none" -> listOf(TaskSection("", sorted))
+            else -> dateSections(sorted, today, zone)
+        }
+        val done = if (filter is TaskFilter.Smart && filter.list in setOf(SmartList.TODAY, SmartList.TOMORROW, SmartList.NEXT_7_DAYS, SmartList.ALL) || filter is TaskFilter.Custom) emptyList() else completed(rows)
+        return groups.filter { it.rows.isNotEmpty() } + done
     }
 
     /** Open-task counts for the sidebar badges. */
@@ -116,6 +155,7 @@ class TaskIndex(
         }
         open.groupingBy { it.projectId }.eachCount().forEach { (id, n) -> out[TaskFilter.InProject(id)] = n }
         open.flatMap { t -> t.tags.distinct() }.groupingBy { it }.eachCount().forEach { (tag, n) -> out[TaskFilter.WithTag(tag)] = n }
+        filters.forEach { f -> out[TaskFilter.Custom(f.id)] = open.count { matches(it, TaskFilter.Custom(f.id), today, zone) } }
         return out
     }
 
@@ -141,6 +181,27 @@ class TaskIndex(
         }
         is TaskFilter.InProject -> t.trashedAt == null && t.projectId == f.id && t.status != TaskStatus.WONT_DO
         is TaskFilter.WithTag -> visible(t) && t.status != TaskStatus.WONT_DO && t.tags.any { it.equals(f.name, ignoreCase = true) || it.lowercase() in childTags(f.name) }
+        is TaskFilter.Custom -> visible(t) && t.isOpen && rules[f.id]?.let { ruleMatches(t, it, today, zone) } == true
+    }
+
+    private fun ruleMatches(t: Task, r: FilterRule, today: LocalDate, zone: TimeZone): Boolean {
+        if (r.lists.isNotEmpty() && t.projectId !in r.lists) return false
+        if (r.tags.isNotEmpty() && r.tags.none { want -> t.tags.any { it.equals(want, ignoreCase = true) } }) return false
+        if (r.priorities.isNotEmpty() && t.priority !in r.priorities) return false
+        r.keyword?.takeIf { it.isNotBlank() }?.let { k ->
+            val key = QuickAddParser.fold(k.lowercase())
+            if (!QuickAddParser.fold((t.title + "\n" + t.content).lowercase()).contains(key)) return false
+        }
+        val d = day(t, zone)
+        return when (r.due) {
+            null, "", "any" -> true
+            "today" -> d != null && d <= today
+            "tomorrow" -> d == today.plus(1, DateTimeUnit.DAY)
+            "next7" -> d != null && d <= today.plus(6, DateTimeUnit.DAY)
+            "overdue" -> d != null && d < today
+            "nodate" -> d == null
+            else -> false
+        }
     }
 
     private fun childTags(name: String): Set<String> {
@@ -229,6 +290,7 @@ class TaskIndex(
             items = store.list(EntityTypes.checklistItem),
             columns = store.list(EntityTypes.column),
             tags = store.list(EntityTypes.tag).sortedBy { it.sortOrder },
+            filters = store.list(EntityTypes.filter).sortedBy { it.sortOrder },
         )
     }
 }
