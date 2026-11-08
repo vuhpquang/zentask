@@ -13,7 +13,7 @@ import java.sql.Connection
 import java.sql.DriverManager
 import java.util.UUID
 
-data class DeviceRow(val id: String, val name: String, val createdAt: Long, val lastSeenAt: Long, val revokedAt: Long?)
+data class DeviceRow(val id: String, val name: String, val createdAt: Long, val lastSeenAt: Long, val revokedAt: Long?, val scope: String = "full")
 
 /**
  * The server's SQLite database (`<dataDir>/zentask.db`): synced records, devices and a little metadata.
@@ -51,6 +51,9 @@ class ServerDb(file: Path, private val now: () -> Long = System::currentTimeMill
                     created_at INTEGER NOT NULL, last_seen_at INTEGER NOT NULL, revoked_at INTEGER)""",
             )
         }
+        // Migration (P3b): device scope; existing devices are full app devices.
+        val hasScope = conn.createStatement().use { st -> st.executeQuery("PRAGMA table_info(devices)").use { rs -> generateSequence { if (rs.next()) rs.getString("name") else null }.toList() } }.contains("scope")
+        if (!hasScope) conn.createStatement().use { it.execute("ALTER TABLE devices ADD COLUMN scope TEXT NOT NULL DEFAULT 'full'") }
         serverId = meta("serverId") ?: UUID.randomUUID().toString().also { setMeta("serverId", it) }
     }
 
@@ -138,11 +141,11 @@ class ServerDb(file: Path, private val now: () -> Long = System::currentTimeMill
         }
 
     @Synchronized
-    fun createDevice(name: String, tokenHash: String): String {
+    fun createDevice(name: String, tokenHash: String, scope: String = "full"): String {
         val id = UUID.randomUUID().toString()
         val t = now()
-        conn.prepareStatement("INSERT INTO devices(id, name, token_hash, created_at, last_seen_at) VALUES (?, ?, ?, ?, ?)").use {
-            it.setString(1, id); it.setString(2, name); it.setString(3, tokenHash); it.setLong(4, t); it.setLong(5, t)
+        conn.prepareStatement("INSERT INTO devices(id, name, token_hash, created_at, last_seen_at, scope) VALUES (?, ?, ?, ?, ?, ?)").use {
+            it.setString(1, id); it.setString(2, name); it.setString(3, tokenHash); it.setLong(4, t); it.setLong(5, t); it.setString(6, scope)
             it.executeUpdate()
         }
         return id
@@ -201,5 +204,6 @@ class ServerDb(file: Path, private val now: () -> Long = System::currentTimeMill
         createdAt = getLong("created_at"),
         lastSeenAt = getLong("last_seen_at"),
         revokedAt = getLong("revoked_at").takeIf { !wasNull() },
+        scope = getString("scope") ?: "full",
     )
 }

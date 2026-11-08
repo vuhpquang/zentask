@@ -1,6 +1,7 @@
 package com.vuhpquang.zentask.server.mcp
 
 import com.vuhpquang.zentask.server.store.ServerDb
+import com.vuhpquang.zentask.server.sync.rejection
 import com.vuhpquang.zentask.store.ZenStore
 import com.vuhpquang.zentask.store.createSqlDriver
 import com.vuhpquang.zentask.tasks.TagActions
@@ -42,11 +43,14 @@ class McpReplica(
             pull()
             val result = block(Context(store, actions, tagActions))
             push()
+            pull() // advance the checkpoint past our own writes (so a restored server is noticed)
             result
         }
     }
 
     private fun pull() {
+        // A checkpoint the server never issued: its database went back in time (restored backup).
+        if (store.checkpoint > db.currentVersion()) db.rotateServerId()
         val known = store.serverId
         if (known != null && known != db.serverId) store.resetForNewServer(db.serverId)
         store.serverId = db.serverId
@@ -60,14 +64,21 @@ class McpReplica(
         }
     }
 
+    /** Pushes the outbox with the same checks as `/v1/sync`; a refused change is parked, never applied. */
     private fun push() {
         while (true) {
             val out = store.pending(PAGE)
             if (out.isEmpty()) break
-            db.apply(out.map { it.record })
-            store.markSynced(out)
+            val now = wall()
+            val (bad, good) = out.partition { rejection(it.record, now) != null }
+            bad.forEach { store.park(it, rejection(it.record, now)!!) }
+            db.apply(good.map { it.record })
+            store.markSynced(good)
         }
     }
+
+    /** True when the last action left unpushed changes (used to audit partial writes). */
+    fun hasPending(): Boolean = store.pending(1).isNotEmpty()
 
     override fun close() = store.close()
 

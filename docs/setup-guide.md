@@ -360,12 +360,14 @@ Server ZenTask có endpoint MCP tại `https://zentask-api.vuhpquang.com/mcp`. C
 read -s "ZT_PW?Mật khẩu ZenTask: "; echo
 curl -s https://zentask-api.vuhpquang.com/v1/auth/login \
   -H 'Content-Type: application/json' \
-  -d "{\"password\":\"$ZT_PW\",\"deviceName\":\"Claude Code\"}" \
+  -d "{\"password\":\"$ZT_PW\",\"deviceName\":\"Claude Code\",\"scope\":\"mcp\"}" \
   -w '\nHTTP %{http_code}\n'
 unset ZT_PW
 ```
 
 Kết quả là `HTTP 200` cùng `{"token":"…","deviceId":"…"}`. Copy giá trị `token`, và ghi lại `deviceId` để sau này có thể thu hồi.
+
+> `"scope":"mcp"` tạo token **chỉ dùng được cho `/mcp`**. Nó không gọi được `/v1/sync` hay `/v1/devices`, nên AI không vượt qua được các lớp bảo vệ của MCP: không xoá hẳn khi task chưa nằm trong Trash, và mọi thay đổi đều được ghi nhật ký. Claude Code lưu token trong `~/.claude.json` trên Mac của anh, nên token này chỉ để trên máy của anh.
 
 ### 6.2 Thêm vào Claude Code
 
@@ -390,9 +392,9 @@ Sau đó, trên Mac, bấm sync ở góc dưới sidebar (hoặc đợi vài gi�
 
 ```bash
 curl -s -o /dev/null -w '%{http_code}\n' -X DELETE \
-  https://zentask-api.vuhpquang.com/v1/devices/<deviceId> -H 'Authorization: Bearer <token>'
+  https://zentask-api.vuhpquang.com/v1/devices/<deviceId> -H 'Authorization: Bearer <token của app>'
 claude mcp remove zentask --scope user
 ```
 
-Lệnh `DELETE` in ra `204`. Từ lúc đó token của Claude trả `401`.
+Lệnh `DELETE` phải chạy bằng token của **app** (một token phạm vi đầy đủ, ví dụ token tạo ở bước 2.3), vì token MCP không gọi được `/v1`. Lệnh in ra `204`. Từ lúc đó token của Claude trả `401`.
 

@@ -3,6 +3,9 @@ package com.vuhpquang.zentask.server
 import com.vuhpquang.zentask.ZenTaskInfo
 import com.vuhpquang.zentask.model.ZenJson
 import com.vuhpquang.zentask.server.auth.DEVICE_AUTH
+import com.vuhpquang.zentask.server.auth.FullScopeOnly
+import com.vuhpquang.zentask.server.auth.SCOPE_FULL
+import com.vuhpquang.zentask.server.auth.SCOPE_MCP
 import com.vuhpquang.zentask.server.auth.LoginLimiter
 import com.vuhpquang.zentask.server.auth.PasswordCheck
 import com.vuhpquang.zentask.server.auth.Tokens
@@ -103,15 +106,20 @@ fun Application.module(config: ServerConfig = ServerConfig.fromEnv(), now: () ->
                     return@post call.respond(HttpStatusCode.Unauthorized, ApiError("unauthorized"))
                 }
                 limiter.succeeded(slot)
+                if (req.scope != SCOPE_FULL && req.scope != SCOPE_MCP) {
+                    limiter.succeeded(slot)
+                    return@post call.respond(HttpStatusCode.BadRequest, ApiError("bad_request"))
+                }
                 val token = Tokens.issue()
                 val name = req.deviceName.trim().take(100).ifEmpty { "Unknown device" }
-                val deviceId = db.createDevice(name, Tokens.hash(token))
+                val deviceId = db.createDevice(name, Tokens.hash(token), req.scope)
                 log.info("Device logged in: $name ($deviceId)")
                 call.respond(LoginResponse(token = token, deviceId = deviceId))
             }
             authenticate(DEVICE_AUTH) {
+                install(FullScopeOnly)
                 get("/devices") {
-                    call.respond(db.listDevices().map { DeviceInfo(it.id, it.name, it.createdAt, it.lastSeenAt) })
+                    call.respond(db.listDevices().map { DeviceInfo(it.id, it.name, it.createdAt, it.lastSeenAt, it.scope) })
                 }
                 syncRoutes(db, now)
                 delete("/devices/{id}") {

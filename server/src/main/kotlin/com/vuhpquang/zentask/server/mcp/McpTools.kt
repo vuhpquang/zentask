@@ -51,6 +51,9 @@ class Tool(
 /** The ZenTask tools (spec §10a). Deletion moves to Trash unless `permanent` on a task already in Trash. */
 object McpTools {
     private const val MAX_TITLE = 500
+    private const val MAX_NOTES = 20_000
+    /** "tag_<name>" must fit the 64-character id limit of /v1/sync. */
+    private const val MAX_TAG = 50
 
     val all: List<Tool> by lazy {
         listOf(
@@ -97,7 +100,10 @@ object McpTools {
                     "id" to str("Task id"),
                     "title" to str("New title"),
                     "notes" to str("New notes"),
-                    "due" to str("ISO date or date-time; null clears"),
+                    "due" to buildJsonObject {
+                        putJsonArray("type") { add(JsonPrimitive("string")); add(JsonPrimitive("null")) }
+                        put("description", "ISO date or date-time; null clears")
+                    },
                     "priority" to enumStr("Priority", "high", "medium", "low", "none"),
                     "tags" to strArray("Replace all tags"),
                     "add_tags" to strArray("Tags to add"),
@@ -111,7 +117,7 @@ object McpTools {
             simple("complete_task", "Complete a task. A repeating task keeps a completed copy and moves to its next date.") { ctx, id -> ctx.actions.complete(id) },
             simple("reopen_task", "Mark a completed or won't-do task as open again.") { ctx, id -> ctx.actions.uncomplete(id) },
             simple("wont_do_task", "Mark a task as won't do.") { ctx, id -> ctx.actions.wontDo(id) },
-            simple("trash_task", "Move a task (and its subtasks) to Trash. It can be restored.") { ctx, id -> ctx.actions.trash(id) },
+            simple("trash_task", "Move a task (and its subtasks) to Trash. It can be restored.") { ctx, id -> notTrashed(ctx, id); ctx.actions.trash(id) },
             simple("restore_task", "Bring a task back from Trash.") { ctx, id -> ctx.actions.restore(id) },
             Tool(
                 "delete_task",
@@ -125,6 +131,7 @@ object McpTools {
                     ctx.actions.deleteForever(t.id)
                     ToolResult("Deleted permanently: ${t.title}", changed = listOf(t.id))
                 } else {
+                    notTrashed(ctx, t.id)
                     ctx.actions.trash(t.id)
                     ToolResult("Moved to Trash: " + json(brief(ctx.store.get(EntityTypes.task, t.id)!!, ctx, zone)), changed = listOf(t.id))
                 }
@@ -151,8 +158,10 @@ object McpTools {
             ) { a, ctx, _ ->
                 val id = a.req("item_id")
                 val item = ctx.store.get(EntityTypes.checklistItem, id)?.takeIf { !it.deleted } ?: throw ToolError("No checklist item $id")
-                a.bool("done")?.let { want -> if ((item.status != TaskStatus.OPEN) != want) ctx.actions.toggleItem(id) }
-                a.str("title")?.let { ctx.actions.renameItem(id, title(it)) }
+                val done = a.bool("done")
+                val newTitle = a.str("title")?.let(::title)
+                done?.let { want -> if ((item.status != TaskStatus.OPEN) != want) ctx.actions.toggleItem(id) }
+                newTitle?.let { ctx.actions.renameItem(id, it) }
                 ToolResult("Updated item $id", changed = listOf(item.taskId))
             },
             Tool("list_lists", "All lists with their folder and open-task count.", schema(), writes = false) { _, ctx, zone ->
@@ -199,9 +208,11 @@ object McpTools {
                 "rename_tag", "Rename a tag on every task (merges into an existing tag of that name).",
                 schema("name" to str("Current name"), "new_name" to str("New name"), required = listOf("name", "new_name")), writes = true,
             ) { a, ctx, _ ->
-                val affected = tagged(ctx, a.req("name"))
-                ctx.tags.rename(a.req("name"), a.req("new_name"))
-                ToolResult("Renamed #${a.req("name")} to #${a.req("new_name").lowercase()} on ${affected.size} tasks", changed = affected)
+                val from = existingTag(ctx, a.req("name"))
+                val to = tagName(a.req("new_name"))
+                val affected = tagged(ctx, from)
+                ctx.tags.rename(from, to)
+                ToolResult("Renamed #$from to #$to on ${affected.size} tasks", changed = affected)
             },
             Tool(
                 "set_tag_color", "Set a tag's colour (#RRGGBB).",
@@ -209,16 +220,18 @@ object McpTools {
             ) { a, ctx, _ ->
                 val color = a.req("color")
                 if (!Regex("^#[0-9A-Fa-f]{6}$").matches(color)) throw ToolError("Colour must look like #2E9E88")
-                ctx.tags.setColor(a.req("name"), color)
-                ToolResult("Colour of #${a.req("name")} set to $color")
+                val name = existingTag(ctx, a.req("name"))
+                ctx.tags.setColor(name, color)
+                ToolResult("Colour of #$name set to $color")
             },
             Tool(
                 "delete_tag", "Remove a tag from every task and delete it. No task is deleted.",
                 schema("name" to str("Tag"), required = listOf("name")), writes = true,
             ) { a, ctx, _ ->
-                val affected = tagged(ctx, a.req("name"))
-                ctx.tags.delete(a.req("name"))
-                ToolResult("Deleted #${a.req("name")} (removed from ${affected.size} tasks)", changed = affected)
+                val name = existingTag(ctx, a.req("name"))
+                val affected = tagged(ctx, name)
+                ctx.tags.delete(name)
+                ToolResult("Deleted #$name (removed from ${affected.size} tasks)", changed = affected)
             },
         )
     }
@@ -287,42 +300,49 @@ object McpTools {
     }
 
     private fun createTask(a: JsonObject, ctx: McpReplica.Context, zone: TimeZone): ToolResult {
-        val quick = a.str("quick_add")?.let { QuickAddParser.parse(it, Clock.System.now(), zone, ctx.index.projects) }
-        val name = a.str("title") ?: quick?.title ?: throw ToolError("Give a title or quick_add text")
+        val quick = a.str("quick_add")?.let { QuickAddParser.parse(it, Clock.System.now(), zone, ctx.index.projects.filter { p -> !p.closed }) }
+        val name = title(a.str("title") ?: quick?.title ?: throw ToolError("Give a title or quick_add text"))
         val parent = a.str("parent_id")?.let { task(ctx, it) }
-        if (parent != null) {
-            val sub = ctx.actions.addSubtask(parent.id, title(name))
-            return ToolResult(json(brief(sub, ctx, zone)), changed = listOf(sub.id))
-        }
         val due = a.str("due")?.let { date(it, zone) }
-        val created = ctx.actions.create(
-            title = title(name),
-            filter = null,
-            projectId = a.str("list")?.let { project(ctx, it).id } ?: quick?.projectId,
-            priority = a.str("priority")?.let(::priority) ?: quick?.priority,
-            tags = a.strings("tags") + quick?.tags.orEmpty(),
-            due = due?.first ?: quick?.due,
-            allDay = due?.second ?: quick?.allDay ?: true,
-        )
-        a.str("notes")?.let { ctx.actions.setContent(created.id, it) }
+        val projectId = a.str("list")?.let { project(ctx, it).id } ?: quick?.projectId
+        val prio = a.str("priority")?.let(::priority) ?: quick?.priority
+        val tags = (a.strings("tags") + quick?.tags.orEmpty()).map(::tagName).distinct()
+        val notes = a.str("notes")?.let(::notes)
+        val created = if (parent != null) {
+            ctx.actions.addSubtask(parent.id, name).also { sub ->
+                prio?.let { ctx.actions.setPriority(sub.id, it) }
+                if (tags.isNotEmpty()) ctx.actions.setTags(sub.id, tags)
+                (due?.first ?: quick?.due)?.let { ctx.actions.setDue(sub.id, it, due?.second ?: quick?.allDay ?: true) }
+            }
+        } else {
+            ctx.actions.create(
+                title = name, filter = null, projectId = projectId, priority = prio, tags = tags,
+                due = due?.first ?: quick?.due, allDay = due?.second ?: quick?.allDay ?: true,
+            )
+        }
+        notes?.let { ctx.actions.setContent(created.id, it) }
         return ToolResult(json(brief(ctx.store.get(EntityTypes.task, created.id)!!, ctx, zone)), changed = listOf(created.id))
     }
 
     private fun updateTask(a: JsonObject, ctx: McpReplica.Context, zone: TimeZone): ToolResult {
         val t = task(ctx, a.req("id"))
-        a.str("title")?.let { ctx.actions.rename(t.id, title(it)) }
-        a.str("notes")?.let { ctx.actions.setContent(t.id, it) }
-        if (a.containsKey("due")) {
-            val due = a.str("due")?.let { date(it, zone) }
-            ctx.actions.setDue(t.id, due?.first, due?.second ?: false)
-        }
-        a.str("priority")?.let { ctx.actions.setPriority(t.id, priority(it)) }
-        val tags = when {
-            a.containsKey("tags") -> a.strings("tags")
-            else -> t.tags + a.strings("add_tags")
-        }.filterNot { tag -> a.strings("remove_tags").any { it.removePrefix("#").equals(tag.removePrefix("#"), ignoreCase = true) } }
+        // Read and check every argument before the first write: a bad one must not leave half an edit.
+        val newTitle = a.str("title")?.let(::title)
+        val newNotes = a.str("notes")?.let(::notes)
+        val dueGiven = a.containsKey("due")
+        val due = a.str("due")?.takeIf { it.isNotEmpty() }?.let { date(it, zone) }
+        val newPriority = a.str("priority")?.let(::priority)
+        val remove = a.strings("remove_tags").map(::tagName).toSet()
+        val tags = (if (a.containsKey("tags")) a.strings("tags").map(::tagName) else t.tags + a.strings("add_tags").map(::tagName))
+            .filterNot { it in remove }.distinct()
+        val list = a.str("list")?.let { project(ctx, it) }
+
+        newTitle?.let { ctx.actions.rename(t.id, it) }
+        newNotes?.let { ctx.actions.setContent(t.id, it) }
+        if (dueGiven) ctx.actions.setDue(t.id, due?.first, due?.second ?: false)
+        newPriority?.let { ctx.actions.setPriority(t.id, it) }
         if (tags != t.tags) ctx.actions.setTags(t.id, tags)
-        a.str("list")?.let { ctx.actions.move(t.id, project(ctx, it).id) }
+        list?.let { ctx.actions.move(t.id, it.id) }
         return ToolResult(json(brief(ctx.store.get(EntityTypes.task, t.id)!!, ctx, zone)), changed = listOf(t.id))
     }
 
@@ -339,6 +359,31 @@ object McpTools {
         fun norm(p: Project) = QuickAddParser.fold(p.name.lowercase()).dropWhile { !it.isLetterOrDigit() }.trim()
         return live.firstOrNull { norm(it) == key } ?: live.firstOrNull { norm(it).startsWith(key) }
             ?: throw ToolError("No list named $nameOrId. Use list_lists to see the lists.")
+    }
+
+    /** A tag name as stored: no `#`, lowercase; must start with a letter and fit the sync id limit. */
+    private fun tagName(raw: String): String {
+        val n = raw.trim().removePrefix("#").lowercase()
+        if (n.isEmpty() || !n.first().isLetter()) throw ToolError("Tag \"$raw\" must start with a letter")
+        if (n.length > MAX_TAG) throw ToolError("Tag \"$raw\" is longer than $MAX_TAG characters")
+        return n
+    }
+
+    /** The normalised name of a tag that exists (as a tag record or on a task). */
+    private fun existingTag(ctx: McpReplica.Context, raw: String): String {
+        val n = raw.trim().removePrefix("#").lowercase()
+        val known = ctx.index.tags.any { it.name.lowercase() == n } || tagged(ctx, n).isNotEmpty()
+        if (!known) throw ToolError("No tag named #$n. Use list_tags to see the tags.")
+        return n
+    }
+
+    private fun notTrashed(ctx: McpReplica.Context, id: String) {
+        if (task(ctx, id).trashedAt != null) throw ToolError("The task is already in Trash. Use restore_task to bring it back.")
+    }
+
+    private fun notes(s: String): String {
+        if (s.length > MAX_NOTES) throw ToolError("Notes are longer than $MAX_NOTES characters")
+        return s
     }
 
     private fun tagged(ctx: McpReplica.Context, name: String): List<String> {
@@ -367,6 +412,10 @@ object McpTools {
         runCatching { return LocalDate.parse(v).atStartOfDayIn(zone).toEpochMilliseconds() to true }
         runCatching { return LocalDateTime.parse(v).toInstant(zone).toEpochMilliseconds() to false }
         runCatching { return Instant.parse(v).toEpochMilliseconds() to false }
+        // 2026-11-09T09:00+07:00 (no seconds) → add them.
+        Regex("""^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2})(Z|[+-]\d{2}:?\d{2})$""").matchEntire(v)?.let { m ->
+            runCatching { return Instant.parse(m.groupValues[1] + ":00" + m.groupValues[2]).toEpochMilliseconds() to false }
+        }
         throw ToolError("Can't read the date \"$s\". Use 2026-11-09 or 2026-11-09T09:00")
     }
 

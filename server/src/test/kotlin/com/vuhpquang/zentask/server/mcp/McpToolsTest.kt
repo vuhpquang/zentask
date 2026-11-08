@@ -235,4 +235,71 @@ class McpToolsTest {
         assertEquals("Renamed on the Mac", obj(client.tool(ai, "get_task", """{"id":"$id"}""").first)["title"]!!.jsonPrimitive.content)
         assertEquals(JsonPrimitive("Made by the AI"), JsonPrimitive("Made by the AI"))
     }
+
+    @Test
+    fun failedToolCallWritesNothing() = testApplication {
+        server()
+        val token = client.loginToken()
+        val id = obj(client.tool(token, "create_task", """{"title":"Keep","notes":"original notes"}""").first)["id"]!!.jsonPrimitive.content
+        assertTrue(client.tool(token, "update_task", """{"id":"$id","title":"RENAMED","priority":"urgent"}""").second)
+        assertTrue(client.tool(token, "update_task", """{"id":"$id","notes":"partial","list":"no-such-list"}""").second)
+        val t = obj(client.tool(token, "get_task", """{"id":"$id"}""").first)
+        assertEquals("Keep", t["title"]!!.jsonPrimitive.content)
+        assertEquals("original notes", t["notes"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun tagToolsAcceptHashAndRejectUnknownTags() = testApplication {
+        server()
+        val token = client.loginToken()
+        client.tool(token, "create_task", """{"title":"x","tags":["work"]}""")
+        val (renamed, e1) = client.tool(token, "rename_tag", """{"name":"#work","new_name":"#job"}""")
+        assertFalse(e1, renamed)
+        assertEquals(listOf("job"), obj("{\"t\":" + client.tool(token, "list_tags").first + "}")["t"]!!.jsonArray.map { it.jsonObject["name"]!!.jsonPrimitive.content })
+        assertTrue(client.tool(token, "delete_tag", """{"name":"nope"}""").second)
+        assertTrue(client.tool(token, "set_tag_color", """{"name":"nope","color":"#112233"}""").second)
+        assertFalse(client.tool(token, "delete_tag", """{"name":"#job"}""").second)
+    }
+
+    @Test
+    fun overlongTagIsRejectedBeforeItReachesTheServer() = testApplication {
+        server()
+        val token = client.loginToken()
+        val (msg, err) = client.tool(token, "create_task", """{"title":"x","tags":["${"a".repeat(80)}"]}""")
+        assertTrue(err, msg)
+        assertEquals(0, obj(client.tool(token, "search_tasks", """{"status":"any"}""").first)["count"]!!.jsonPrimitive.int)
+    }
+
+    @Test
+    fun trashingATrashedTaskIsAnError() = testApplication {
+        server()
+        val token = client.loginToken()
+        val id = obj(client.tool(token, "create_task", """{"title":"x"}""").first)["id"]!!.jsonPrimitive.content
+        assertFalse(client.tool(token, "trash_task", """{"id":"$id"}""").second)
+        assertTrue(client.tool(token, "trash_task", """{"id":"$id"}""").second)
+        assertTrue(client.tool(token, "delete_task", """{"id":"$id"}""").second)
+    }
+
+    @Test
+    fun mcpScopedTokenCannotUseTheSyncApi() = testApplication {
+        server()
+        val res = client.post("/v1/auth/login") {
+            contentType(ContentType.Application.Json)
+            setBody("""{"password":"${com.vuhpquang.zentask.server.TEST_PASSWORD}","deviceName":"Claude Code","scope":"mcp"}""")
+        }
+        val token = obj(res.bodyAsText())["token"]!!.jsonPrimitive.content
+        assertFalse(client.tool(token, "list_tags").second, "MCP works")
+        val sync = client.post("/v1/sync") { bearerAuth(token); contentType(ContentType.Application.Json); setBody("""{"checkpoint":0,"changes":[]}""") }
+        assertEquals(HttpStatusCode.Forbidden, sync.status)
+        assertEquals(HttpStatusCode.Forbidden, client.get("/v1/devices") { bearerAuth(token) }.status)
+    }
+
+    @Test
+    fun datesWithOffsetAndBadTimezone() = testApplication {
+        server()
+        val token = client.loginToken()
+        val t = obj(client.tool(token, "create_task", """{"title":"x","due":"2026-11-09T09:00+07:00"}""").first)
+        assertEquals("2026-11-09T09:00", t["due"]!!.jsonPrimitive.content)
+        assertTrue(client.tool(token, "create_task", """{"title":"x","due":"2026-11-09","timezone":"PST"}""").second)
+    }
 }

@@ -4,14 +4,15 @@ import kotlinx.serialization.Serializable
 
 // Wire format between clients and the server (JSON via ZenJson). Field names are a protocol: add, never rename.
 
+/** [scope]: `full` (a ZenTask app) or `mcp` (an AI client: only `/mcp`, never `/v1`). */
 @Serializable
-data class LoginRequest(val password: String, val deviceName: String)
+data class LoginRequest(val password: String, val deviceName: String, val scope: String = "full")
 
 @Serializable
 data class LoginResponse(val token: String, val deviceId: String)
 
 @Serializable
-data class DeviceInfo(val id: String, val name: String, val createdAt: Long, val lastSeenAt: Long)
+data class DeviceInfo(val id: String, val name: String, val createdAt: Long, val lastSeenAt: Long, val scope: String = "full")
 
 /** Push [changes] and pull everything the server has after [checkpoint]. */
 @Serializable

@@ -3,6 +3,8 @@ package com.vuhpquang.zentask.server.auth
 import com.vuhpquang.zentask.server.store.ServerDb
 import io.ktor.server.auth.AuthenticationConfig
 import io.ktor.server.auth.bearer
+import io.ktor.server.auth.principal
+import io.ktor.server.response.respond
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.Base64
@@ -11,8 +13,21 @@ import javax.crypto.spec.PBEKeySpec
 
 const val DEVICE_AUTH = "device"
 
-/** The authenticated caller of a `/v1` route. */
-data class DevicePrincipal(val deviceId: String)
+const val SCOPE_FULL = "full"
+const val SCOPE_MCP = "mcp"
+
+/** The authenticated caller. [scope] `mcp` tokens may only use `/mcp`. */
+data class DevicePrincipal(val deviceId: String, val scope: String = SCOPE_FULL)
+
+/** Install inside an authenticated route: refuses tokens that aren't full app devices (403). */
+val FullScopeOnly = io.ktor.server.application.createRouteScopedPlugin("FullScopeOnly") {
+    on(io.ktor.server.auth.AuthenticationChecked) { call ->
+        val principal = call.principal<DevicePrincipal>()
+        if (principal != null && principal.scope != SCOPE_FULL) {
+            call.respond(io.ktor.http.HttpStatusCode.Forbidden, com.vuhpquang.zentask.sync.ApiError("forbidden"))
+        }
+    }
+}
 
 /**
  * Checks the login password against a salted PBKDF2-HMAC-SHA256 hash made at startup; only the hash
@@ -77,7 +92,7 @@ fun AuthenticationConfig.deviceBearer(db: ServerDb) {
                 null
             } else {
                 db.touch(device.id)
-                DevicePrincipal(device.id)
+                DevicePrincipal(device.id, device.scope)
             }
         }
     }

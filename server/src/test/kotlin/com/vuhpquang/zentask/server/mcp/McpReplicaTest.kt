@@ -70,4 +70,19 @@ class McpReplicaTest {
         McpReplica(fresh, dir.resolve("mcp.db")) { wall }.use { it.transact { } }
         assertTrue(fresh.changesSince(0, 100).first.any { it.second.id == id }, "re-uploaded to the new database")
     }
+
+    @Test
+    fun restoreWithTheSameServerIdIsDetected() = runBlocking {
+        val backup = dir.resolve("backup.db")
+        replica.transact { it.actions.create("Before backup", null) }
+        replica.close()
+        db.close()
+        Files.copy(dir.resolve("zentask.db"), backup)
+        val live = ServerDb(dir.resolve("zentask.db")) { wall }
+        val id = McpReplica(live, dir.resolve("mcp.db")) { wall }.use { r -> r.transact { it.actions.create("After backup", null).id } }
+        live.close()
+        val restored = ServerDb(backup) { wall } // same serverId, lower version
+        McpReplica(restored, dir.resolve("mcp.db")) { wall }.use { it.transact { } }
+        assertTrue(restored.changesSince(0, 100).first.any { it.second.id == id }, "the replica re-uploads what the backup lost")
+    }
 }
