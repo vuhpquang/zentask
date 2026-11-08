@@ -162,4 +162,25 @@ class SyncEngineTest {
         assertTrue(store.pending(10).isEmpty())
         assertTrue(store.parked().isEmpty())
     }
+
+    @Test
+    fun calendarCallsUseTheTokenAndReportServerErrors() = runTest {
+        val seen = mutableListOf<String>()
+        val http = HttpClient(MockEngine { data ->
+            seen += "${data.method.value} ${data.url.encodedPath}"
+            assertEquals("Bearer tok", data.headers[HttpHeaders.Authorization])
+            when (data.url.encodedPath) {
+                "/v1/calendar/google/start" -> respond("""{"url":"https://accounts.google.com/x"}""", HttpStatusCode.OK)
+                "/v1/calendar/ical" -> respond("""{"error":"The link must start with https:// or webcal://"}""", HttpStatusCode.BadRequest)
+                else -> respond("", HttpStatusCode.NoContent)
+            }
+        })
+        val api = SyncApi(http, "https://example.test", token = { "tok" })
+        assertEquals("https://accounts.google.com/x", api.calendarConnectUrl())
+        val e = kotlin.test.assertFailsWith<SyncException> { api.addIcal("Work", "ftp://x") }
+        assertEquals("The link must start with https:// or webcal://", e.message)
+        api.removeCalendarAccount("acc1")
+        api.refreshCalendars()
+        assertEquals(listOf("POST /v1/calendar/google/start", "POST /v1/calendar/ical", "DELETE /v1/calendar/accounts/acc1", "POST /v1/calendar/sync"), seen)
+    }
 }

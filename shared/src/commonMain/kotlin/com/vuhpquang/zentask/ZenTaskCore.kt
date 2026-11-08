@@ -20,7 +20,15 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import com.vuhpquang.zentask.calendar.CalendarDay
+import com.vuhpquang.zentask.calendar.CalendarQueries
 import com.vuhpquang.zentask.lists.FilterRule
+import com.vuhpquang.zentask.model.CalendarAccount
+import com.vuhpquang.zentask.model.CalendarSource
+import com.vuhpquang.zentask.model.ZenJson
+import kotlinx.datetime.toLocalDateTime
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.builtins.serializer
 import com.vuhpquang.zentask.lists.ListActions
 import com.vuhpquang.zentask.lists.SortOrder
 import com.vuhpquang.zentask.lists.ViewOptions
@@ -149,6 +157,65 @@ class ZenTaskCore(
 
     fun describeRepeat(rule: String): String = Recurrence.describe(rule)
 
+    // ---- Calendar ----
+
+    /** [count] day columns starting at the local day of [firstDayMillis] (events of visible calendars + dated tasks). */
+    fun calendarDays(firstDayMillis: Long, count: Int): List<CalendarDay> {
+        val z = zone()
+        val first = Instant.fromEpochMilliseconds(firstDayMillis).toLocalDateTime(z).date
+        return CalendarQueries.days(
+            store.list(EntityTypes.calendarEvent), store.list(EntityTypes.calendarSource), store.list(EntityTypes.calendarAccount),
+            store.list(EntityTypes.task), first, count, z, hiddenCalendars(),
+        )
+    }
+
+    data class CalendarInfo(val source: CalendarSource, val account: CalendarAccount?, val hidden: Boolean)
+
+    /** Calendars with their account (for Settings → Calendars). */
+    fun calendars(): List<CalendarInfo> {
+        val accounts = store.list(EntityTypes.calendarAccount).associateBy { it.id }
+        val hidden = hiddenCalendars()
+        return store.list(EntityTypes.calendarSource).filter { it.accountId in accounts }.sortedWith(compareBy({ accounts[it.accountId]?.email }, { it.name }))
+            .map { CalendarInfo(it, accounts[it.accountId], it.id in hidden) }
+    }
+
+    fun calendarAccounts(): List<CalendarAccount> = store.list(EntityTypes.calendarAccount)
+
+    fun hiddenCalendars(): Set<String> =
+        store.get(EntityTypes.preference, HIDDEN_CALENDARS)?.takeIf { !it.deleted }?.value
+            ?.let { runCatching { ZenJson.decodeFromString(ListSerializer(String.serializer()), it) }.getOrNull() }?.toSet() ?: emptySet()
+
+    fun setCalendarHidden(sourceId: String, hidden: Boolean) {
+        val next = (if (hidden) hiddenCalendars() + sourceId else hiddenCalendars() - sourceId).sorted()
+        val value = ZenJson.encodeToString(ListSerializer(String.serializer()), next)
+        if (store.get(EntityTypes.preference, HIDDEN_CALENDARS) == null) {
+            store.put(EntityTypes.preference, Preference(id = HIDDEN_CALENDARS, key = HIDDEN_CALENDARS, value = value))
+        } else {
+            store.update(EntityTypes.preference, HIDDEN_CALENDARS) { it.copy(value = value, deleted = false) }
+        }
+    }
+
+    @Throws(Exception::class)
+    suspend fun googleConnectUrl(): String = api.calendarConnectUrl()
+
+    @Throws(Exception::class)
+    suspend fun addIcal(name: String, url: String) {
+        api.addIcal(name, url)
+        scheduler.requestNow()
+    }
+
+    @Throws(Exception::class)
+    suspend fun removeCalendarAccount(id: String) {
+        api.removeCalendarAccount(id)
+        scheduler.requestNow()
+    }
+
+    @Throws(Exception::class)
+    suspend fun refreshCalendars() {
+        api.refreshCalendars()
+        scheduler.requestNow()
+    }
+
     /** Reminders to schedule as local notifications (next 14 days, soonest first). */
     fun plannedReminders(index: TaskIndex): List<PlannedReminder> = ReminderPlanner.upcoming(index.allTasks, now(), zone())
 
@@ -226,6 +293,7 @@ class ZenTaskCore(
 
     companion object {
         const val DEFAULT_SERVER = "https://zentask-api.vuhpquang.com"
+        private const val HIDDEN_CALENDARS = "calendar.hidden"
 
         /** Swift-friendly constructor: default server and the platform HTTP client. */
         fun open(dbPath: String?): ZenTaskCore = ZenTaskCore(dbPath)
