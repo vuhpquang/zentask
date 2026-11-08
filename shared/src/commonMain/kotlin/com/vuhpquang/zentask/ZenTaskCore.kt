@@ -21,7 +21,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import com.vuhpquang.zentask.model.Project
+import com.vuhpquang.zentask.tasks.PlannedReminder
 import com.vuhpquang.zentask.tasks.QuickAdd
+import com.vuhpquang.zentask.tasks.ReminderPlanner
 import com.vuhpquang.zentask.tasks.QuickAddParser
 import com.vuhpquang.zentask.tasks.Recurrence
 import com.vuhpquang.zentask.tasks.TagActions
@@ -105,6 +107,9 @@ class ZenTaskCore(
     fun projectGroups(): List<ProjectGroup> = store.list(EntityTypes.projectGroup).sortedBy { it.sortOrder }
 
     fun describeRepeat(rule: String): String = Recurrence.describe(rule)
+
+    /** Reminders to schedule as local notifications (next 14 days, soonest first). */
+    fun plannedReminders(index: TaskIndex): List<PlannedReminder> = ReminderPlanner.upcoming(index.allTasks, now(), zone())
 
     private fun now(): Instant = Clock.System.now()
     private fun zone(): TimeZone = TimeZone.currentSystemDefault()

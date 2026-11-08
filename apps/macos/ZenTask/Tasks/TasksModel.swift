@@ -37,6 +37,8 @@ final class TasksModel {
     private(set) var groups: [ProjectGroup] = []
     private(set) var tags: [Tag] = []
     private var started = false
+    /// Set by the app (not in tests or snapshots): local notifications for task reminders.
+    var reminders: Reminders?
     private var pendingReload: _Concurrency.Task<Void, Never>?
 
     init(core: ZenTaskCore) {
@@ -69,6 +71,7 @@ final class TasksModel {
         tags = idx.tags.filter { !$0.deleted }
         groups = core.projectGroups()
         recompute()
+        if let reminders { await reminders.reschedule(core.plannedReminders(index: idx)) }
     }
 
     func recompute() {

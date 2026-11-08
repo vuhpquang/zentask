@@ -57,6 +57,9 @@ class TaskIndex(
     private val itemsByTask = items.filter { !it.deleted }.groupBy { it.taskId }
     private val columnsByProject = columns.filter { !it.deleted }.groupBy { it.projectId }
 
+    /** Every live (not deleted) task, for planners. */
+    val allTasks: List<Task> get() = tasks
+
     fun task(id: String): Task? = tasks.firstOrNull { it.id == id }
 
     fun items(taskId: String): List<ChecklistItem> = itemsByTask[taskId].orEmpty().sortedBy { it.sortOrder }

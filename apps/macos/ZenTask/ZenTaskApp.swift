@@ -12,8 +12,10 @@ struct ZenTaskApp: App {
         }
         let model = AppModel.live()
         _model = State(initialValue: model)
-        _tasks = State(initialValue: TasksModel(core: model.core))
+        let tasks = TasksModel(core: model.core)
+        _tasks = State(initialValue: tasks)
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil {
+            tasks.reminders = Reminders(core: model.core)
             model.start()
         }
     }
