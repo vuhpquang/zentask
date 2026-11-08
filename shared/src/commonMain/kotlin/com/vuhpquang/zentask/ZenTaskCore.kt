@@ -24,6 +24,8 @@ import com.vuhpquang.zentask.calendar.CalendarDay
 import com.vuhpquang.zentask.calendar.CalendarQueries
 import com.vuhpquang.zentask.calendar.CalendarViewOptions
 import com.vuhpquang.zentask.calendar.Lunar
+import com.vuhpquang.zentask.focus.FocusActions
+import com.vuhpquang.zentask.focus.FocusStats
 import com.vuhpquang.zentask.habits.CountdownActions
 import com.vuhpquang.zentask.habits.CountdownCard
 import com.vuhpquang.zentask.habits.HabitActions
@@ -132,6 +134,10 @@ class ZenTaskCore(
     fun habitSections(): List<HabitSection> = store.list(EntityTypes.habitSection).filter { !it.deleted }.sortedBy { it.sortOrder }
 
     fun matrix(index: TaskIndex): List<Quadrant> = index.matrix(now(), zone())
+
+    val focusActions: FocusActions = FocusActions(store)
+
+    fun focusStats(): FocusStats = FocusStats.of(store.list(EntityTypes.focusRecord), today(), zone())
 
     fun countdownCards(): List<CountdownCard> = HabitBoard.countdowns(store.list(EntityTypes.countdown), today(), zone())
 

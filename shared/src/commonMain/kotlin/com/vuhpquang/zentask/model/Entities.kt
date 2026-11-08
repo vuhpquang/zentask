@@ -271,6 +271,29 @@ data class Countdown(
     val showInCalendar: Boolean = true,
 ) : Entity
 
+/** A finished focus session (Pomodoro or stopwatch), optionally on a task. */
+@Serializable
+data class FocusRecord(
+    override val id: String,
+    override val createdAt: Long = 0,
+    override val updatedAt: Long = 0,
+    override val deleted: Boolean = false,
+    override val ticktickId: String? = null,
+    val taskId: String? = null,
+    val start: Long = 0,
+    val end: Long = 0,
+    /** [KIND_POMO] or [KIND_STOPWATCH]. */
+    val kind: String = KIND_POMO,
+    val note: String = "",
+) : Entity {
+    val minutes: Int get() = ((end - start) / 60_000).toInt()
+
+    companion object {
+        const val KIND_POMO = "pomo"
+        const val KIND_STOPWATCH = "stopwatch"
+    }
+}
+
 /** A synced setting; [value] is raw JSON. The record id is the setting key. */
 @Serializable
 data class Preference(
