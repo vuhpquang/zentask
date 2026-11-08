@@ -50,6 +50,7 @@ import androidx.compose.material.icons.outlined.FilterAlt
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.outlined.NotificationsNone
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
@@ -538,6 +539,7 @@ fun TaskDetailScreen(app: ZenApp, taskId: String, close: () -> Unit) {
                     }
                 }
                 if (day != null) ReminderChip(app, task, expanded = picking == "reminder", open = { picking = "reminder" }, close = { picking = null })
+                if (day != null) RepeatChip(app, task, day, expanded = picking == "repeat", open = { picking = "repeat" }, close = { picking = null })
             }
             OutlinedTextField(
                 value = notes, onValueChange = { notes = it }, label = { Text("Notes") },
@@ -570,6 +572,39 @@ fun TaskDetailScreen(app: ZenApp, taskId: String, close: () -> Unit) {
         }
     }
     if (picking == "date") DueDialog(app, task) { picking = null }
+}
+
+/** Repeat for a dated task: the same presets as the Mac app (based on the task's day), or none. */
+@Composable
+private fun RepeatChip(app: ZenApp, task: Task, dayMillis: Long, expanded: Boolean, open: () -> Unit, close: () -> Unit) {
+    val date = Instant.ofEpochMilli(dayMillis).atZone(ZoneId.systemDefault()).toLocalDate()
+    val code = listOf("MO", "TU", "WE", "TH", "FR", "SA", "SU")[date.dayOfWeek.value - 1]
+    val weekday = date.dayOfWeek.getDisplayName(java.time.format.TextStyle.FULL, java.util.Locale.getDefault())
+    val presets = listOf(
+        "RRULE:FREQ=DAILY;INTERVAL=1" to "Daily",
+        "RRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=MO,TU,WE,TH,FR" to "Every weekday (Mon–Fri)",
+        "RRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=$code" to "Weekly on $weekday",
+        "RRULE:FREQ=MONTHLY;INTERVAL=1;BYMONTHDAY=${date.dayOfMonth}" to "Monthly on day ${date.dayOfMonth}",
+        "RRULE:FREQ=YEARLY;INTERVAL=1" to "Yearly on ${date.format(DateTimeFormatter.ofPattern("d MMMM"))}",
+    )
+    val rule = task.repeatRule
+    Box {
+        AssistChip(onClick = open, label = { Text(rule?.let { app.core.describeRepeat(it) } ?: "Repeat", maxLines = 1) }, leadingIcon = {
+            Icon(Icons.Filled.Repeat, null, tint = if (rule != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+        })
+        DropdownMenu(expanded = expanded, onDismissRequest = close) {
+            for ((r, title) in presets) {
+                DropdownMenuItem(
+                    text = { Text(title) },
+                    leadingIcon = { Icon(if (r == rule) Icons.Filled.CheckCircle else Icons.Outlined.Circle, null, tint = MaterialTheme.colorScheme.primary) },
+                    onClick = { app.core.actions.setRepeat(task.id, r, task.repeatFrom); close() },
+                )
+            }
+            if (rule != null) {
+                DropdownMenuItem(text = { Text("Don't repeat") }, onClick = { app.core.actions.setRepeat(task.id, null, null); close() })
+            }
+        }
+    }
 }
 
 /** Reminders for a dated task: the shared presets for timed or all-day tasks, toggled on and off. */
