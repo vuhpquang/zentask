@@ -26,4 +26,11 @@ class HealthRouteTest {
         val wrongMethod = client.post("/health").status
         assertTrue(wrongMethod == HttpStatusCode.NotFound || wrongMethod == HttpStatusCode.MethodNotAllowed, "got $wrongMethod")
     }
+
+    @Test
+    fun malformedUrlReturns400NotInternalError() = testApplication {
+        application { module() }
+        val badPath = client.get("/%zz").status
+        assertTrue(badPath == HttpStatusCode.BadRequest || badPath == HttpStatusCode.NotFound, "got $badPath")
+    }
 }
