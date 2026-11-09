@@ -213,9 +213,11 @@ final class HabitsModel {
         if let original {
             a.update(original: original, name: draft.name, icon: draft.storedIcon, color: draft.color, type: draft.type,
                      goal: draft.goal, step: draft.step, unit: draft.unit, repeatRule: draft.repeatRule)
+            if draft.reminders != original.reminders { a.setReminders(id: original.id, times: draft.reminders) }
         } else {
             let h = a.create(name: draft.name, icon: draft.storedIcon, color: draft.color, type: draft.type,
                              goal: draft.goal, step: draft.step, unit: draft.unit, repeatRule: draft.repeatRule)
+            if !draft.reminders.isEmpty { a.setReminders(id: h.id, times: draft.reminders) }
             selection = h.id
         }
     }
@@ -247,6 +249,8 @@ struct HabitDraft: Equatable {
     var step: Double = 1
     var unit = ""
     var frequency: Frequency = .daily
+    /// Reminder times, "HH:mm" (notifications on due days not done yet).
+    var reminders: [String] = []
     /// "Every N days" (from INTERVAL); the editor keeps such rules as they are.
     private(set) var interval = 1
     /// What the habit had when the editor opened: kept unless the user changes that part
@@ -271,6 +275,7 @@ struct HabitDraft: Equatable {
         goal = habit.goal
         step = habit.step
         unit = habit.unit
+        reminders = habit.reminders
         let parts = Dictionary((habit.repeatRule ?? "").replacingOccurrences(of: "RRULE:", with: "").split(separator: ";").compactMap { p -> (String, String)? in
             let kv = p.split(separator: "=", maxSplits: 1)
             return kv.count == 2 ? (kv[0].uppercased(), String(kv[1])) : nil

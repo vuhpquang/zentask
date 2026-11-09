@@ -166,6 +166,9 @@ class ZenApp(private val context: Context) {
 
     fun syncNow() = core.requestSync()
 
+    /** Shows the notification fired by [fire] again at [at]. */
+    fun snooze(fire: android.content.Intent, at: Long) = reminders.snooze(fire, at)
+
     /** Reschedules every reminder now (after a reboot, when the app may be stopped again soon). */
     suspend fun rescheduleReminders(force: Boolean) {
         val index = core.loadIndex()

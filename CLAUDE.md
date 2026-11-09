@@ -156,7 +156,11 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
 - Mac: `Services/Reminders.swift` (categories task/habit/plain, Snooze 5m/15m/1h/Tomorrow, Check in),
   Settings → Notifications (`Settings/NotificationSettings.swift`). Clicking a task notification opens
   `zentask://task/<id>`.
+- Android: `Reminders.kt` (one channel "reminders"; Done / Check in + snooze 15 min / 1 hour; snoozes are
+  alarms with `zs.` ids that `sync` leaves alone), Settings → Notifications (`ui/NotificationSettings.kt`).
 - New dated tasks get the default reminder via `TaskActions.defaultReminders` (set by the core from the prefs).
+- All-day triggers at 09:00 (every preset, TickTick's default) and "on time" fire at the prefs' all-day time;
+  other explicit times stay. Habit reminder times: `HabitActions.setReminders` (Mac habit editor → Reminders).
 
 ## Gotchas
 

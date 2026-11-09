@@ -9,6 +9,7 @@ struct HabitEditor: View {
     @State private var draft = HabitDraft()
     @State private var kind = 0
     @State private var original: Habit?
+    @State private var newReminder = Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: .now) ?? .now
 
     private var editingId: String? { if case .edit(let id) = editing { id } else { nil } }
 
@@ -98,6 +99,28 @@ struct HabitEditor: View {
                         }
                     }
                 }
+            }
+
+            VStack(alignment: .leading, spacing: Theme.Space.s) {
+                Text("Reminders").font(.headline)
+                HStack(spacing: Theme.Space.s) {
+                    ForEach(draft.reminders, id: \.self) { time in
+                        Button {
+                            draft.reminders.removeAll { $0 == time }
+                        } label: {
+                            Label(time, systemImage: "xmark.circle.fill").labelStyle(.titleAndIcon)
+                        }
+                        .help("Remove this reminder")
+                    }
+                    DatePicker("New reminder", selection: $newReminder, displayedComponents: .hourAndMinute)
+                        .labelsHidden()
+                    Button("Add", systemImage: "bell.badge") {
+                        let c = Calendar.current.dateComponents([.hour, .minute], from: newReminder)
+                        let time = String(format: "%02d:%02d", c.hour ?? 0, c.minute ?? 0)
+                        if !draft.reminders.contains(time) { draft.reminders = (draft.reminders + [time]).sorted() }
+                    }
+                }
+                Text("On days the habit is due and not done yet").font(.callout).foregroundStyle(.secondary)
             }
 
             HStack {

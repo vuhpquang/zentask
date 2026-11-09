@@ -40,6 +40,16 @@ class NotificationPlannerTest {
     }
 
     @Test
+    fun allDayNineOClockTriggersFollowTheSettingButOtherTimesStay() {
+        val t = Task(
+            id = "a", title = "Trip", dueDate = ms("2026-11-10T00:00"), isAllDay = true, timeZone = zone.id,
+            reminders = listOf("TRIGGER:PT9H", "TRIGGER:-PT15H", "TRIGGER:P0DT17H50M0S"),
+        )
+        val r = plan(NotificationPrefs(summary = false, allDayMinutes = 7 * 60), tasks = listOf(t))
+        assertEquals(listOf(ms("2026-11-09T07:00"), ms("2026-11-10T07:00"), ms("2026-11-10T17:50")), r.map { it.fireAt })
+    }
+
+    @Test
     fun habitsRemindOnDueDaysNotDoneYet() {
         // Weekly on Monday and Wednesday at 07:00; done already on Monday 9th.
         val h = Habit(id = "h", name = "Run", repeatRule = "RRULE:FREQ=WEEKLY;BYDAY=MO,WE", reminders = listOf("07:00"), encouragement = "Keep going")

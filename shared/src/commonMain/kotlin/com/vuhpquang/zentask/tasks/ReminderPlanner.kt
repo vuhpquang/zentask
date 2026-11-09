@@ -31,7 +31,7 @@ data class PlannedReminder(
 /**
  * Which reminders fire in the next [days] days (spec §11). A trigger is an offset from the task's date
  * (start, else due): `TRIGGER:-PT15M` = 15 minutes before. All-day tasks are anchored at their local
- * midnight; there, "on time" (`PT0S`) means [allDayMinutes] after midnight (09:00 by default). Open, live tasks only, soonest first, at most [limit]
+ * midnight; there, "on time" (`PT0S`) and 09:00 triggers mean [allDayMinutes] after midnight (09:00 by default). Open, live tasks only, soonest first, at most [limit]
  * (macOS keeps 64 pending notifications per app).
  */
 object ReminderPlanner {
@@ -47,11 +47,21 @@ object ReminderPlanner {
             val anchor = t.startDate ?: t.dueDate ?: continue
             for (trigger in t.reminders.distinct()) {
                 val offset = offsetMillis(trigger) ?: continue
-                val fire = anchor + if (t.isAllDay && offset == 0L) allDayMinutes * 60_000L else offset
+                val fire = anchor + if (t.isAllDay) allDayOffset(offset, allDayMinutes) else offset
                 if (fire in (from + 1)..until) out += PlannedReminder("zt.${t.id}.${trigger.removePrefix("TRIGGER:")}", t.id, t.title, fire)
             }
         }
         return out.sortedBy { it.fireAt }.take(limit)
+    }
+
+    /**
+     * All-day reminders at 09:00 (TickTick's default and every preset) or "on time" fire at [allDayMinutes]
+     * (Settings → Notifications) on the same day; other explicit times (17:50) stay as set.
+     */
+    private fun allDayOffset(offset: Long, allDayMinutes: Int): Long {
+        val day = 24 * HOUR
+        val timeOfDay = ((offset % day) + day) % day
+        return if (offset == 0L || timeOfDay == 9 * HOUR) offset - timeOfDay + allDayMinutes * 60_000L else offset
     }
 
     /** ISO 8601 duration (`-PT15M`, `P0DT9H0M0S`, `-P1W`) with or without `TRIGGER:` → millis; null if unreadable. */

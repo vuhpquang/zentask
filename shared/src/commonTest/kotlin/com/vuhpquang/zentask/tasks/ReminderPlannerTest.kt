@@ -74,7 +74,7 @@ class ReminderPlannerTest {
         assertEquals(listOf("TRIGGER:PT9H", "TRIGGER:-PT15H"), ReminderPresets.convert(listOf("TRIGGER:PT0S", "TRIGGER:-P1D", "TRIGGER:-PT30M"), toAllDay = true))
         assertEquals(listOf("TRIGGER:PT0S", "TRIGGER:-P1D", "TRIGGER:-P2D", "TRIGGER:-P7D"),
             ReminderPresets.convert(listOf("TRIGGER:PT9H", "TRIGGER:-PT15H", "TRIGGER:-P1DT15H", "TRIGGER:-P6DT15H"), toAllDay = false))
-        assertEquals("1 day early (9:00)", ReminderPresets.title("TRIGGER:-PT15H"))
+        assertEquals("1 day early", ReminderPresets.title("TRIGGER:-PT15H"))
         assertEquals(null, ReminderPresets.title("TRIGGER:-PT45M"))
     }
 }

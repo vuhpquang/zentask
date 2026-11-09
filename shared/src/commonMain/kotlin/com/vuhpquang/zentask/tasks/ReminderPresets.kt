@@ -2,7 +2,7 @@ package com.vuhpquang.zentask.tasks
 
 /**
  * The reminder choices the apps offer. All-day tasks are anchored at local midnight (see [ReminderPlanner]),
- * so "1 day early at 9:00" is `-PT15H`. [convert] maps choices when a task switches between all-day and timed,
+ * so "1 day early at 9:00" is `-PT15H`; the planner moves 9:00 to the all-day reminder time in the settings. [convert] maps choices when a task switches between all-day and timed,
  * dropping ones without a counterpart (a reminder must never silently change its meaning).
  */
 object ReminderPresets {
@@ -15,10 +15,10 @@ object ReminderPresets {
     )
 
     val allDay: List<Pair<String, String>> = listOf(
-        "TRIGGER:PT9H" to "On the day (9:00)",
-        "TRIGGER:-PT15H" to "1 day early (9:00)",
-        "TRIGGER:-P1DT15H" to "2 days early (9:00)",
-        "TRIGGER:-P6DT15H" to "1 week early (9:00)",
+        "TRIGGER:PT9H" to "On the day",
+        "TRIGGER:-PT15H" to "1 day early",
+        "TRIGGER:-P1DT15H" to "2 days early",
+        "TRIGGER:-P6DT15H" to "1 week early",
     )
 
     /** Timed trigger ↔ its all-day counterpart. */

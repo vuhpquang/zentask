@@ -400,6 +400,7 @@ fun SettingsScreen(app: ZenApp, close: () -> Unit) {
                     FilterChip(selected = mode == key, onClick = { app.setThemeMode(key) }, label = { Text(label) })
                 }
             }
+            NotificationsSection(app)
             UpdatesSection(app.updater)
         }
     }

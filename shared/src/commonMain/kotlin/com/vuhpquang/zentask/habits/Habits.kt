@@ -165,6 +165,14 @@ class HabitActions(
         if (store.get(EntityTypes.habit, original.id)?.deleted == false) store.put(EntityTypes.habit, edited, base = original)
     }
 
+    /** Reminder times ("HH:mm", local), sorted; unreadable ones are dropped. */
+    fun setReminders(id: String, times: List<String>) {
+        val clean = times.mapNotNull { t ->
+            com.vuhpquang.zentask.notify.NotificationPlanner.clockMinutes(t)?.let { m -> "${(m / 60).toString().padStart(2, '0')}:${(m % 60).toString().padStart(2, '0')}" }
+        }.distinct().sorted()
+        store.update(EntityTypes.habit, id) { it.copy(reminders = clean) }
+    }
+
     fun archive(id: String) {
         val now = wall()
         store.update(EntityTypes.habit, id) { it.copy(archivedAt = now) }

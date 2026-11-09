@@ -9,6 +9,8 @@ import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import com.vuhpquang.zentask.habits.Stamp
+import com.vuhpquang.zentask.notify.Snooze
 import com.vuhpquang.zentask.tasks.PlannedReminder
 import com.vuhpquang.zentask.tasks.isOpen
 import kotlinx.coroutines.CoroutineScope
@@ -16,7 +18,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 /**
- * Task reminders as exact alarms, planned by the shared `ReminderPlanner` (the same reminders the Mac shows).
+ * Notifications as exact alarms, planned by the shared `NotificationPlanner` (the same ones the Mac shows): task
+ * and habit reminders, countdowns and the morning summary.
  * [sync] is called after every index reload: alarms for reminders that are gone are cancelled, the rest are
  * (re)set. The set of scheduled ids is kept in preferences, because AlarmManager can't list its alarms.
  * Alarms don't survive a reboot or an update; [BootReceiver] sets them all again.
@@ -53,8 +56,17 @@ class Reminders(private val context: Context) {
 
     private fun pending(id: String, r: PlannedReminder?): PendingIntent {
         val intent = Intent(context, ReminderReceiver::class.java).setAction(ACTION_FIRE).setData(android.net.Uri.parse("zentask-reminder:$id"))
-        if (r != null) intent.putExtra(EXTRA_TASK, r.taskId).putExtra(EXTRA_TITLE, r.title)
+        if (r != null) putReminder(intent, r)
         return PendingIntent.getBroadcast(context, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+    }
+
+    /** Shows the same notification again at [at]. Snoozes use their own `zs.` ids, so [sync] leaves them alone. */
+    fun snooze(fire: Intent, at: Long) {
+        val id = fire.data?.schemeSpecificPart.orEmpty().removePrefix("zs.")
+        val again = Intent(fire).setAction(ACTION_FIRE).setData(android.net.Uri.parse("zentask-reminder:zs.$id"))
+        val pi = PendingIntent.getBroadcast(context, 0, again, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        if (alarms.canScheduleExactAlarms()) alarms.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
+        else alarms.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, pi)
     }
 
     /** The end of a pomo: saves it and says so, even when the app isn't open. */
@@ -86,16 +98,41 @@ class Reminders(private val context: Context) {
         const val CHANNEL = "reminders"
         const val ACTION_FIRE = "com.vuhpquang.zentask.REMINDER"
         const val ACTION_DONE = "com.vuhpquang.zentask.REMINDER_DONE"
+        const val ACTION_CHECK_IN = "com.vuhpquang.zentask.REMINDER_CHECK_IN"
+        const val ACTION_SNOOZE = "com.vuhpquang.zentask.REMINDER_SNOOZE"
         const val EXTRA_TASK = "taskId"
         const val EXTRA_TITLE = "title"
+        const val EXTRA_KIND = "kind"
+        const val EXTRA_BODY = "body"
+        const val EXTRA_HABIT = "habitId"
+        const val EXTRA_STAMP = "stamp"
+        const val EXTRA_COUNTDOWN = "countdownId"
+        const val EXTRA_SNOOZE = "snooze"
+        /** The notification's own id (`zt.…`), carried to the snooze so it can be shown again. */
+        const val EXTRA_ID = "id"
 
         fun createChannel(context: Context) {
-            val channel = NotificationChannel(CHANNEL, "Task reminders", NotificationManager.IMPORTANCE_HIGH)
+            val channel = NotificationChannel(CHANNEL, "Reminders", NotificationManager.IMPORTANCE_HIGH)
+            channel.description = "Task and habit reminders, countdowns and the daily summary"
             context.getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
         }
 
+        fun putReminder(intent: Intent, r: PlannedReminder): Intent = intent
+            .putExtra(EXTRA_ID, r.id).putExtra(EXTRA_KIND, r.kind).putExtra(EXTRA_TASK, r.taskId).putExtra(EXTRA_TITLE, r.title)
+            .putExtra(EXTRA_BODY, r.body).putExtra(EXTRA_HABIT, r.habitId).putExtra(EXTRA_STAMP, r.stamp).putExtra(EXTRA_COUNTDOWN, r.countdownId)
+
         /** Stable per task, so a second reminder for the same task replaces the first notification. */
         fun notificationId(taskId: String): Int = taskId.hashCode()
+
+        /** Stable per item: a habit's reminders replace each other, as do a countdown's and the summary. */
+        fun notificationId(intent: Intent): Int = when (intent.getStringExtra(EXTRA_KIND) ?: PlannedReminder.KIND_TASK) {
+            PlannedReminder.KIND_HABIT -> ("habit:" + intent.getStringExtra(EXTRA_HABIT)).hashCode()
+            PlannedReminder.KIND_COUNTDOWN -> ("countdown:" + intent.getStringExtra(EXTRA_COUNTDOWN)).hashCode()
+            PlannedReminder.KIND_SUMMARY -> SUMMARY_NOTIFICATION_ID
+            else -> notificationId(intent.getStringExtra(EXTRA_TASK).orEmpty())
+        }
+
+        const val SUMMARY_NOTIFICATION_ID = 0x5A40
     }
 }
 
@@ -114,17 +151,46 @@ class ReminderReceiver : BroadcastReceiver() {
             if (zen.finishPomoIfDue()) showFocusDone(context)
             return
         }
-        val taskId = intent.getStringExtra(Reminders.EXTRA_TASK) ?: return
         when (intent.action) {
             Reminders.ACTION_DONE -> {
+                val taskId = intent.getStringExtra(Reminders.EXTRA_TASK) ?: return
                 zen.core.task(taskId)?.takeIf { it.isOpen }?.let { zen.core.actions.complete(taskId) }
-                NotificationManagerCompat.from(context).cancel(Reminders.notificationId(taskId))
+                NotificationManagerCompat.from(context).cancel(Reminders.notificationId(intent))
             }
-            Reminders.ACTION_FIRE -> {
+            Reminders.ACTION_CHECK_IN -> {
+                val habitId = intent.getStringExtra(Reminders.EXTRA_HABIT) ?: return
+                zen.core.habitMarkDone(habitId, intent.getIntExtra(Reminders.EXTRA_STAMP, 0))
+                NotificationManagerCompat.from(context).cancel(Reminders.notificationId(intent))
+            }
+            Reminders.ACTION_SNOOZE -> {
+                val option = intent.getStringExtra(Reminders.EXTRA_SNOOZE) ?: Snooze.FIFTEEN_MINUTES
+                zen.snooze(intent, zen.core.snoozeUntil(option))
+                NotificationManagerCompat.from(context).cancel(Reminders.notificationId(intent))
+            }
+            Reminders.ACTION_FIRE -> fire(context, zen, intent)
+        }
+    }
+
+    private fun fire(context: Context, zen: ZenApp, intent: Intent) {
+        val prefs = zen.core.notificationPrefs()
+        val title = intent.getStringExtra(Reminders.EXTRA_TITLE).orEmpty()
+        val body = intent.getStringExtra(Reminders.EXTRA_BODY).orEmpty()
+        when (intent.getStringExtra(Reminders.EXTRA_KIND) ?: PlannedReminder.KIND_TASK) {
+            PlannedReminder.KIND_HABIT -> {
+                val habitId = intent.getStringExtra(Reminders.EXTRA_HABIT) ?: return
+                val day = Stamp.date(intent.getIntExtra(Reminders.EXTRA_STAMP, 0)) ?: return
+                // Planned earlier; skip if it has since been done, archived or deleted.
+                val habit = zen.core.habitRows().firstOrNull { it.habit.id == habitId }?.habit
+                if (habit == null || habit.archivedAt != null || zen.core.habitActions.checkins(habitId, day).any { it.status == 2 }) return
+                show(context, intent, habit.name.ifBlank { title }, body, prefs.sound, primary = "Check in" to Reminders.ACTION_CHECK_IN)
+            }
+            PlannedReminder.KIND_COUNTDOWN, PlannedReminder.KIND_SUMMARY ->
+                show(context, intent, title, body, prefs.sound, primary = null, snooze = false)
+            else -> {
+                val taskId = intent.getStringExtra(Reminders.EXTRA_TASK) ?: return
                 val task = zen.core.task(taskId)
-                // Planned earlier; skip if the task has since been done, trashed or deleted.
                 if (task == null || !task.isOpen || task.deleted || task.trashedAt != null) return
-                show(context, taskId, task.title.ifBlank { intent.getStringExtra(Reminders.EXTRA_TITLE).orEmpty() })
+                show(context, intent, task.title.ifBlank { title }, "Task reminder", prefs.sound, primary = "Done" to Reminders.ACTION_DONE)
             }
         }
     }
@@ -146,32 +212,37 @@ class ReminderReceiver : BroadcastReceiver() {
         try { nm.notify(Reminders.FOCUS_NOTIFICATION_ID, n) } catch (_: SecurityException) {}
     }
 
-    private fun show(context: Context, taskId: String, title: String) {
+    /** Posts a reminder: tapping opens the task (or the app); [primary] is Done / Check in; snoozes 15 min and 1 hour. */
+    private fun show(context: Context, fire: Intent, title: String, text: String, sound: Boolean, primary: Pair<String, String>?, snooze: Boolean = true) {
         val nm = NotificationManagerCompat.from(context)
         if (!nm.areNotificationsEnabled()) return
-        val open = PendingIntent.getActivity(
-            context, taskId.hashCode(),
-            Intent(context, MainActivity::class.java).setData(android.net.Uri.parse("zentask-task:$taskId")).putExtra(MainActivity.EXTRA_OPEN_TASK, taskId)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
-        val done = PendingIntent.getBroadcast(
-            context, taskId.hashCode(),
-            Intent(context, ReminderReceiver::class.java).setAction(Reminders.ACTION_DONE).setData(android.net.Uri.parse("zentask-task:$taskId")).putExtra(Reminders.EXTRA_TASK, taskId),
+        val nid = Reminders.notificationId(fire)
+        val taskId = fire.getStringExtra(Reminders.EXTRA_TASK).orEmpty()
+        val launch = Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        if (taskId.isNotEmpty()) launch.setData(android.net.Uri.parse("zentask-task:$taskId")).putExtra(MainActivity.EXTRA_OPEN_TASK, taskId)
+        val open = PendingIntent.getActivity(context, nid, launch, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+        fun action(action: String, request: Int, extra: Intent.() -> Unit = {}): PendingIntent = PendingIntent.getBroadcast(
+            context, request,
+            Intent(fire).setClass(context, ReminderReceiver::class.java).setAction(action).also(extra),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
         val n = NotificationCompat.Builder(context, Reminders.CHANNEL)
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
-            .setContentText("Task reminder")
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setSilent(!sound)
             .setAutoCancel(true)
             .setContentIntent(open)
-            .addAction(0, "Done", done)
-            .build()
+        primary?.let { (label, act) -> n.addAction(0, label, action(act, nid)) }
+        if (snooze) {
+            n.addAction(0, "15 min", action(Reminders.ACTION_SNOOZE, nid + 1) { putExtra(Reminders.EXTRA_SNOOZE, Snooze.FIFTEEN_MINUTES) })
+            n.addAction(0, "1 hour", action(Reminders.ACTION_SNOOZE, nid + 2) { putExtra(Reminders.EXTRA_SNOOZE, Snooze.ONE_HOUR) })
+        }
         try {
-            nm.notify(Reminders.notificationId(taskId), n)
+            nm.notify(nid, n.build())
         } catch (_: SecurityException) {
             // Notification permission revoked between the check and the post.
         }

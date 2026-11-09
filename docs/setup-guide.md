@@ -466,6 +466,11 @@ Cách 2, không cần cáp: gửi file APK sang điện thoại (Google Drive, T
    trì hoãn nhắc nhở khi đang tiết kiệm pin.
 3. Widget: giữ ngón tay trên màn hình chính → Widget → tìm "ZenTask" → kéo widget **Today** ra màn hình.
    Bấm ô vuông để hoàn thành task, bấm tên task để mở app.
+4. Chọn loại thông báo (từ 0.11.0): ☰ → **Settings** → **Notifications** — nhắc task, nhắc habit, countdown,
+   tóm tắt mỗi ngày (giờ gửi), giờ nhắc task cả ngày, nhắc mặc định cho task mới, âm thanh. Cài đặt này đồng bộ
+   với Mac (Mac: Settings → **Notifications**). Thông báo task có nút **Done**, habit có **Check in**, cả hai có
+   **15 min** / **1 hour** để nhắc lại sau (Mac có thêm 5 phút và Tomorrow).
+5. Giờ nhắc habit đặt trên Mac: mở habit → **Edit** → **Reminders** → chọn giờ → **Add**.
 
 ### 7.5 Cập nhật bản mới (từ 0.10.0)
 

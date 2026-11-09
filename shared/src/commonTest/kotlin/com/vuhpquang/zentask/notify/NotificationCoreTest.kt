@@ -33,4 +33,11 @@ class NotificationCoreTest {
         assertEquals(8.0, c.value)
         assertEquals(2, c.status)
     }
+
+    @Test
+    fun habitReminderTimesAreCleaned() {
+        val h = core.habitActions.create("Read", null, null, Habit.TYPE_BOOLEAN, 1.0, 1.0, "", "RRULE:FREQ=DAILY")
+        core.habitActions.setReminders(h.id, listOf("21:00", "7:5", "7:05", "25:00", "x", "07:05"))
+        assertEquals(listOf("07:05", "21:00"), core.habitRows().single { it.habit.id == h.id }.habit.reminders)
+    }
 }
