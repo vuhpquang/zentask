@@ -85,6 +85,7 @@ struct TaskListView: View {
             .listStyle(.inset)
             .themedListBackground(themeColors)
             .environment(\.defaultMinListRowHeight, Theme.Size.minRow)
+            .remeasuresRows(data: tasks.index.map(ObjectIdentifier.init), hasRows: !tasks.sections.isEmpty)
             .overlay {
                 if tasks.sections.isEmpty { emptyState }
             }

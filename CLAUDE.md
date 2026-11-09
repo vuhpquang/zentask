@@ -166,6 +166,10 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
 - Dock / ⌘-Tab showing an old icon after an icon change: the Dock has its own icon cache
   (`$(getconf DARWIN_USER_CACHE_DIR)com.apple.dock.iconcache`). Run `scripts/refresh-icon-cache.sh` (moves the cache
   aside, restarts the Dock). `release.sh` also touches the installed bundle, since `ditto` keeps its old date.
+- macOS `List` keeps the estimated row height (`defaultMinListRowHeight`, 40 pt) for rows filled while it
+  isn't on screen, so a row's date line is drawn under the next row until the list is rebuilt.
+  `.remeasuresRows(data:hasRows:)` (`Tasks/RowRemeasure.swift`) rebuilds the rows once after the first data and
+  when the window comes back visible after the data changed behind it. Use it on any new task `List`.
 - The macOS app links `-lsqlite3` (SQLDelight's native driver); keep it in `project.yml` `OTHER_LDFLAGS`.
 - This office network inspects TLS (Fortinet): the Android emulator doesn't trust it, so anything hitting
   GitHub/the server from the emulator fails with "Trust anchor not found". To test, build a throwaway APK with a

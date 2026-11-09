@@ -278,6 +278,7 @@ private struct TaskPanelContent: View {
             }
             .listStyle(.inset)
             .themedListBackground(themeColors)
+            .remeasuresRows(data: tasks.index.map(ObjectIdentifier.init), hasRows: !state.sections.isEmpty)
             .overlay {
                 if state.sections.isEmpty { ContentUnavailableView("No tasks here", systemImage: "checkmark.circle") }
             }
