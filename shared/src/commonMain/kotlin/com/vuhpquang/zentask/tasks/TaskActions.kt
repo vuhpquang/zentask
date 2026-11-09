@@ -227,14 +227,22 @@ class TaskActions(
     fun setDue(id: String, due: Long?, allDay: Boolean) {
         val z = zone().id
         store.update(tasks, id) {
-            it.copy(dueDate = due, startDate = null, isAllDay = due != null && allDay, timeZone = if (due != null) it.timeZone ?: z else it.timeZone)
+            firstDateDefaults(it, it.copy(dueDate = due, startDate = null, isAllDay = due != null && allDay, timeZone = if (due != null) it.timeZone ?: z else it.timeZone))
         }
+    }
+
+    /** A task getting its first date (with no reminders yet) gets the default reminder, like a new dated task. */
+    private fun firstDateDefaults(before: Task, after: Task): Task {
+        val hadDate = before.startDate != null || before.dueDate != null
+        val hasDate = after.startDate != null || after.dueDate != null
+        if (hadDate || !hasDate || before.reminders.isNotEmpty()) return after
+        return after.copy(reminders = defaultReminders(after.isAllDay).filter(String::isNotBlank).distinct())
     }
 
     /** A timed block from [start] to [end] (e.g. dragged out on the calendar). */
     fun setSpan(id: String, start: Long, end: Long) {
         val z = zone().id
-        store.update(tasks, id) { it.copy(startDate = start, dueDate = maxOf(end, start), isAllDay = false, timeZone = it.timeZone ?: z) }
+        store.update(tasks, id) { firstDateDefaults(it, it.copy(startDate = start, dueDate = maxOf(end, start), isAllDay = false, timeZone = it.timeZone ?: z)) }
     }
 
     /**
@@ -245,7 +253,7 @@ class TaskActions(
         val z = zone()
         val last = Instant.fromEpochMilliseconds(maxOf(lastDay, startDay)).toLocalDateTime(z).date
         val end = last.plus(1, DateTimeUnit.DAY).atStartOfDayIn(z).toEpochMilliseconds()
-        store.update(tasks, id) { it.copy(startDate = startDay, dueDate = end, isAllDay = true, timeZone = it.timeZone ?: z.id) }
+        store.update(tasks, id) { firstDateDefaults(it, it.copy(startDate = startDay, dueDate = end, isAllDay = true, timeZone = it.timeZone ?: z.id)) }
     }
 
     /** Sets (or clears, with null) the repeat rule; [from] is "due" or "completion". */

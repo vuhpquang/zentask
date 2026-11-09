@@ -45,6 +45,28 @@ class TaskActionsTest {
     }
 
     @Test
+    fun aTaskThatGetsItsFirstDateGetsTheDefaultReminder() {
+        actions.defaultReminders = { allDay -> if (allDay) listOf("TRIGGER:PT9H") else listOf("TRIGGER:-PT15M") }
+        val a = actions.create("Someday", filter = null)
+        actions.setDue(a.id, ms("2026-11-09T15:00"), allDay = false)
+        assertEquals(listOf("TRIGGER:-PT15M"), get(a.id).reminders)
+        // Moving a dated task keeps its reminders as they are.
+        actions.setReminders(a.id, emptyList())
+        actions.setDue(a.id, ms("2026-11-10T15:00"), allDay = false)
+        assertEquals(emptyList(), get(a.id).reminders)
+        val b = actions.create("Trip", filter = null)
+        actions.setAllDaySpan(b.id, ms("2026-11-12T00:00"), ms("2026-11-14T00:00"))
+        assertEquals(listOf("TRIGGER:PT9H"), get(b.id).reminders)
+        val c = actions.create("Call", filter = null)
+        actions.setSpan(c.id, ms("2026-11-09T10:00"), ms("2026-11-09T10:30"))
+        assertEquals(listOf("TRIGGER:-PT15M"), get(c.id).reminders)
+        // Clearing the date doesn't add anything.
+        val d = actions.create("Idea", filter = null)
+        actions.setDue(d.id, null, allDay = false)
+        assertEquals(emptyList(), get(d.id).reminders)
+    }
+
+    @Test
     fun completingRecurringTaskMakesCopyAndAdvances() {
         recurring()
         actions.complete("r")

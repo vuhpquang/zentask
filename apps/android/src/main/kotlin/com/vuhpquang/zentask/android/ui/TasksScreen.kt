@@ -785,8 +785,16 @@ private fun DueDialog(app: ZenApp, task: Task, close: () -> Unit) {
             TextButton(onClick = { app.core.actions.setDue(task.id, null, false); close() }) { Text("Clear") }
         },
     ) {
-        Column {
-            DatePicker(state = dateState, showModeToggle = false)
+        Column(Modifier.verticalScroll(rememberScrollState())) {
+            // Quick picks, like the Mac's date popover.
+            val today = LocalDate.now(zone)
+            Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                for ((label, d) in listOf("Today" to today, "Tomorrow" to today.plusDays(1), "Next week" to today.plusDays((8 - today.dayOfWeek.value).toLong()))) {
+                    AssistChip(onClick = { dateState.selectedDateMillis = d.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli() }, label = { Text(label) })
+                }
+            }
+            // No title/headline: the quick picks say it, and the time row needs the room.
+            DatePicker(state = dateState, showModeToggle = false, title = null, headline = null)
             Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("Time", Modifier.weight(1f))
                 Switch(checked = withTime, onCheckedChange = { withTime = it })
