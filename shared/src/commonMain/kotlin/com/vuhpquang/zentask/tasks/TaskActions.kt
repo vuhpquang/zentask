@@ -30,6 +30,9 @@ class TaskActions(
 ) {
     private val tasks = EntityTypes.task
 
+    /** Reminder triggers for a new dated task (all-day or not); the apps set this from the notification settings. */
+    var defaultReminders: (allDay: Boolean) -> List<String> = { emptyList() }
+
     // ---- create ----
 
     /**
@@ -69,7 +72,7 @@ class TaskActions(
             dueDate = due ?: filterDue,
             isAllDay = if (due != null) allDay else filterDue != null,
             timeZone = if (due != null || filterDue != null) z.id else null,
-        )
+        ).let { t -> if (t.dueDate == null) t else t.copy(reminders = defaultReminders(t.isAllDay).filter(String::isNotBlank).distinct()) }
         store.inTransaction {
             ensureTags(allTags)
             store.put(tasks, task)

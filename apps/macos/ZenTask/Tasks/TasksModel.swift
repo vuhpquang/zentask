@@ -213,7 +213,7 @@ final class TasksModel {
         smartModes = Dictionary(uniqueKeysWithValues: TasksModel.allSmart.map { ($0, core.smartListMode(list: $0)) })
         recompute()
         await recomputeTask?.value
-        if let reminders { await reminders.reschedule(core.plannedReminders(index: idx)) }
+        if let reminders { await reminders.reschedule(core.plannedReminders(index: idx, limit: 60)) }
     }
 
     private var recomputeTask: _Concurrency.Task<Void, Never>?

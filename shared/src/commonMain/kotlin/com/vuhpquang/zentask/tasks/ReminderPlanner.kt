@@ -4,21 +4,41 @@ import com.vuhpquang.zentask.model.Task
 import kotlinx.datetime.TimeZone
 import kotlin.time.Instant
 
-/** A local notification to schedule. [id] is stable for the same task + trigger, so rescheduling replaces it. */
-data class PlannedReminder(val id: String, val taskId: String, val title: String, val fireAt: Long)
+/**
+ * A local notification to schedule. [id] is stable for the same item + trigger, so rescheduling replaces it
+ * (every planned id starts with `zt.`). [kind] is [KIND_TASK], [KIND_HABIT], [KIND_COUNTDOWN] or [KIND_SUMMARY];
+ * [taskId] is the task (task kind), [habitId] + [stamp] the habit and its day (habit kind), [countdownId] the countdown.
+ */
+data class PlannedReminder(
+    val id: String,
+    val taskId: String,
+    val title: String,
+    val fireAt: Long,
+    val kind: String = KIND_TASK,
+    val body: String = "",
+    val habitId: String = "",
+    val stamp: Int = 0,
+    val countdownId: String = "",
+) {
+    companion object {
+        const val KIND_TASK = "task"
+        const val KIND_HABIT = "habit"
+        const val KIND_COUNTDOWN = "countdown"
+        const val KIND_SUMMARY = "summary"
+    }
+}
 
 /**
  * Which reminders fire in the next [days] days (spec §11). A trigger is an offset from the task's date
  * (start, else due): `TRIGGER:-PT15M` = 15 minutes before. All-day tasks are anchored at their local
- * midnight; there, "on time" (`PT0S`) means 09:00. Open, live tasks only, soonest first, at most [limit]
+ * midnight; there, "on time" (`PT0S`) means [allDayMinutes] after midnight (09:00 by default). Open, live tasks only, soonest first, at most [limit]
  * (macOS keeps 64 pending notifications per app).
  */
 object ReminderPlanner {
     private const val HOUR = 3_600_000L
-    private const val ALL_DAY_ON_TIME = 9 * HOUR
     private val DURATION = Regex("""^(-)?P(?:(\d+)W)?(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$""")
 
-    fun upcoming(tasks: List<Task>, now: Instant, zone: TimeZone, days: Int = 14, limit: Int = 60): List<PlannedReminder> {
+    fun upcoming(tasks: List<Task>, now: Instant, zone: TimeZone, days: Int = 14, limit: Int = 60, allDayMinutes: Int = 9 * 60): List<PlannedReminder> {
         val from = now.toEpochMilliseconds()
         val until = from + days * 24 * HOUR
         val out = mutableListOf<PlannedReminder>()
@@ -27,7 +47,7 @@ object ReminderPlanner {
             val anchor = t.startDate ?: t.dueDate ?: continue
             for (trigger in t.reminders.distinct()) {
                 val offset = offsetMillis(trigger) ?: continue
-                val fire = anchor + if (t.isAllDay && offset == 0L) ALL_DAY_ON_TIME else offset
+                val fire = anchor + if (t.isAllDay && offset == 0L) allDayMinutes * 60_000L else offset
                 if (fire in (from + 1)..until) out += PlannedReminder("zt.${t.id}.${trigger.removePrefix("TRIGGER:")}", t.id, t.title, fire)
             }
         }

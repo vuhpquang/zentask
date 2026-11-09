@@ -64,6 +64,7 @@ struct ZenTaskApp: App {
         Settings {
             SettingsView()
                 .environment(model)
+                .environment(tasks)
                 .environment(calendar)
                 .modifier(Themed())
         }

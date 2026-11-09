@@ -1,5 +1,8 @@
 package com.vuhpquang.zentask
 
+import com.vuhpquang.zentask.notify.NotificationPlanner
+import com.vuhpquang.zentask.notify.NotificationPrefs
+import com.vuhpquang.zentask.notify.Snooze
 import com.vuhpquang.zentask.model.EntityTypes
 import com.vuhpquang.zentask.model.Task
 import com.vuhpquang.zentask.model.TaskStatus
@@ -52,11 +55,11 @@ import com.vuhpquang.zentask.lists.ListActions
 import com.vuhpquang.zentask.lists.SortOrder
 import com.vuhpquang.zentask.lists.ViewOptions
 import com.vuhpquang.zentask.model.Filter
+import com.vuhpquang.zentask.model.Habit
 import com.vuhpquang.zentask.model.Preference
 import com.vuhpquang.zentask.model.Project
 import com.vuhpquang.zentask.tasks.PlannedReminder
 import com.vuhpquang.zentask.tasks.QuickAdd
-import com.vuhpquang.zentask.tasks.ReminderPlanner
 import com.vuhpquang.zentask.tasks.QuickAddParser
 import com.vuhpquang.zentask.tasks.Recurrence
 import com.vuhpquang.zentask.tasks.TagActions
@@ -101,7 +104,9 @@ class ZenTaskCore(
     val syncStatus: StateFlow<SyncStatus> = engine.status
 
     /** Task operations (complete, trash, edit, checklist…); every edit is offline-first and synced. */
-    val actions: TaskActions = TaskActions(store)
+    val actions: TaskActions = TaskActions(store).also { a ->
+        a.defaultReminders = { allDay -> notificationPrefs().let { if (allDay) it.defaultAllDay else it.defaultTimed }.let { if (it.isBlank()) emptyList() else listOf(it) } }
+    }
     val tagActions: TagActions = TagActions(store)
     val listActions: ListActions = ListActions(store)
     val habitActions: HabitActions = HabitActions(store)
@@ -332,8 +337,44 @@ class ZenTaskCore(
         scheduler.requestNow()
     }
 
-    /** Reminders to schedule as local notifications (next 14 days, soonest first). */
-    fun plannedReminders(index: TaskIndex): List<PlannedReminder> = ReminderPlanner.upcoming(index.allTasks, now(), zone())
+    // ---- Notifications (spec §15) ----
+
+    fun notificationPrefs(): NotificationPrefs =
+        store.get(EntityTypes.preference, NotificationPrefs.KEY)?.takeIf { !it.deleted }?.let { NotificationPrefs.parse(it.value) } ?: NotificationPrefs()
+
+    fun setNotificationPrefs(prefs: NotificationPrefs) {
+        val id = NotificationPrefs.KEY
+        if (store.get(EntityTypes.preference, id) == null) {
+            store.put(EntityTypes.preference, Preference(id = id, key = id, value = prefs.encode()))
+        } else {
+            store.update(EntityTypes.preference, id) { it.copy(value = prefs.encode(), deleted = false) }
+        }
+    }
+
+    /**
+     * Every local notification to schedule: task reminders, habit reminders, countdowns and the morning
+     * summary (per the notification settings), soonest first, at most [limit].
+     */
+    fun plannedReminders(index: TaskIndex, limit: Int = 60): List<PlannedReminder> {
+        val z = zone()
+        return NotificationPlanner.plan(
+            notificationPrefs(), index.allTasks, { index.day(it, z) }, store.list(EntityTypes.habit),
+            store.list(EntityTypes.habitCheckin), store.list(EntityTypes.countdown), now(), z, limit,
+        )
+    }
+
+    /** "Check in" on a habit notification: marks the day done, never undoes it (unlike [habitCheckIn]). */
+    fun habitMarkDone(habitId: String, stamp: Int) {
+        val day = Stamp.date(stamp) ?: return
+        if (habitActions.checkins(habitId, day).any { it.status == 2 }) return
+        val h = store.get(EntityTypes.habit, habitId)?.takeIf { !it.deleted } ?: return
+        // A number habit is done once it reaches its goal.
+        val amount = if (h.type == Habit.TYPE_REAL) (h.goal - (habitActions.checkin(habitId, day)?.value ?: 0.0)).coerceAtLeast(h.step) else null
+        habitActions.checkIn(habitId, day, amount)
+    }
+
+    /** When a notification snoozed with [option] ([Snooze]) fires again, epoch millis. */
+    fun snoozeUntil(option: String): Long = Snooze.until(option, now(), zone(), notificationPrefs())
 
     private fun now(): Instant = Clock.System.now()
     private fun zone(): TimeZone = TimeZone.currentSystemDefault()

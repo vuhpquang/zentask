@@ -34,6 +34,17 @@ class TaskActionsTest {
             .also { store.put(EntityTypes.task, it) }
 
     @Test
+    fun newDatedTasksGetTheDefaultReminder() {
+        actions.defaultReminders = { allDay -> if (allDay) listOf("TRIGGER:PT0S") else listOf("TRIGGER:-PT15M", "") }
+        val timed = actions.create("Call", filter = null, due = ms("2026-11-09T15:00"), allDay = false)
+        val today = actions.create("Plan", filter = TaskFilter.Smart(SmartList.TODAY))
+        val undated = actions.create("Someday", filter = null)
+        assertEquals(listOf("TRIGGER:-PT15M"), get(timed.id).reminders)
+        assertEquals(listOf("TRIGGER:PT0S"), get(today.id).reminders)
+        assertEquals(emptyList(), get(undated.id).reminders)
+    }
+
+    @Test
     fun completingRecurringTaskMakesCopyAndAdvances() {
         recurring()
         actions.complete("r")

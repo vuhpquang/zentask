@@ -14,7 +14,7 @@ Lý do: muốn sở hữu dữ liệu (server riêng), tự quyết tính năng,
 
 1. **macOS** (chính, làm trước — giai đoạn test chỉ macOS)
 2. Android
-3. Windows
+3. ~~Windows~~ (bỏ, 2026-11-09)
 4. Galaxy Watch (Wear OS)
 
 Kiến trúc phải sẵn sàng cho cả 4 ngay từ đầu (Kotlin Multiplatform), nhưng chỉ build macOS cho tới hết P6.
@@ -199,7 +199,6 @@ Bố cục học theo TickTick (theo ảnh chủ dự án gửi), dark mode là 
 - **Cập nhật trong app (bắt buộc cho mọi nền tảng, chủ dự án yêu cầu 2026-11-09):** muốn lên bản mới không phải tự tải và cài lại; chỉ cần bấm một nút trong app. Mọi bản đọc GitHub release mới nhất (`vX.Y.Z`, Latest) của `vuhpquang/zentask` và tải file của nền tảng mình (`AppUpdates` trong shared: `ZenTask-X.Y.Z.zip` cho Mac, `ZenTask-X.Y.Z-android.apk` cho Android, `ZenTask-X.Y.Z-windows.msi` cho Windows ở P8).
   - Mac (0.10.0): Settings → General → Updates và menu ZenTask → Check for Updates…; tự kiểm tra lúc mở app và mỗi 6 giờ; "Install and relaunch" tải zip, kiểm tra bundle id + chữ ký cùng chứng chỉ release, thay app rồi mở lại.
   - Android (0.10.0): Settings → Updates và mục "Update to X" trong drawer; "Update now" tải APK và cài bằng PackageInstaller (lần đầu Android hỏi quyền "Cài ứng dụng không rõ nguồn" cho ZenTask; Android luôn hiện hộp xác nhận). APK phải ký cùng khoá (debug key của Mac).
-  - Windows (P8): phải có ngay từ bản đầu, cùng cơ chế.
   - Galaxy Watch: chưa cần.
 - `scripts/deploy.sh`: rsync server + docker compose lên `vps1` (giống personal-wiki).
 
@@ -216,8 +215,25 @@ Bố cục học theo TickTick (theo ảnh chủ dự án gửi), dark mode là 
 | **P5** Calendar | Google OAuth + iCal fallback ở server, Day/Week/Month view, task + event, kéo thả đặt giờ | Week view như ảnh mẫu |
 | **P6** Habit + Countdown | Habit list, check-in, streak/thống kê, countdown list, countdown trên calendar | Thay được TickTick hoàn toàn trên Mac |
 | **P7** Android + Galaxy Watch | Compose app, Wear app (today tasks, check habit) | P7a (2026-11-08): Android app — task list/drawer/quick add/detail, Calendar tuần, Habits, Countdown, Focus, Settings + sync. P7b: nhắc nhở (exact alarm, nút Done), widget Today, Focus chạy nền. P7c: Wear app độc lập (task hôm nay, check-in habit, tự sync) |
-| **P8** Windows | Compose Desktop, có nút cập nhật trong app ngay từ bản đầu (mục 12) | — |
+| **P8** Notifications (Mac + Android) | Chủ dự án yêu cầu làm sớm (2026-11-09), thay cho Windows. Mục 15 | Nhắc task, habit, countdown và tóm tắt mỗi ngày trên Mac và Android, có trang cài đặt |
+| **P9** Android đủ như Mac | Tag/Won't do/vuốt trong task; sửa, xoá habit + countdown, thống kê habit; Calendar lưới Ngày/Tuần/Tháng + View Options; Matrix, Kanban; lịch sử Focus | — |
+| ~~Windows~~ | Bỏ (chủ dự án quyết định 2026-11-09) | — |
 
 ## 14. Để lại cho người build quyết định
 
 Tên package Kotlin, cấu trúc thư mục bên trong module, thư viện argon2/bcrypt, chi tiết UI pixel, thư viện RRULE (hoặc tự viết tập con cần thiết), cách nhúng XCFramework (SPM local package hay embed trực tiếp).
+
+## 15. Notifications (P8, chủ dự án yêu cầu 2026-11-09)
+
+- Lập lịch ở shared (`notify/NotificationPlanner`), thuần, có test; Mac và Android chỉ hiển thị. Mỗi khi dữ liệu hay cài đặt đổi thì lập lịch lại toàn bộ (id ổn định bắt đầu `zt.`; snooze dùng `zs.` và không bị xoá khi lập lại).
+- Loại thông báo:
+  - **Task:** theo trigger của task (như trước); task cả ngày "đúng giờ" = giờ trong cài đặt (mặc định 09:00). Nút Complete + Snooze.
+  - **Habit:** theo giờ nhắc của habit (`HH:mm`, có sẵn từ TickTick), chỉ những ngày habit đến hạn và chưa xong, 7 ngày tới. Nút Check in (chỉ đánh dấu xong, không bao giờ bỏ đánh dấu; habit số thì cộng đủ mục tiêu) + Snooze.
+  - **Countdown:** vào ngày đó và N ngày trước (mặc định 1), lúc 09:00; sinh nhật có số năm.
+  - **Tóm tắt mỗi ngày:** mặc định 08:00, chỉ những ngày có task; "N tasks today, M overdue" + tối đa 3 tên task.
+- Snooze: 5 phút, 15 phút, 1 giờ, ngày mai (lúc giờ của task cả ngày).
+- Nhắc mặc định cho task mới (có giờ / cả ngày), thêm khi task mới có ngày.
+- Cài đặt lưu trong `Preference` key `notifications` nên đồng bộ mọi máy: bật/tắt từng loại, giờ tóm tắt, giờ task cả ngày, giờ + số ngày báo trước countdown, nhắc mặc định, âm thanh.
+- Tối đa 60 thông báo chờ (macOS giữ 64 mỗi app), gần nhất trước.
+- Người build quyết định: nhắc liên tục (kêu đến khi bấm) để sau.
+

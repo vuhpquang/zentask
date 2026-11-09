@@ -21,6 +21,7 @@ enum Snapshots {
             ("settings-smartlists", AnyView(SmartListSettings().frame(width: Theme.Size.settingsWidth)), CGSize(width: 540, height: 480)),
         ]
         for (name, view, size) in settings { both(view.environment(model), size: size, name: name, dir: dir) }
+        both(AnyView(NotificationSettings().frame(width: Theme.Size.settingsWidth)).environment(model).environment(tasks), size: CGSize(width: 540, height: 760), name: "settings-notifications", dir: dir)
         wait { await tasks.reload() }
         both(AnyView(MainWindow()).environment(model).environment(tasks).environment(panel).environment(focus), size: windowSize, name: "tasks-empty", dir: dir)
 

@@ -14,6 +14,8 @@ struct SettingsView: View {
                 .tabItem { Label("TickTick", systemImage: "arrow.down.circle") }
             SmartListSettings()
                 .tabItem { Label("Smart lists", systemImage: "line.3.horizontal.decrease.circle") }
+            NotificationSettings()
+                .tabItem { Label("Notifications", systemImage: "bell.badge") }
             CalendarSettings()
                 .tabItem { Label("Calendars", systemImage: "calendar") }
             DateTimeSettings()
