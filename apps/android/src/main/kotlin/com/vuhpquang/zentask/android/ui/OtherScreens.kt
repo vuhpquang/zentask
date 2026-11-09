@@ -94,85 +94,6 @@ private val zone: ZoneId get() = ZoneId.systemDefault()
 private fun midnight(d: LocalDate) = d.atStartOfDay(zone).toInstant().toEpochMilli()
 private fun hm(ms: Long) = Instant.ofEpochMilli(ms).atZone(zone).toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm"))
 
-// MARK: Calendar
-
-/** A week strip to pick a day, then that day's events, tasks, habits and countdowns in time order. */
-@Composable
-fun CalendarScreen(app: ZenApp) {
-    val revision by app.revision.collectAsState()
-    var day by rememberSaveable { mutableStateOf(LocalDate.now(zone).toEpochDay()) }
-    val selected = LocalDate.ofEpochDay(day)
-    val monday = selected.minusDays((selected.dayOfWeek.value - 1).toLong())
-    val week = loaded(revision, monday) { app.core.calendarDays(midnight(monday), 7) } ?: return
-    val today = LocalDate.now(zone)
-    Scaffold(topBar = {
-        TopAppBar(
-            title = { Text(selected.format(DateTimeFormatter.ofPattern("MMMM yyyy"))) },
-            actions = { OutlinedButton(onClick = { day = today.toEpochDay() }) { Text("Today") } },
-        )
-    }) { padding ->
-        Column(Modifier.padding(padding)) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                IconButton(onClick = { day -= 7 }) { Text("‹", fontSize = 22.sp) }
-                for (i in 0 until 7) {
-                    val d = monday.plusDays(i.toLong())
-                    val isSel = d == selected
-                    val busy = week.getOrNull(i)?.let { it.allDay.isNotEmpty() || it.timed.isNotEmpty() } == true
-                    Column(
-                        Modifier.clip(RoundedCornerShape(12.dp)).background(if (isSel) MaterialTheme.colorScheme.primary else Color.Transparent)
-                            .clickable { day = d.toEpochDay() }.padding(horizontal = 8.dp, vertical = 6.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        val fg = if (isSel) MaterialTheme.colorScheme.onPrimary else if (d == today) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                        Text(d.format(DateTimeFormatter.ofPattern("EEEEE")), style = MaterialTheme.typography.labelSmall, color = fg)
-                        Text("${d.dayOfMonth}", fontWeight = FontWeight.SemiBold, color = fg)
-                        Box(Modifier.size(4.dp).clip(CircleShape).background(if (busy) fg else Color.Transparent))
-                    }
-                }
-                IconButton(onClick = { day += 7 }) { Text("›", fontSize = 22.sp) }
-            }
-            val entries = week.getOrNull((selected.toEpochDay() - monday.toEpochDay()).toInt())?.let { it.allDay + it.timed.map { p -> p.entry } }.orEmpty()
-            if (entries.isEmpty()) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Nothing planned", color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            } else {
-                LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-                    items(entries, key = { it.id }) { AgendaCard(app, it) }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun AgendaCard(app: ZenApp, e: CalendarEntry) {
-    val color = when (e.kind) {
-        "task", "repeat", "checklist" -> ZenColors.hex(e.color) ?: ZenColors.priority(e.priority, MaterialTheme.colorScheme.primary)
-        else -> ZenColors.hex(e.color) ?: MaterialTheme.colorScheme.primary
-    }
-    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(if (e.allDay) "All day" else hm(e.start), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.width(56.dp))
-        Row(
-            Modifier.weight(1f).clip(RoundedCornerShape(8.dp)).background(color.copy(alpha = 0.16f))
-                .clickable(enabled = e.kind == "task" || e.kind == "habit") {
-                    when (e.kind) {
-                        "task" -> app.core.task(e.id)?.let { toggleComplete(app, it) }
-                        "habit" -> app.core.toggleHabitEntry(e.id)
-                    }
-                },
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Box(Modifier.width(4.dp).height(44.dp).background(color))
-            Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
-                if (!e.allDay && e.kind == "event") Text("${hm(e.start)} – ${hm(e.end)}", style = MaterialTheme.typography.labelSmall, color = color)
-                Text(
-                    (if (e.done) "✓ " else "") + e.title.ifEmpty { "Untitled" },
-                    style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-    }
-}
-
 // MARK: Habits
 
 @Composable
@@ -428,6 +349,7 @@ fun SettingsScreen(app: ZenApp, close: () -> Unit) {
                 }
             }
             NotificationsSection(app)
+            CalendarSettingsSection()
             UpdatesSection(app.updater)
         }
     }
@@ -509,7 +431,7 @@ fun SearchScreen(app: ZenApp, open: (String) -> Unit, close: () -> Unit) {
  * value on screen while the next one loads. Null only before the first load.
  */
 @Composable
-private fun <T> loaded(vararg keys: Any?, load: () -> T): T? =
+internal fun <T> loaded(vararg keys: Any?, load: () -> T): T? =
     androidx.compose.runtime.produceState<T?>(null, *keys) {
         value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) { load() }
     }.value

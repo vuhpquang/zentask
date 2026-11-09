@@ -105,3 +105,16 @@ private fun PresetRow(title: String, value: String, presets: List<Pair<String, S
         }
     }
 }
+
+/** Settings → Calendar: the hour Day / Week views open on (per device). */
+@Composable
+fun CalendarSettingsSection() {
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("zentask.calendar", android.content.Context.MODE_PRIVATE) }
+    var start by remember { mutableStateOf(prefs.getInt("workStart", 8)) }
+    Text("Calendar", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 12.dp))
+    TimeRow("Day and Week open at", start * 60) { minutes ->
+        start = minutes / 60
+        prefs.edit().putInt("workStart", start).apply()
+    }
+}

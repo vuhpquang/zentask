@@ -170,6 +170,10 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
 - Habits & countdowns (P9b, `ui/HabitEditors.kt`): one editor for new/edit habit (colour, yes-no/amount, weekdays,
   reminder times; rules it can't show are kept unless days are picked), a detail sheet (streaks, month grid to
   check in past days, Edit / Archive / Delete), countdown editor + Edit / Archive / Delete, "Archived" toggles.
+- Calendar (P9c, `ui/CalendarScreens.kt`): Day / 3 days / Week time grid (all-day row, now line, opens at the hour in
+  Settings → Calendar, tap an empty slot = new 30-min task), Month grid (tap a day = Day view), List (2 weeks),
+  swipe left/right to page, View options sheet writing the synced `CalendarViewOptions`. Tapping a task opens it via
+  `ZenApp.openTask`.
 - Compose gotcha: `Modifier.border(0.dp, …)` still draws a hairline; add the border conditionally.
 
 ## Gotchas
