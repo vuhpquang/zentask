@@ -68,6 +68,11 @@ final class CalendarModel {
     /// ⌥ held: task blocks show their checkbox.
     var optionDown = false
 
+    /// Hour height that fits [hours] into [height] points (within the zoom limits).
+    func fitHours(_ hours: Int, into height: CGFloat) {
+        hourHeight = min(Theme.Calendar.maxHourHeight, max(Theme.Calendar.minHourHeight, (height / CGFloat(max(hours, 1))).rounded(.down)))
+    }
+
     func zoom(by factor: CGFloat) {
         hourHeight = min(Theme.Calendar.maxHourHeight, max(Theme.Calendar.minHourHeight, hourHeight * factor))
     }

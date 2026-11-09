@@ -74,6 +74,35 @@ enum Theme {
         static let miniDay: CGFloat = 24
         static let miniDot: CGFloat = 4
         static let lunarSize: CGFloat = 8
+        static let optionsHeight: CGFloat = 640
+        static let swatch: CGFloat = 18
+        static let stylePreview: CGFloat = 130
+        /// Block fills: Classic is solid, Modern a tint with a coloured edge.
+        static let classicFill: Double = 0.9
+        static let modernFill: Double = 0.2
+        /// Blocks shorter than this show title and time on one line.
+        static let compactBlock: CGFloat = 34
+        /// Space between stacked blocks, so neighbours of the same colour stay apart.
+        static let blockGap: CGFloat = 2
+        static let minBlock: CGFloat = 16
+        /// Narrower blocks keep the title on one line.
+        static let wrapWidth: CGFloat = 110
+        /// Narrower blocks drop the kind icon so the title has room.
+        static let iconMinWidth: CGFloat = 80
+        static let labelRoom: CGFloat = 10
+        /// A compact block keeps its time only if the title still gets this much room.
+        static let minTitle: CGFloat = 44
+        static let heatMin: Double = 0.15
+        static let heatStep: Double = 0.12
+        static let heatRadius: CGFloat = 5
+        static let fixedColors = ["#F2A65A", "#B8D45A", "#7FCF7A", "#5EC4B6", "#6A9CF0", "#A88BF2", "#EE82B8", "#EB6B6B"]
+        /// Focus sessions on the calendar.
+        static let focusColor = "#8B7CF6"
+        /// Working hours shown when the calendar opens (Settings → Calendars).
+        static let workStartKey = "calendar.workStart"
+        static let workEndKey = "calendar.workEnd"
+        static let workStart = 8
+        static let workEnd = 21
     }
 
     enum Opacity {

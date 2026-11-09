@@ -58,7 +58,9 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
     `CountdownQueries`/`CountdownActions` (yearly repeats, 29 Feb → 28), `HabitBoard` (rows/cards for the UIs and MCP).
   - `calendar/` — `CalendarQueries` (Day/Week/Month content: visible events + dated tasks + countdowns + habits,
     all-day row, timed entries clipped per day with overlap columns; filtered by `CalendarViewOptions`, the
-    synced Preference `calendar.view`), `Lunar` (Vietnamese lunar dates, UTC+7). Calendar records are server-owned; which
+    synced Preference `calendar.view`: colours incl. one fixed habit/countdown colour, Classic/Modern item style,
+    icons, year heatmap, checklist items, every repeat cycle (`kind = "repeat"`, read-only, `taskId` → the task),
+    focus sessions, a second time zone), `Lunar` (Vietnamese lunar dates, UTC+7). Calendar records are server-owned; which
     calendars show is the Preference `calendar.hidden`.
   - `ZenTaskCore` — the Swift-facing entry point (typed helpers; Kotlin `Task` is `ZenTaskShared.Task` in Swift).
 - `server/` — Ktor/JVM, depends on `shared` (same models, merge and protocol).
@@ -83,7 +85,9 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
   local notifications from `core.plannedReminders`. The window is `MainWindow` = `AppRail` (always-visible
   icon rail, ⌘1–5) + the area. List management: `Tasks/ListSheets.swift` (sheets), sidebar context menus,
   drag and drop with task-id String payloads validated in `TasksModel.drop`. `Calendar/` (rail ⌘2):
-  `CalendarModel` + `CalendarView` (Week/Day grid, Month, Unscheduled panel); Settings → Calendars.
+  `CalendarModel` + `CalendarView` (Week/Day grid, Month, Unscheduled panel); Settings → Calendars (accounts and
+  working hours: Day/Week open fitted to `calendar.workStart`–`workEnd`, 08–21 by default). Short blocks are one line
+  (`TitleAndTime`: title truncates, time stays) with a gap between stacked blocks.
   `Habits/` (rail ⌘3): `HabitsModel` + `HabitsView` (list with a 7-day strip | detail with check-in, stats,
   month map) + `HabitEditor`. `Countdowns/` (rail ⌘4): `CountdownsModel` + `CountdownsView` (card grid, editor).
   Countdowns with "show in calendar" appear as all-day entries. Habits area = week progress rings + habits by

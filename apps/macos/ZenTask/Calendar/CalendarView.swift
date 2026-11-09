@@ -151,32 +151,79 @@ struct CalendarView: View {
 struct WeekGrid: View {
     @Environment(CalendarModel.self) private var cal
     @State private var pinchBase: CGFloat = 1
+    @AppStorage(Theme.Calendar.workStartKey) private var workStart = Theme.Calendar.workStart
+    @AppStorage(Theme.Calendar.workEndKey) private var workEnd = Theme.Calendar.workEnd
 
     var body: some View {
         VStack(spacing: 0) {
             header
             allDayRow
             Divider()
-            ScrollViewReader { proxy in
-                ScrollView {
-                    HStack(alignment: .top, spacing: 0) {
-                        hourLabels
-                        ForEach(Array(cal.days.enumerated()), id: \.offset) { _, day in
-                            DayColumn(day: day)
+            GeometryReader { viewport in
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        HStack(alignment: .top, spacing: 0) {
+                            hourLabels
+                            if let zone = extraZone { zoneLabels(zone) }
+                            ForEach(Array(cal.days.enumerated()), id: \.offset) { _, day in
+                                DayColumn(day: day)
+                            }
+                        }
+                        .id("grid")
+                        .background(alignment: .top) {
+                            VStack(spacing: 0) {
+                                ForEach(0..<24, id: \.self) { h in Color.clear.frame(height: cal.hourHeight).id("hour-\(h)") }
+                            }
+                            // Scrolling to an hour leaves room for its label, which sits half above the line.
+                            .offset(y: -Theme.Calendar.labelRoom)
                         }
                     }
-                    .id("grid")
-                    .overlay(alignment: .topLeading) { Color.clear.frame(height: 1).offset(y: 7 * cal.hourHeight).id("seven") }
+                    .onAppear { showWorkingHours(viewport.size.height, proxy) }
+                    .onChange(of: workStart) { showWorkingHours(viewport.size.height, proxy) }
+                    .onChange(of: workEnd) { showWorkingHours(viewport.size.height, proxy) }
+                    .gesture(
+                        MagnifyGesture()
+                            .onChanged { value in
+                                cal.zoom(by: value.magnification / pinchBase)
+                                pinchBase = value.magnification
+                            }
+                            .onEnded { _ in pinchBase = 1 },
+                    )
                 }
-                .onAppear { proxy.scrollTo("seven", anchor: .top) }
-                .gesture(
-                    MagnifyGesture()
-                        .onChanged { value in
-                            cal.zoom(by: value.magnification / pinchBase)
-                            pinchBase = value.magnification
-                        }
-                        .onEnded { _ in pinchBase = 1 },
-                )
+            }
+        }
+    }
+
+    /// Opening the calendar fits the working hours (Settings → Calendars, 08:00–21:00 by default) into the
+    /// window and scrolls to their start; ⌘-scroll or pinch still zooms from there.
+    private func showWorkingHours(_ height: CGFloat, _ proxy: ScrollViewProxy) {
+        let start = max(0, min(23, workStart))
+        let end = max(start + 1, min(24, workEnd))
+        if height > 0 { cal.fitHours(end - start, into: height - Theme.Calendar.labelRoom) }
+        DispatchQueue.main.async { proxy.scrollTo("hour-\(start)", anchor: .top) }
+    }
+
+    private var extraZone: TimeZone? {
+        let id = cal.viewOptions.extraZone
+        return id.isEmpty ? nil : TimeZone(identifier: id)
+    }
+
+    /// Width of the time column(s) on the left.
+    private var gutter: CGFloat { Theme.Calendar.timeGutter * (extraZone == nil ? 1 : 2) }
+
+    /// The second zone's clock at each of this zone's hours (for the first shown day).
+    private func zoneLabels(_ zone: TimeZone) -> some View {
+        let day = cal.days.first.map { cal.date(of: $0) } ?? .now
+        let shift = (zone.secondsFromGMT(for: day) - cal.calendar.timeZone.secondsFromGMT(for: day)) / 60
+        return VStack(spacing: 0) {
+            ForEach(0..<24, id: \.self) { h in
+                let m = ((h * 60 + shift) % 1440 + 1440) % 1440
+                Text(h == 0 ? "" : String(format: "%02d:%02d", m / 60, m % 60))
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                    .frame(width: Theme.Calendar.timeGutter - Theme.Space.s, height: cal.hourHeight, alignment: .topTrailing)
+                    .offset(y: -Theme.Calendar.labelNudge)
+                    .padding(.trailing, Theme.Space.s)
             }
         }
     }
@@ -193,6 +240,11 @@ struct WeekGrid: View {
                 }
             }
             .frame(width: Theme.Calendar.timeGutter)
+            if let zone = extraZone {
+                Text(zone.abbreviation(for: cal.days.first.map { cal.date(of: $0) } ?? .now) ?? zone.identifier)
+                    .font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
+                    .frame(width: Theme.Calendar.timeGutter)
+            }
             ForEach(Array(cal.days.enumerated()), id: \.offset) { _, day in
                 let date = cal.date(of: day)
                 let isToday = cal.calendar.isDateInToday(date)
@@ -217,7 +269,7 @@ struct WeekGrid: View {
     private var allDayRow: some View {
         HStack(alignment: .top, spacing: 0) {
             Text("All day").font(.caption).foregroundStyle(.secondary)
-                .frame(width: Theme.Calendar.timeGutter, alignment: .trailing)
+                .frame(width: gutter - Theme.Space.xs, alignment: .trailing)
                 .padding(.trailing, Theme.Space.xs)
             ForEach(Array(cal.days.enumerated()), id: \.offset) { _, day in
                 VStack(spacing: Theme.Space.xxs) {
@@ -286,9 +338,11 @@ private struct DayColumn: View {
             GeometryReader { geo in
                 ForEach(day.timed, id: \.entry.id) { placed in
                     let width = geo.size.width / CGFloat(max(placed.columns, 1))
-                    EntryBlock(entry: placed.entry)
-                        .frame(width: max(width - 2, 0), height: max(CGFloat(placed.endMinute - placed.startMinute) / 60 * cal.hourHeight - 2, 18))
-                        .offset(x: CGFloat(placed.column) * width + 1, y: CGFloat(placed.startMinute) / 60 * cal.hourHeight + 1)
+                    let gap = Theme.Calendar.blockGap
+                    let height = max(CGFloat(placed.endMinute - placed.startMinute) / 60 * cal.hourHeight - gap, Theme.Calendar.minBlock)
+                    EntryBlock(entry: placed.entry, height: height, width: width - gap)
+                        .frame(width: max(width - gap, 0), height: height)
+                        .offset(x: CGFloat(placed.column) * width + gap / 2, y: CGFloat(placed.startMinute) / 60 * cal.hourHeight + gap / 2)
                 }
             }
             if cal.calendar.isDateInToday(cal.date(of: day)) { NowLine(hourHeight: cal.hourHeight) }
@@ -496,47 +550,149 @@ private struct MonthCell: View {
 
 // MARK: - Entries
 
-/// Events take their calendar's colour; tasks their priority colour (grey for none).
+extension CalendarEntry {
+    /// Tasks and the things that stand for one (a later repeat, a dated checklist item).
+    var isTaskLike: Bool { kind == "task" || kind == "repeat" || kind == "checklist" }
+
+    /// The task a click opens: the task itself, or the one a repeat/checklist/focus entry belongs to.
+    var openTaskId: String? { kind == "task" ? id : taskId }
+
+    /// Small kind icon (View options → Show item icons); plain tasks have none.
+    var kindIcon: String? {
+        switch kind {
+        case "event": "calendar"
+        case "habit": "target"
+        case "countdown": "hourglass"
+        case "focus": "timer"
+        case "repeat": "repeat"
+        case "checklist": "checklist"
+        default: nil
+        }
+    }
+}
+
+/// Tasks take their priority (or list) colour, grey for none; events their calendar's; focus a fixed violet.
 func entryColor(_ entry: CalendarEntry) -> Color {
-    if entry.kind == "task" {
+    if entry.isTaskLike {
         if let list = Color(hex: entry.color) { return list } // coloured by list
         return entry.priority == 0 ? Color.secondary : Theme.PriorityColor.color(Int32(entry.priority))
     }
+    if entry.kind == "focus" { return Color(hex: Theme.Calendar.focusColor) ?? .purple }
     return Color(hex: entry.color) ?? .accentColor
 }
 
-/// A timed block in the Week/Day grid. Tasks are solid bars with white text; events are tinted.
-/// Holding ⌥ shows a task's checkbox, as in TickTick.
+/// Fill, text and edge of an entry in the chosen style. Classic: solid with white text. Modern: a tint with a
+/// coloured edge and normal text. Done items fade.
+private struct EntryLook: ViewModifier {
+    let entry: CalendarEntry
+    let modern: Bool
+
+    func body(content: Content) -> some View {
+        let color = entryColor(entry)
+        let shape = RoundedRectangle(cornerRadius: Theme.Calendar.eventRadius, style: .continuous)
+        content
+            .foregroundStyle(modern ? AnyShapeStyle(.primary) : AnyShapeStyle(Color.white))
+            .background(color.opacity(modern ? Theme.Calendar.modernFill : Theme.Calendar.classicFill), in: shape)
+            .overlay(alignment: .leading) { if modern { RoundedRectangle(cornerRadius: 2).fill(color).frame(width: 3) } }
+            .clipShape(shape)
+            .opacity(entry.done || entry.kind == "repeat" ? 0.6 : 1)
+    }
+}
+
+/// A timed block in the Week/Day grid. Short blocks put title and time on one line, so stacked blocks
+/// stay readable. Holding ⌥ shows a task's checkbox, as in TickTick.
 private struct EntryBlock: View {
     @Environment(TasksModel.self) private var tasks
     @Environment(CalendarModel.self) private var cal
     let entry: CalendarEntry
+    let height: CGFloat
+    let width: CGFloat
     @State private var showing = false
 
     var body: some View {
-        let color = entryColor(entry)
-        let isTask = entry.kind == "task"
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: Theme.Space.xs) {
-                if isTask && cal.optionDown { TaskCheck(entry: entry) }
-                Text(entry.title).font(.callout.weight(.medium)).strikethrough(entry.done).lineLimit(2)
+        let o = cal.viewOptions
+        let compact = height < Theme.Calendar.compactBlock
+        Group {
+            if compact {
+                // Title and time on one line: the title truncates first; the time drops only when there's no room.
+                HStack(spacing: Theme.Space.xs) {
+                    lead(o)
+                    TitleAndTime {
+                        title(.caption.weight(.semibold)).lineLimit(1)
+                        Text(time).font(.caption2).opacity(0.8).lineLimit(1)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 1)
+            } else {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(alignment: .firstTextBaseline, spacing: Theme.Space.xs) {
+                        lead(o)
+                        // Narrow columns get one line: wrapping there breaks words in the middle.
+                        title(.callout.weight(.medium)).lineLimit(width < Theme.Calendar.wrapWidth ? 1 : max(1, Int((height - 16) / 16)))
+                    }
+                    Text(time).font(.caption).opacity(0.85).lineLimit(1)
+                }
+                .padding(.vertical, Theme.Space.xxs)
             }
-            Text(Date(timeIntervalSince1970: Double(entry.start) / 1000).formatted(date: .omitted, time: .shortened))
-                .font(.caption).opacity(0.85)
         }
-        .foregroundStyle(isTask ? AnyShapeStyle(Color.white) : AnyShapeStyle(.primary))
-        .padding(.horizontal, Theme.Space.xs + Theme.Space.xxs)
-        .padding(.vertical, Theme.Space.xxs)
+        .padding(.leading, Theme.Space.xs + Theme.Space.xxs + (o.isModern ? 2 : 0))
+        .padding(.trailing, Theme.Space.xs)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(isTask ? AnyShapeStyle(color.opacity(entry.done ? 0.45 : 0.9)) : AnyShapeStyle(color.opacity(Theme.Calendar.eventFill)),
-                    in: RoundedRectangle(cornerRadius: Theme.Calendar.eventRadius, style: .continuous))
-        .overlay(alignment: .leading) { if !isTask { RoundedRectangle(cornerRadius: 2).fill(color).frame(width: 3) } }
-        .clipShape(RoundedRectangle(cornerRadius: Theme.Calendar.eventRadius, style: .continuous))
+        .modifier(EntryLook(entry: entry, modern: o.isModern))
         .contentShape(Rectangle())
         .onTapGesture { showing = true }
         .popover(isPresented: $showing) { EntryDetail(entry: entry) }
         .modifier(DraggableTask(entry: entry))
-        .contextMenu { if isTask, let t = tasks.index?.task(id: entry.id) { TaskMenu(task: t) } }
+        .contextMenu { if entry.kind == "task", let t = tasks.index?.task(id: entry.id) { TaskMenu(task: t) } }
+        .help(entry.title + " · " + time)
+    }
+
+    private func title(_ font: Font) -> some View {
+        Text(entry.title).font(font).strikethrough(entry.done)
+    }
+
+    @ViewBuilder private func lead(_ o: CalendarViewOptions) -> some View {
+        if entry.kind == "task" && cal.optionDown {
+            TaskCheck(entry: entry)
+        } else if o.showIcons, width >= Theme.Calendar.iconMinWidth, let icon = entry.kindIcon {
+            Image(systemName: icon).font(.caption2).opacity(0.85)
+        }
+    }
+
+    private var time: String {
+        Date(timeIntervalSince1970: Double(entry.start) / 1000).formatted(date: .omitted, time: .shortened)
+    }
+}
+
+/// Lays out [title, time] on one line. Both at their natural width when they fit; otherwise the title takes what's
+/// left after the time; when even a short title wouldn't fit, the time is hidden.
+private struct TitleAndTime: Layout {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let sizes = subviews.map { Self.natural($0) }
+        let natural = sizes.reduce(0) { $0 + $1.width } + Theme.Space.xs * CGFloat(max(0, sizes.count - 1))
+        return CGSize(width: min(proposal.width ?? natural, natural), height: sizes.map(\.height).max() ?? 0)
+    }
+
+    /// Natural size, rounded up: text placed at exactly its fractional width truncates.
+    private static func natural(_ view: LayoutSubview) -> CGSize {
+        let s = view.sizeThatFits(.unspecified)
+        return CGSize(width: s.width.rounded(.up) + 1, height: s.height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard subviews.count == 2 else { return }
+        let title = Self.natural(subviews[0]), time = Self.natural(subviews[1])
+        let gap = Theme.Space.xs
+        let room = bounds.width - time.width - gap
+        let showTime = room >= min(title.width, Theme.Calendar.minTitle)
+        let titleWidth = showTime ? min(title.width, room) : bounds.width
+        subviews[0].place(at: CGPoint(x: bounds.minX, y: bounds.midY), anchor: .leading, proposal: ProposedViewSize(width: titleWidth, height: bounds.height))
+        if showTime {
+            subviews[1].place(at: CGPoint(x: bounds.minX + titleWidth + gap, y: bounds.midY), anchor: .leading, proposal: .unspecified)
+        } else {
+            subviews[1].place(at: CGPoint(x: bounds.maxX + 1000, y: bounds.midY), anchor: .leading, proposal: .zero)
+        }
     }
 }
 
@@ -549,28 +705,26 @@ private struct EntryChip: View {
     @State private var showing = false
 
     var body: some View {
-        let color = entryColor(entry)
-        let isTask = entry.kind == "task"
+        let o = cal.viewOptions
         HStack(spacing: Theme.Space.xs) {
-            if isTask {
-                if cal.optionDown { TaskCheck(entry: entry) }
-            } else {
-                Circle().fill(color).frame(width: Theme.Calendar.dot, height: Theme.Calendar.dot)
+            if entry.kind == "task" && cal.optionDown {
+                TaskCheck(entry: entry)
+            } else if o.showIcons, let icon = entry.kindIcon {
+                Image(systemName: icon).font(.caption2).opacity(0.85)
             }
             Text(entry.title).lineLimit(1).strikethrough(entry.done)
             Spacer(minLength: 0)
         }
         .font(.caption.weight(.medium))
-        .foregroundStyle(isTask ? AnyShapeStyle(Color.white) : AnyShapeStyle(.primary))
-        .padding(.horizontal, Theme.Space.xs + Theme.Space.xxs)
+        .padding(.leading, Theme.Space.xs + Theme.Space.xxs + (o.isModern ? 2 : 0))
+        .padding(.trailing, Theme.Space.xs)
         .padding(.vertical, Theme.Space.xxs)
-        .background(isTask ? AnyShapeStyle(color.opacity(entry.done ? 0.45 : 0.9)) : AnyShapeStyle(color.opacity(Theme.Calendar.eventFill)),
-                    in: RoundedRectangle(cornerRadius: Theme.Calendar.eventRadius, style: .continuous))
+        .modifier(EntryLook(entry: entry, modern: o.isModern))
         .contentShape(Rectangle())
         .onTapGesture { showing = true }
         .popover(isPresented: $showing) { EntryDetail(entry: entry) }
         .modifier(DraggableTask(entry: entry))
-        .contextMenu { if isTask, let t = tasks.index?.task(id: entry.id) { TaskMenu(task: t) } }
+        .contextMenu { if entry.kind == "task", let t = tasks.index?.task(id: entry.id) { TaskMenu(task: t) } }
     }
 }
 
@@ -671,8 +825,8 @@ struct EntryDetail: View {
     let entry: CalendarEntry
 
     var body: some View {
-        if entry.kind == "task", tasks.index?.task(id: entry.id) != nil {
-            TaskQuickEditor(taskId: entry.id)
+        if entry.kind != "focus", let id = entry.openTaskId, tasks.index?.task(id: id) != nil {
+            TaskQuickEditor(taskId: id)
         } else {
             info
         }
@@ -695,6 +849,8 @@ struct EntryDetail: View {
                 Button(entry.done ? "Undo check-in" : "Check in") { tasks.core.toggleHabitEntry(entryId: entry.id) }
                     .controlSize(.large)
                 Label("A habit · open it in Habits (⌘3)", systemImage: "target").font(.caption).foregroundStyle(.secondary)
+            } else if entry.kind == "focus" {
+                Label("A focus session", systemImage: "timer").font(.caption).foregroundStyle(.secondary)
             } else if entry.kind == "countdown" {
                 Label("A countdown · edit it in Countdown (⌘4)", systemImage: "hourglass").font(.caption).foregroundStyle(.secondary)
             } else {
@@ -738,6 +894,9 @@ private struct MiniMonth: View {
     let month: Int
     let counts: [Date: Int]
 
+    /// Heatmap shade: busier days are darker (1 item light, 5+ strongest).
+    static func heat(_ count: Int) -> Double { Theme.Calendar.heatMin + Double(min(count, 5) - 1) * Theme.Calendar.heatStep }
+
     var body: some View {
         let first = cal.calendar.date(from: DateComponents(year: year, month: month, day: 1))!
         let gridStart = cal.calendar.dateInterval(of: .weekOfYear, for: first)?.start ?? first
@@ -747,7 +906,7 @@ private struct MiniMonth: View {
                 ForEach(0..<42, id: \.self) { i in
                     let date = cal.calendar.date(byAdding: .day, value: i, to: gridStart)!
                     let inMonth = cal.calendar.component(.month, from: date) == month
-                    let busy = (counts[date] ?? 0) > 0
+                    let count = inMonth && cal.viewOptions.yearHeatmap ? (counts[date] ?? 0) : 0
                     Button {
                         cal.anchor = date
                         cal.mode = .day
@@ -756,7 +915,8 @@ private struct MiniMonth: View {
                             .font(.caption)
                             .frame(width: Theme.Calendar.yearCell, height: Theme.Calendar.yearCell)
                             .foregroundStyle(cal.calendar.isDateInToday(date) ? Color.white : (inMonth ? Color.primary : Color.secondary.opacity(0.4)))
-                            .background(cal.calendar.isDateInToday(date) ? AnyShapeStyle(.tint) : (busy && inMonth ? AnyShapeStyle(.tint.opacity(0.18)) : AnyShapeStyle(.clear)), in: Circle())
+                            .background(cal.calendar.isDateInToday(date) ? AnyShapeStyle(.tint) : (count > 0 ? AnyShapeStyle(.tint.opacity(Self.heat(count))) : AnyShapeStyle(.clear)),
+                                        in: RoundedRectangle(cornerRadius: Theme.Calendar.heatRadius, style: .continuous))
                     }
                     .buttonStyle(.plain)
                     .disabled(!inMonth)

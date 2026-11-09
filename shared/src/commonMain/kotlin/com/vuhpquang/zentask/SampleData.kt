@@ -30,5 +30,12 @@ object SampleData {
             ),
         )
         core.actions.create("Write release notes", null, priority = 5, due = at(10.5), allDay = false)
+        // Back-to-back half-hour tasks (the case that used to stack unreadably) and a daily repeat.
+        core.actions.create("Review the API notes", null, priority = 3, due = at(13.5, 3), allDay = false)
+        core.actions.create("Estimate the mock screens", null, priority = 3, due = at(14.0, 3), allDay = false)
+        core.actions.create("Estimate the detail screen", null, priority = 5, due = at(14.5, 3), allDay = false)
+        core.actions.create("Test the full flow", null, priority = 3, due = at(14.0, 3), allDay = false)
+        val daily = core.actions.create("Plan the day", null, priority = 1, due = at(8.5), allDay = false)
+        core.actions.setRepeat(id = daily.id, rule = "RRULE:FREQ=DAILY;INTERVAL=1", from = null)
     }
 }

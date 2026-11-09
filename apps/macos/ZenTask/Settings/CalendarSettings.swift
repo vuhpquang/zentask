@@ -14,9 +14,25 @@ struct CalendarSettings: View {
     @State private var error: String?
     @State private var addingIcal = false
     @State private var removing: CalendarAccount?
+    @AppStorage(Theme.Calendar.workStartKey) private var workStart = Theme.Calendar.workStart
+    @AppStorage(Theme.Calendar.workEndKey) private var workEnd = Theme.Calendar.workEnd
 
     var body: some View {
         Form {
+            Section {
+                Picker("Starts at", selection: $workStart) {
+                    ForEach(0..<24, id: \.self) { Text(String(format: "%02d:00", $0)).tag($0) }
+                }
+                Picker("Ends at", selection: $workEnd) {
+                    ForEach(1...24, id: \.self) { Text(String(format: "%02d:00", $0)).tag($0) }
+                }
+            } header: {
+                Text("Working hours")
+            } footer: {
+                Text("Day and week views open on these hours, sized to fit the window").foregroundStyle(.secondary)
+            }
+            .onChange(of: workStart) { _, s in if workEnd <= s { workEnd = min(24, s + 1) } }
+            .onChange(of: workEnd) { _, e in if workStart >= e { workStart = max(0, e - 1) } }
             Section {
                 HStack {
                     Button("Connect Google account…", action: connect).disabled(!app.signedIn || busy)

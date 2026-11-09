@@ -171,4 +171,53 @@ class CalendarQueriesTest {
         val week = CalendarQueries.days(emptyList(), sources, accounts, listOf(allDay), LocalDate(2026, 11, 9), 7, zone, emptySet())
         assertEquals(listOf(false, true, true, true, false, false, false), week.map { d -> d.allDay.any { it.title == "Trip" } })
     }
+
+    private fun opts(o: CalendarViewOptions, tasks: List<Task>, checklist: List<com.vuhpquang.zentask.model.ChecklistItem> = emptyList(),
+                     focus: List<com.vuhpquang.zentask.model.FocusRecord> = emptyList()) =
+        CalendarQueries.days(emptyList(), sources, accounts, tasks, LocalDate(2026, 11, 9), 7, zone, emptySet(), options = o, checklist = checklist, focus = focus)
+
+    @Test
+    fun repeatingTasksShowLaterCyclesWhenAsked() {
+        val daily = Task(id = "r", title = "Standup", dueDate = ms("2026-11-09T09:00"), repeatRule = "RRULE:FREQ=DAILY;INTERVAL=1", timeZone = zone.id)
+        val on = opts(CalendarViewOptions(), listOf(daily))
+        assertEquals(List(7) { 1 }, on.map { d -> d.timed.count { it.entry.title == "Standup" } })
+        assertEquals("task", on[0].timed.single().entry.kind)
+        val copy = on[3].timed.single().entry
+        assertEquals("repeat", copy.kind)
+        assertEquals("r", copy.taskId)
+        assertEquals(540, on[3].timed.single().startMinute)
+        val off = opts(CalendarViewOptions(showRepeats = false), listOf(daily))
+        assertEquals(listOf(1, 0, 0), off.take(3).map { it.timed.size })
+        // From completion: no fixed future dates.
+        val fromDone = opts(CalendarViewOptions(), listOf(daily.copy(repeatFrom = "completion")))
+        assertEquals(listOf(1, 0), fromDone.take(2).map { it.timed.size })
+    }
+
+    @Test
+    fun checklistItemsAndFocusRecordsAreOptIn() {
+        val parent = Task(id = "p", title = "Trip", priority = 5)
+        val item = com.vuhpquang.zentask.model.ChecklistItem(id = "i", taskId = "p", title = "Book hotel", startDate = ms("2026-11-10T10:00"))
+        val record = com.vuhpquang.zentask.model.FocusRecord(id = "f", taskId = "p", start = ms("2026-11-11T14:00"), end = ms("2026-11-11T14:25"))
+        val hidden = opts(CalendarViewOptions(), listOf(parent), listOf(item), listOf(record))
+        assertTrue(hidden.all { it.timed.isEmpty() })
+        val shown = opts(CalendarViewOptions(showChecklist = true, showFocus = true), listOf(parent), listOf(item), listOf(record))
+        val c = shown[1].timed.single().entry
+        assertEquals("checklist" to "p", c.kind to c.taskId)
+        assertEquals(5, c.priority)
+        val f = shown[2].timed.single()
+        assertEquals("focus" to "Trip", f.entry.kind to f.entry.title)
+        assertEquals(840 to 865, f.startMinute to f.endMinute)
+        // A checklist item of a trashed task doesn't show.
+        val trashed = opts(CalendarViewOptions(showChecklist = true), listOf(parent.copy(trashedAt = 1)), listOf(item))
+        assertTrue(trashed.all { it.timed.isEmpty() })
+    }
+
+    @Test
+    fun optionsDecodeFromOlderJson() {
+        val o = CalendarViewOptions.parse("""{"showCompleted":false,"colorBy":"list"}""")
+        assertEquals(false, o.showCompleted)
+        assertEquals("classic", o.itemStyle)
+        assertEquals(true, o.showRepeats)
+        assertEquals("", o.extraZone)
+    }
 }

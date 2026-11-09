@@ -6,11 +6,20 @@ import SwiftUI
 extension CalendarViewOptions {
     /// A copy with some fields changed (Kotlin data classes have no default arguments in Swift).
     func with(lists: [String]? = nil, tags: [String]? = nil, showCompleted: Bool? = nil, showHabits: Bool? = nil,
-              showCountdowns: Bool? = nil, colorBy: String? = nil, showLunar: Bool? = nil) -> CalendarViewOptions {
+              showCountdowns: Bool? = nil, colorBy: String? = nil, showLunar: Bool? = nil, showChecklist: Bool? = nil,
+              showRepeats: Bool? = nil, showFocus: Bool? = nil, habitColor: String? = nil, countdownColor: String? = nil,
+              itemStyle: String? = nil, showIcons: Bool? = nil, yearHeatmap: Bool? = nil, extraZone: String? = nil) -> CalendarViewOptions {
         CalendarViewOptions(lists: lists ?? self.lists, tags: tags ?? self.tags, showCompleted: showCompleted ?? self.showCompleted,
                             showHabits: showHabits ?? self.showHabits, showCountdowns: showCountdowns ?? self.showCountdowns,
-                            colorBy: colorBy ?? self.colorBy, showLunar: showLunar ?? self.showLunar)
+                            colorBy: colorBy ?? self.colorBy, showLunar: showLunar ?? self.showLunar,
+                            showChecklist: showChecklist ?? self.showChecklist, showRepeats: showRepeats ?? self.showRepeats,
+                            showFocus: showFocus ?? self.showFocus, habitColor: habitColor ?? self.habitColor,
+                            countdownColor: countdownColor ?? self.countdownColor, itemStyle: itemStyle ?? self.itemStyle,
+                            showIcons: showIcons ?? self.showIcons, yearHeatmap: yearHeatmap ?? self.yearHeatmap,
+                            extraZone: extraZone ?? self.extraZone)
     }
+
+    var isModern: Bool { itemStyle == "modern" }
 }
 
 /// Left bar: a mini month (lunar dates, dots on busy days, the shown range tinted) and what to show.
@@ -159,7 +168,7 @@ struct CalendarSideBar: View {
     }
 }
 
-/// View options for the Calendar: colour, completed tasks, habits, countdowns, lunar dates.
+/// View options for the Calendar: colours, item style, what to show, a second time zone.
 struct CalendarViewOptionsSheet: View {
     @Environment(CalendarModel.self) private var cal
     @Environment(\.dismiss) private var dismiss
@@ -168,17 +177,45 @@ struct CalendarViewOptionsSheet: View {
         let o = cal.viewOptions
         VStack(alignment: .leading, spacing: 0) {
             Form {
-                Picker("Colour tasks by", selection: Binding(get: { o.colorBy }, set: { cal.setViewOptions(o.with(colorBy: $0)) })) {
-                    Text("Priority").tag("priority")
-                    Text("List").tag("list")
+                Section("Colour") {
+                    Picker("Tasks", selection: bind(o.colorBy) { o.with(colorBy: $0) }) {
+                        Text("By priority").tag("priority")
+                        Text("By list").tag("list")
+                    }
+                    FixedColorRow(title: "Habits", value: o.habitColor) { cal.setViewOptions(o.with(habitColor: $0)) }
+                    FixedColorRow(title: "Countdowns", value: o.countdownColor) { cal.setViewOptions(o.with(countdownColor: $0)) }
+                }
+                Section("Style") {
+                    HStack(spacing: Theme.Space.l) {
+                        StyleChoice(title: "Classic", modern: false, selected: !o.isModern) { cal.setViewOptions(o.with(itemStyle: "classic")) }
+                        StyleChoice(title: "Modern", modern: true, selected: o.isModern) { cal.setViewOptions(o.with(itemStyle: "modern")) }
+                    }
+                    .frame(maxWidth: .infinity)
+                    Toggle("Show item icons", isOn: bind(o.showIcons) { o.with(showIcons: $0) })
+                    Toggle("Heatmap in the year view", isOn: bind(o.yearHeatmap) { o.with(yearHeatmap: $0) })
+                }
+                Section("Show") {
+                    Toggle("Completed tasks", isOn: bind(o.showCompleted) { o.with(showCompleted: $0) })
+                    Toggle("Checklist items with a date", isOn: bind(o.showChecklist) { o.with(showChecklist: $0) })
+                    Toggle("Every cycle of repeating tasks", isOn: bind(o.showRepeats) { o.with(showRepeats: $0) })
                 }
                 Section {
-                    Toggle("Show completed tasks", isOn: Binding(get: { o.showCompleted }, set: { cal.setViewOptions(o.with(showCompleted: $0)) }))
-                    Toggle("Show habits", isOn: Binding(get: { o.showHabits }, set: { cal.setViewOptions(o.with(showHabits: $0)) }))
-                    Toggle("Show countdowns", isOn: Binding(get: { o.showCountdowns }, set: { cal.setViewOptions(o.with(showCountdowns: $0)) }))
+                    Toggle("Habits", isOn: bind(o.showHabits) { o.with(showHabits: $0) })
+                    Toggle("Focus sessions", isOn: bind(o.showFocus) { o.with(showFocus: $0) })
+                    Toggle("Countdowns", isOn: bind(o.showCountdowns) { o.with(showCountdowns: $0) })
+                    Toggle("Lunar dates", isOn: bind(o.showLunar) { o.with(showLunar: $0) })
                 }
                 Section {
-                    Toggle("Show lunar dates", isOn: Binding(get: { o.showLunar }, set: { cal.setViewOptions(o.with(showLunar: $0)) }))
+                    Toggle("Second time zone", isOn: Binding(get: { !o.extraZone.isEmpty }, set: { on in
+                        cal.setViewOptions(o.with(extraZone: on ? Self.defaultZone : ""))
+                    }))
+                    if !o.extraZone.isEmpty {
+                        Picker("Time zone", selection: bind(o.extraZone) { o.with(extraZone: $0) }) {
+                            ForEach(Self.zones, id: \.self) { Text(Self.zoneName($0)).tag($0) }
+                        }
+                    }
+                } footer: {
+                    Text("Day and week views show its hours next to yours.").foregroundStyle(.secondary)
                 }
             }
             .formStyle(.grouped)
@@ -188,6 +225,87 @@ struct CalendarViewOptionsSheet: View {
             }
             .padding(Theme.Space.l)
         }
-        .frame(width: Theme.Size.sheetWidth + Theme.Space.xxl)
+        .frame(width: Theme.Size.sheetWidth + Theme.Space.xxl, height: Theme.Calendar.optionsHeight)
+    }
+
+    private func bind<T>(_ value: T, _ make: @escaping (T) -> CalendarViewOptions) -> Binding<T> {
+        Binding(get: { value }, set: { cal.setViewOptions(make($0)) })
+    }
+
+    static let defaultZone = "UTC"
+    static let zones: [String] = ["UTC"] + TimeZone.knownTimeZoneIdentifiers.filter { $0.contains("/") }.sorted()
+
+    static func zoneName(_ id: String) -> String {
+        guard let z = TimeZone(identifier: id) else { return id }
+        let hours = Double(z.secondsFromGMT()) / 3600
+        let offset = hours == 0 ? "GMT" : String(format: "GMT%+g", hours)
+        return "\(id.replacingOccurrences(of: "_", with: " ")) (\(offset))"
+    }
+}
+
+/// "Own colour" or one fixed colour for every habit / countdown on the calendar.
+private struct FixedColorRow: View {
+    let title: String
+    let value: String
+    let set: (String) -> Void
+
+    var body: some View {
+        LabeledContent(title) {
+            HStack(spacing: Theme.Space.xs) {
+                Button { set("") } label: {
+                    Text("Own").font(.caption.weight(.medium))
+                        .padding(.horizontal, Theme.Space.s).padding(.vertical, Theme.Space.xxs)
+                        .background(value.isEmpty ? AnyShapeStyle(.tint.opacity(0.2)) : AnyShapeStyle(.quaternary), in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .help("Each one keeps its own colour")
+                ForEach(Theme.Calendar.fixedColors, id: \.self) { hex in
+                    Button { set(hex) } label: {
+                        Circle().fill(Color(hex: hex) ?? .accentColor)
+                            .frame(width: Theme.Calendar.swatch, height: Theme.Calendar.swatch)
+                            .overlay { if value.caseInsensitiveCompare(hex) == .orderedSame { Circle().strokeBorder(.primary, lineWidth: 2) } }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+}
+
+/// A small preview of the Classic or Modern block style.
+private struct StyleChoice: View {
+    let title: String
+    let modern: Bool
+    let selected: Bool
+    let pick: () -> Void
+
+    var body: some View {
+        Button(action: pick) {
+            VStack(spacing: Theme.Space.s) {
+                VStack(spacing: 2) {
+                    sample("Task", "9:00 – 10:00", .accentColor)
+                    sample("Event", "10:00 – 11:00", .orange)
+                }
+                .frame(width: Theme.Calendar.stylePreview)
+                Label(title, systemImage: selected ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(selected ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+            }
+            .padding(Theme.Space.s)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func sample(_ name: String, _ time: String, _ color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text(name).font(.caption.weight(.semibold))
+            Text(time).font(.caption2).opacity(0.8)
+        }
+        .foregroundStyle(modern ? AnyShapeStyle(.primary) : AnyShapeStyle(Color.white))
+        .padding(.horizontal, Theme.Space.s).padding(.vertical, Theme.Space.xs)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(color.opacity(modern ? Theme.Calendar.modernFill : Theme.Calendar.classicFill), in: RoundedRectangle(cornerRadius: Theme.Calendar.eventRadius, style: .continuous))
+        .overlay(alignment: .leading) { if modern { RoundedRectangle(cornerRadius: 2).fill(color).frame(width: 3) } }
+        .clipShape(RoundedRectangle(cornerRadius: Theme.Calendar.eventRadius, style: .continuous))
     }
 }

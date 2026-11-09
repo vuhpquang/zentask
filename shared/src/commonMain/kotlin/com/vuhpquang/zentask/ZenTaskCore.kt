@@ -252,10 +252,13 @@ class ZenTaskCore(
         val margin = 2 * 86_400_000L
         val from = first.atStartOfDayIn(z).toEpochMilliseconds() - margin
         val until = first.plus(count, DateTimeUnit.DAY).atStartOfDayIn(z).toEpochMilliseconds() + margin
+        val options = calendarView()
         return CalendarQueries.days(
             store.listOverlapping(EntityTypes.calendarEvent, from, until), store.list(EntityTypes.calendarSource), store.list(EntityTypes.calendarAccount),
             store.list(EntityTypes.task), first, count, z, hiddenCalendars(), store.list(EntityTypes.countdown),
-            calendarView(), store.list(EntityTypes.habit), store.list(EntityTypes.habitCheckin), store.list(EntityTypes.project),
+            options, store.list(EntityTypes.habit), store.list(EntityTypes.habitCheckin), store.list(EntityTypes.project),
+            checklist = if (options.showChecklist) store.list(EntityTypes.checklistItem) else emptyList(),
+            focus = if (options.showFocus) store.list(EntityTypes.focusRecord) else emptyList(),
         )
     }
 

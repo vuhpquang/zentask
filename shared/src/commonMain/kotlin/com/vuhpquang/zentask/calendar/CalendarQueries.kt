@@ -11,7 +11,10 @@ import com.vuhpquang.zentask.model.HabitCheckin
 import com.vuhpquang.zentask.model.Project
 import com.vuhpquang.zentask.model.ZenJson
 import kotlinx.serialization.Serializable
+import com.vuhpquang.zentask.model.ChecklistItem
 import com.vuhpquang.zentask.model.Countdown
+import com.vuhpquang.zentask.model.FocusRecord
+import com.vuhpquang.zentask.tasks.Recurrence
 import com.vuhpquang.zentask.model.Task
 import com.vuhpquang.zentask.tasks.isDone
 import kotlinx.datetime.DateTimeUnit
@@ -35,6 +38,24 @@ data class CalendarViewOptions(
     val showCountdowns: Boolean = true,
     val colorBy: String = "priority",
     val showLunar: Boolean = true,
+    /** Checklist items that have their own date. */
+    val showChecklist: Boolean = false,
+    /** Later occurrences of repeating tasks (read-only copies on their dates). */
+    val showRepeats: Boolean = true,
+    /** Finished focus sessions as blocks at the time they ran. */
+    val showFocus: Boolean = false,
+    /** One colour for every habit ("#RRGGBB"), or "" for each habit's own colour. */
+    val habitColor: String = "",
+    /** One colour for every countdown, or "" for each countdown's own colour. */
+    val countdownColor: String = "",
+    /** "classic" (solid blocks) or "modern" (tinted with a coloured edge). */
+    val itemStyle: String = "classic",
+    /** Small kind icons (calendar, habit, countdown, focus, repeat) on entries. */
+    val showIcons: Boolean = true,
+    /** Year view shades days by how many items they have. */
+    val yearHeatmap: Boolean = true,
+    /** A second time column in Day/Week ("Asia/Tokyo"), or "" for none. */
+    val extraZone: String = "",
 ) {
     fun encode(): String = ZenJson.encodeToString(serializer(), this)
 
@@ -62,6 +83,8 @@ data class CalendarEntry(
     val done: Boolean = false,
     val location: String = "",
     val priority: Int = 0,
+    /** For "repeat" and "checklist" entries: the task they belong to (opens on click). */
+    val taskId: String? = null,
 )
 
 /** A timed entry placed in a day: minutes since midnight and its overlap column. */
@@ -80,6 +103,8 @@ object CalendarQueries {
     /** A habit reminder time, "19:00". */
     private val CLOCK = Regex("""^(\d{1,2}):(\d{2})$""")
     private const val DAY_MINUTES = 24 * 60
+    /** Safety cap on generated repeat occurrences per task (a daily rule over a year view is 366). */
+    private const val MAX_REPEATS = 400
 
     fun days(
         events: List<CalendarEvent>,
@@ -95,6 +120,8 @@ object CalendarQueries {
         habits: List<Habit> = emptyList(),
         checkins: List<HabitCheckin> = emptyList(),
         projects: List<Project> = emptyList(),
+        checklist: List<ChecklistItem> = emptyList(),
+        focus: List<FocusRecord> = emptyList(),
     ): List<CalendarDay> {
         val listColor = projects.associate { it.id to it.color }
         // Tasks far outside the window can't show; skip them before any time-zone work (margin: all-day zones).
@@ -108,7 +135,7 @@ object CalendarQueries {
         }
         val liveAccounts = accounts.filter { !it.deleted }.mapTo(HashSet()) { it.id }
         val visible = sources.filter { !it.deleted && it.accountId in liveAccounts && it.id !in hidden }.associateBy { it.id }
-        val entries = events.filter { !it.deleted && it.sourceId in visible }.map { e ->
+        val entries: List<CalendarEntry> = events.filter { !it.deleted && it.sourceId in visible }.map { e ->
             if (e.isAllDay) {
                 // All-day = calendar dates: read them in the event's zone, place them on the same dates here.
                 val z = zoneOf(e.timeZone)
@@ -122,22 +149,50 @@ object CalendarQueries {
             } else {
                 CalendarEntry(e.id, "event", e.title, e.start, maxOf(e.end, e.start), false, visible[e.sourceId]?.color, location = e.location)
             }
-        } + tasks.filter { t ->
+        }
+        val live = { t: Task -> !t.deleted && t.trashedAt == null && t.status != -1 && wanted(t) }
+        val colour = { t: Task, e: CalendarEntry -> if (options.colorBy == "list") e.copy(color = listColor[t.projectId]) else e }
+        val taskEntries = tasks.filter { t ->
             val at = t.startDate ?: t.dueDate
             // Overlap, not start-in-window: a span that began days earlier still covers the shown days.
-            at != null && at <= windowTo && maxOf(t.dueDate ?: at, at) >= windowFrom && !t.deleted && t.trashedAt == null && t.status != -1 && wanted(t) && (options.showCompleted || !t.isDone)
+            at != null && at <= windowTo && maxOf(t.dueDate ?: at, at) >= windowFrom && live(t) && (options.showCompleted || !t.isDone)
+        }.mapNotNull { t -> taskEntry(t, zone, zoneOf(t.timeZone))?.let { colour(t, it) } }
+        val repeatEntries = if (!options.showRepeats) emptyList() else tasks.filter { live(it) && !it.isDone && !it.repeatRule.isNullOrBlank() }
+            .flatMap { t -> repeatEntries(t, zone, zoneOf(t.timeZone), windowFrom, windowTo).map { colour(t, it) } }
+        val checklistEntries = if (!options.showChecklist) emptyList() else {
+            val parents = tasks.filter { live(it) }.associateBy { it.id }
+            checklist.filter { !it.deleted && it.startDate != null && it.startDate in windowFrom..windowTo && (options.showCompleted || it.status == 0) }
+                .mapNotNull { item ->
+                    val t = parents[item.taskId] ?: return@mapNotNull null
+                    val start = item.startDate!!
+                    val e = if (item.isAllDay) {
+                        val day = Instant.fromEpochMilliseconds(start).toLocalDateTime(zoneOf(t.timeZone)).date
+                        CalendarEntry(item.id, "checklist", item.title, day.atStartOfDayIn(zone).toEpochMilliseconds(),
+                            day.plus(1, DateTimeUnit.DAY).atStartOfDayIn(zone).toEpochMilliseconds(), true, null, item.status != 0, priority = t.priority, taskId = t.id)
+                    } else {
+                        CalendarEntry(item.id, "checklist", item.title, start, start + TASK_MINUTES * 60_000L, false, null, item.status != 0, priority = t.priority, taskId = t.id)
+                    }
+                    colour(t, e)
+                }
         }
-            .mapNotNull { t -> taskEntry(t, zone, zoneOf(t.timeZone))?.let { e -> if (options.colorBy == "list") e.copy(color = listColor[t.projectId]) else e } } +
-            (if (options.showCountdowns) countdownEntries(countdowns, first, count, zone) else emptyList()) +
-            (if (options.showHabits) habitEntries(habits, checkins, first, count, zone).filter { options.showCompleted || !it.done } else emptyList())
+        val focusEntries = if (!options.showFocus) emptyList() else {
+            val titles = tasks.associate { it.id to it.title }
+            focus.filter { !it.deleted && it.end > it.start && it.start <= windowTo && it.end >= windowFrom }.map { f ->
+                CalendarEntry(f.id, "focus", f.taskId?.let { titles[it] }?.takeIf { it.isNotBlank() } ?: "Focus", f.start, f.end, false, null, true, taskId = f.taskId)
+            }
+        }
+        val all = entries + taskEntries + repeatEntries + checklistEntries + focusEntries +
+            (if (options.showCountdowns) countdownEntries(countdowns, first, count, zone).map { if (options.countdownColor.isNotEmpty()) it.copy(color = options.countdownColor) else it } else emptyList()) +
+            (if (options.showHabits) habitEntries(habits, checkins, first, count, zone).filter { options.showCompleted || !it.done }
+                .map { if (options.habitColor.isNotEmpty()) it.copy(color = options.habitColor) else it } else emptyList())
 
         return (0 until count).map { i ->
             val date = first.plus(i, DateTimeUnit.DAY)
             val from = date.atStartOfDayIn(zone).toEpochMilliseconds()
             val to = date.plus(1, DateTimeUnit.DAY).atStartOfDayIn(zone).toEpochMilliseconds()
-            val allDay = entries.filter { it.allDay && it.start < to && it.end > from }
+            val allDay = all.filter { it.allDay && it.start < to && it.end > from }
                 .sortedWith(compareBy({ it.kind != "event" }, { it.start }, { it.title }))
-            val timed = entries.filter { !it.allDay && it.start < to && (it.end > from || (it.end == it.start && it.start >= from)) }
+            val timed = all.filter { !it.allDay && it.start < to && (it.end > from || (it.end == it.start && it.start >= from)) }
                 .map { e ->
                     val s = ((maxOf(e.start, from) - from) / 60_000).toInt()
                     val end = ((minOf(e.end, to) - from) / 60_000).toInt()
@@ -191,6 +246,31 @@ object CalendarQueries {
         }
         val end = t.dueDate?.takeIf { t.startDate != null && it > start } ?: (start + TASK_MINUTES * 60_000L)
         return CalendarEntry(t.id, "task", t.title, start, end, false, null, t.isDone, priority = t.priority)
+    }
+
+    /**
+     * Later occurrences of a repeating task inside the window (the task itself is its first occurrence).
+     * Repeats counted from completion have no fixed future dates, so they show none.
+     */
+    private fun repeatEntries(t: Task, zone: TimeZone, own: TimeZone, windowFrom: Long, windowTo: Long): List<CalendarEntry> {
+        if (t.repeatFrom == "completion" || t.repeatFrom == "1") return emptyList()
+        val rule = t.repeatRule ?: return emptyList()
+        val base = taskEntry(t, zone, own) ?: return emptyList()
+        val first = t.startDate ?: t.dueDate ?: return emptyList()
+        val length = base.end - base.start
+        val out = mutableListOf<CalendarEntry>()
+        var at = Instant.fromEpochMilliseconds(first)
+        for (i in 0 until MAX_REPEATS) {
+            val next = runCatching { Recurrence.next(rule, at, own, i) }.getOrNull() ?: break
+            if (next <= at) break
+            at = next
+            val ms = next.toEpochMilliseconds()
+            if (ms > windowTo) break
+            val start = if (t.isAllDay) next.toLocalDateTime(own).date.atStartOfDayIn(zone).toEpochMilliseconds() else ms
+            if (start + length < windowFrom) continue
+            out += base.copy(id = "${t.id}@$start", kind = "repeat", start = start, end = start + length, done = false, taskId = t.id)
+        }
+        return out
     }
 
     /** Overlap clusters share a column count; each item takes the first free column. */
