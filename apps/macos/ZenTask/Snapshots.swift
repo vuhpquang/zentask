@@ -61,6 +61,7 @@ enum Snapshots {
             both(AnyView(HotkeySettings().frame(width: Theme.Size.settingsWidth)), size: CGSize(width: 540, height: 560), name: "settings-hotkeys", dir: dir)
             both(AnyView(SearchOverlay(open: { _, _ in }, close: {})).environment(tasks), size: CGSize(width: 600, height: 340), name: "search", dir: dir)
             both(AnyView(AppearanceSettings().frame(width: Theme.Size.settingsWidth)), size: CGSize(width: 540, height: 420), name: "settings-appearance", dir: dir)
+            both(AnyView(GeneralSettings().frame(width: Theme.Size.settingsWidth)), size: CGSize(width: 540, height: 760), name: "settings-general", dir: dir)
             for themeId in ["dracula", "catppuccin"] {
                 UserDefaults.standard.set(themeId, forKey: "appearance.theme")
                 both(AnyView(MainWindow().modifier(Themed())).environment(model).environment(tasks).environment(panel).environment(focus), size: windowSize, name: "theme-\(themeId)", dir: dir)

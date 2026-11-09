@@ -15,6 +15,14 @@ struct ZenTaskApp: App {
             Snapshots.render(to: URL(fileURLWithPath: dir))
             exit(0)
         }
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["ZENTASK_UPDATE_DRYRUN"] != nil {
+            let done = DispatchSemaphore(value: 0)
+            Task.detached { print(await Updater.shared.dryRun()); done.signal() }
+            while done.wait(timeout: .now()) == .timedOut { RunLoop.main.run(until: Date().addingTimeInterval(0.1)) }
+            exit(0)
+        }
+        #endif
         let model = AppModel.live()
         _model = State(initialValue: model)
         let tasks = TasksModel(core: model.core)
@@ -29,6 +37,7 @@ struct ZenTaskApp: App {
             model.start()
             IntentBridge.tasks = tasks
             IntentBridge.focus = _focus.wrappedValue
+            Updater.shared.startAutomaticChecks()
             _focus.wrappedValue.start() // a running pomo keeps ticking and is recorded even before Focus is opened
             HotKeys.shared.start(handlers: [
                 .quickAdd: { tasks.start(); QuickAddWindow.shared.show(tasks: tasks) },
@@ -66,10 +75,25 @@ struct TaskCommands: Commands {
     @FocusedValue(\.focusQuickAdd) private var focusQuickAdd
 
     var body: some Commands {
+        CommandGroup(after: .appInfo) {
+            CheckForUpdatesButton()
+        }
         CommandGroup(replacing: .newItem) {
             Button("New Task") { focusQuickAdd?() }
                 .keyboardShortcut("n")
                 .disabled(focusQuickAdd == nil)
+        }
+    }
+}
+
+/// App menu → Check for Updates…: opens Settings (General shows the result) and checks.
+private struct CheckForUpdatesButton: View {
+    @Environment(\.openSettings) private var openSettings
+
+    var body: some View {
+        Button("Check for Updates…") {
+            openSettings()
+            Task { await Updater.shared.check() }
         }
     }
 }
