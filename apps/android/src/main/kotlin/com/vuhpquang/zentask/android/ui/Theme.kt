@@ -15,6 +15,8 @@ object ZenColors {
     val high = Color(0xFFE5484D)
     val medium = Color(0xFFF59E0B)
     val low = Color(0xFF3B82F6)
+    /** Swipe-to-complete background. */
+    val done = Color(0xFF10B981)
 
     fun priority(p: Int, fallback: Color): Color = when (p) {
         5 -> high

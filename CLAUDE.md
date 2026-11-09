@@ -162,6 +162,12 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
 - All-day triggers at 09:00 (every preset, TickTick's default) and "on time" fire at the prefs' all-day time;
   other explicit times stay. Habit reminder times: `HabitActions.setReminders` (Mac habit editor → Reminders).
 
+## Android parity (P9)
+
+- Tasks (P9a): swipe right = complete / reopen, left = Trash with an Undo snackbar (`ui/TaskExtras.kt`
+  `SwipeTaskRow`; the snackbar runs in the list's scope because the row leaves the list); tag chips + tag dialog
+  and the "…" menu (pin, duplicate, Won't do / Reopen, Trash; Restore / Delete forever in Trash) on task detail.
+
 ## Gotchas
 
 - JDK: the default Oracle JDK 18 on this Mac is x86_64 ("Bad CPU type"). `scripts/lib/env.sh`

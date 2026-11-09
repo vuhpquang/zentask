@@ -33,6 +33,7 @@ import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Flag
@@ -206,6 +207,7 @@ fun TasksScreen(app: ZenApp, openSettings: () -> Unit, openSearch: () -> Unit) {
     var adding by remember { mutableStateOf(false) }
     val drawer = rememberDrawerState(androidx.compose.material3.DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    val snackbar = remember { androidx.compose.material3.SnackbarHostState() }
 
     openTaskId?.let { id ->
         TaskDetailScreen(app, id) { openTaskId = null }
@@ -234,6 +236,7 @@ fun TasksScreen(app: ZenApp, openSettings: () -> Unit, openSearch: () -> Unit) {
                     },
                 )
             },
+            snackbarHost = { androidx.compose.material3.SnackbarHost(snackbar) },
             floatingActionButton = {
                 if (pick !is ListPick.Smart || pick.list !in setOf(SmartList.COMPLETED, SmartList.WONT_DO, SmartList.TRASH)) {
                     FloatingActionButton(onClick = { adding = true }) { Icon(Icons.Filled.Add, "Add task") }
@@ -241,7 +244,7 @@ fun TasksScreen(app: ZenApp, openSettings: () -> Unit, openSearch: () -> Unit) {
             },
         ) { padding ->
             Box(Modifier.padding(padding).fillMaxSize()) {
-                TaskList(app, index, pick) { openTaskId = it }
+                TaskList(app, index, pick, snackbar) { openTaskId = it }
             }
         }
     }
@@ -389,7 +392,8 @@ private fun DrawerRow(label: String, icon: ImageVector, tint: Color?, count: Int
 }
 
 @Composable
-private fun TaskList(app: ZenApp, index: TaskIndex?, pick: ListPick, open: (String) -> Unit) {
+private fun TaskList(app: ZenApp, index: TaskIndex?, pick: ListPick, snackbar: androidx.compose.material3.SnackbarHostState, open: (String) -> Unit) {
+    val scope = rememberCoroutineScope()
     val sections = remember(index, pick) {
         index?.let { app.core.sections(it, pick.filter, app.core.viewOptions(pick.filter)) }.orEmpty()
     }
@@ -414,7 +418,10 @@ private fun TaskList(app: ZenApp, index: TaskIndex?, pick: ListPick, open: (Stri
             }
             if (!isFolded || section.title.isEmpty()) {
                 items(section.rows, key = { section.key + ":" + it.task.id }) { row ->
-                    TaskRowItem(app, index, row, showList = pick !is ListPick.InProject, barColor = ZenColors.hex(section.color)) { open(row.task.id) }
+                    // Trash has its own Restore / Delete forever in the task's menu.
+                    SwipeTaskRow(app, row.task, enabled = row.task.trashedAt == null, trashed = { offerUndoTrash(app, it, snackbar, scope) }) {
+                        TaskRowItem(app, index, row, showList = pick !is ListPick.InProject, barColor = ZenColors.hex(section.color)) { open(row.task.id) }
+                    }
                 }
             }
         }
@@ -438,8 +445,9 @@ private fun SectionHeader(section: TaskSection, folded: Boolean, toggle: () -> U
 
 @Composable
 fun CheckCircleButton(task: Task, onToggle: () -> Unit) {
-    val color = ZenColors.priority(task.priority, MaterialTheme.colorScheme.outline)
-    val done = task.isDone
+    val wontDo = task.status == TaskStatus.WONT_DO
+    val color = if (wontDo) MaterialTheme.colorScheme.outline else ZenColors.priority(task.priority, MaterialTheme.colorScheme.outline)
+    val done = task.isDone || wontDo
     Box(
         Modifier.size(24.dp).clip(RoundedCornerShape(6.dp))
             .background(if (done) color.copy(alpha = 0.85f) else Color.Transparent)
@@ -447,7 +455,8 @@ fun CheckCircleButton(task: Task, onToggle: () -> Unit) {
             .clickable(onClick = onToggle),
         contentAlignment = Alignment.Center,
     ) {
-        if (done) Icon(Icons.Filled.Check, "Done", tint = Color.White, modifier = Modifier.size(16.dp))
+        if (wontDo) Icon(Icons.Filled.Close, "Won't do", tint = Color.White, modifier = Modifier.size(16.dp))
+        else if (done) Icon(Icons.Filled.Check, "Done", tint = Color.White, modifier = Modifier.size(16.dp))
     }
 }
 
@@ -581,9 +590,7 @@ fun TaskDetailScreen(app: ZenApp, taskId: String, close: () -> Unit) {
             TopAppBar(
                 title = { Text(listName(index, task.projectId)) },
                 navigationIcon = { IconButton(onClick = { commit(); close() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
-                actions = {
-                    IconButton(onClick = { app.core.actions.trash(task.id); close() }) { Icon(Icons.Filled.Delete, "Move to Trash") }
-                },
+                actions = { TaskMenu(app, task) { close() } },
             )
         },
     ) { padding ->
@@ -621,6 +628,7 @@ fun TaskDetailScreen(app: ZenApp, taskId: String, close: () -> Unit) {
                 }
                 if (day != null) ReminderChip(app, task, expanded = picking == "reminder", open = { picking = "reminder" }, close = { picking = null })
                 if (day != null) RepeatChip(app, task, day, expanded = picking == "repeat", open = { picking = "repeat" }, close = { picking = null })
+                TagChips(app, index, task)
             }
             OutlinedTextField(
                 value = notes, onValueChange = { notes = it }, label = { Text("Notes") },
