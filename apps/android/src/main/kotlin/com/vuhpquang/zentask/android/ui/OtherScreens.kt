@@ -145,7 +145,7 @@ fun CalendarScreen(app: ZenApp) {
 @Composable
 private fun AgendaCard(app: ZenApp, e: CalendarEntry) {
     val color = when (e.kind) {
-        "task" -> ZenColors.hex(e.color) ?: ZenColors.priority(e.priority, MaterialTheme.colorScheme.primary)
+        "task", "repeat", "checklist" -> ZenColors.hex(e.color) ?: ZenColors.priority(e.priority, MaterialTheme.colorScheme.primary)
         else -> ZenColors.hex(e.color) ?: MaterialTheme.colorScheme.primary
     }
     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
