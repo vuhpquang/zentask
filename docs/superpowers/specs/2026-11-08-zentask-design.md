@@ -196,7 +196,11 @@ Bố cục học theo TickTick (theo ảnh chủ dự án gửi), dark mode là 
 
 - `scripts/release.sh X.Y.Z [notes.md]` theo mẫu LaunchApp/Quickcast: build shared XCFramework → `xcodegen generate` → xcodebuild Release arm64 → ký self-signed "ZenTask Self-Signed" (backup ở `~/.config/zentask-signing/`) → zip → tag → (push + GitHub release nếu được cho phép) → thay `/Applications/ZenTask.app`. Hỗ trợ `DRY_RUN=1`, `INSTALL=1`.
 - Bundle id `com.vuhpquang.zentask` (`.dev` cho Debug).
-- Auto-update: hoãn sau v1.
+- **Cập nhật trong app (bắt buộc cho mọi nền tảng, chủ dự án yêu cầu 2026-11-09):** muốn lên bản mới không phải tự tải và cài lại; chỉ cần bấm một nút trong app. Mọi bản đọc GitHub release mới nhất (`vX.Y.Z`, Latest) của `vuhpquang/zentask` và tải file của nền tảng mình (`AppUpdates` trong shared: `ZenTask-X.Y.Z.zip` cho Mac, `ZenTask-X.Y.Z-android.apk` cho Android, `ZenTask-X.Y.Z-windows.msi` cho Windows ở P8).
+  - Mac (0.10.0): Settings → General → Updates và menu ZenTask → Check for Updates…; tự kiểm tra lúc mở app và mỗi 6 giờ; "Install and relaunch" tải zip, kiểm tra bundle id + chữ ký cùng chứng chỉ release, thay app rồi mở lại.
+  - Android (0.10.0): Settings → Updates và mục "Update to X" trong drawer; "Update now" tải APK và cài bằng PackageInstaller (lần đầu Android hỏi quyền "Cài ứng dụng không rõ nguồn" cho ZenTask; Android luôn hiện hộp xác nhận). APK phải ký cùng khoá (debug key của Mac).
+  - Windows (P8): phải có ngay từ bản đầu, cùng cơ chế.
+  - Galaxy Watch: chưa cần.
 - `scripts/deploy.sh`: rsync server + docker compose lên `vps1` (giống personal-wiki).
 
 ## 13. Phases
@@ -212,7 +216,7 @@ Bố cục học theo TickTick (theo ảnh chủ dự án gửi), dark mode là 
 | **P5** Calendar | Google OAuth + iCal fallback ở server, Day/Week/Month view, task + event, kéo thả đặt giờ | Week view như ảnh mẫu |
 | **P6** Habit + Countdown | Habit list, check-in, streak/thống kê, countdown list, countdown trên calendar | Thay được TickTick hoàn toàn trên Mac |
 | **P7** Android + Galaxy Watch | Compose app, Wear app (today tasks, check habit) | P7a (2026-11-08): Android app — task list/drawer/quick add/detail, Calendar tuần, Habits, Countdown, Focus, Settings + sync. P7b: nhắc nhở (exact alarm, nút Done), widget Today, Focus chạy nền. P7c: Wear app độc lập (task hôm nay, check-in habit, tự sync) |
-| **P8** Windows | Compose Desktop | — |
+| **P8** Windows | Compose Desktop, có nút cập nhật trong app ngay từ bản đầu (mục 12) | — |
 
 ## 14. Để lại cho người build quyết định
 

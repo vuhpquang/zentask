@@ -467,6 +467,22 @@ Cách 2, không cần cáp: gửi file APK sang điện thoại (Google Drive, T
 3. Widget: giữ ngón tay trên màn hình chính → Widget → tìm "ZenTask" → kéo widget **Today** ra màn hình.
    Bấm ô vuông để hoàn thành task, bấm tên task để mở app.
 
+### 7.5 Cập nhật bản mới (từ 0.10.0)
+
+Không cần tải APK nữa. Mở ☰ → **Settings** → **Updates** → **Update now** (khi có bản mới, drawer cũng hiện mục
+"Update to X.Y.Z").
+
+1. Lần đầu: Android mở màn hình "Cài ứng dụng không rõ nguồn" → bật **Cho phép từ nguồn này** cho ZenTask →
+   bấm quay lại. ZenTask tự tải tiếp.
+2. Bấm **Cập nhật** ở hộp xác nhận của Android. Nếu Play Protect hỏi quét ứng dụng, chọn **Quét ứng dụng** rồi
+   **Cài đặt**.
+3. App tự đóng khi cài xong; mở lại từ thông báo "ZenTask updated to X.Y.Z".
+
+Bản 0.9.0 chưa có nút này: cài 0.10.0 theo 7.1–7.2 một lần, các bản sau cập nhật trong app.
+
+Trên Mac: menu **ZenTask → Check for Updates…** (hoặc Settings → General → Updates) → **Install and relaunch**.
+App tự kiểm tra lúc mở và mỗi 6 giờ. Bản 0.9.0 cũng chưa có nút này; 0.10.0 được cài bằng script release.
+
 ## 8. Cài ZenTask lên Galaxy Watch (Wear OS 5 trở lên)
 
 App trên đồng hồ chạy độc lập: tự sync với server, không cần app trên điện thoại đang mở.
