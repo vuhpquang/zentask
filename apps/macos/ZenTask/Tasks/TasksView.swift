@@ -9,6 +9,7 @@ struct TasksView: View {
         NavigationSplitView(columnVisibility: $tasks.columnVisibility) {
             SidebarView()
                 .navigationSplitViewColumnWidth(min: Theme.Size.sidebarMin, ideal: 230)
+                .toolbar(removing: .sidebarToggle)
         } content: {
             Group {
                 if tasks.showingSummary { SummaryView() } else { TaskListView() }
@@ -33,16 +34,8 @@ struct TasksView: View {
                 }
             }
         }
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    withMotion { tasks.showCalendarPanel.toggle() }
-                } label: {
-                    Label("Calendar", systemImage: "sidebar.right")
-                }
-                .help(tasks.showCalendarPanel ? "Hide the calendar" : "Show the calendar beside your tasks")
-            }
-        }
+        // The window has no title bar: the list header has the sidebar button and "Calendar beside tasks".
+        .toolbar(removing: .sidebarToggle)
         .onAppear { tasks.start() }
         .sheet(item: Binding(get: { tasks.sheet }, set: { tasks.sheet = $0 })) { ListSheetView(sheet: $0).environment(tasks) }
         .confirmationDialog(

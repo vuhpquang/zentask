@@ -59,6 +59,8 @@ struct ZenTaskApp: App {
                 .modifier(Themed())
         }
         .defaultSize(width: 1100, height: 720)
+        // No title bar: the traffic lights sit over the rail, like the window's own chrome (every area).
+        .windowStyle(.hiddenTitleBar)
         .commands { TaskCommands() }
 
         Settings {
@@ -104,7 +106,12 @@ struct MainWindow: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(TasksModel.self) private var tasks
     @Environment(FocusModel.self) private var focusModel
-    @State private var tab: RailTab = .tasks
+    @State private var tab: RailTab = {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["ZENTASK_OPEN_AREA"] == "calendar" { return .calendar }
+        #endif
+        return .tasks
+    }()
     @State private var searching = false
 
     var body: some View {
