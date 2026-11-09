@@ -242,6 +242,8 @@ fun TasksScreen(app: ZenApp, openSettings: () -> Unit, openSearch: () -> Unit) {
                         if (pick != ListPick.Matrix) IconButton(onClick = { sorting = true }) { Icon(Icons.AutoMirrored.Filled.Sort, "Group and sort") }
                         val project = (pick as? ListPick.InProject)?.let { p -> index?.projects?.firstOrNull { it.id == p.id } }
                         if (project != null && project.id != Project.INBOX_ID) ListMenu(app, project) { pickKey = ListPick.Smart(SmartList.INBOX).key }
+                        val filter = (pick as? ListPick.Custom)?.let { c -> index?.filters?.firstOrNull { it.id == c.id } }
+                        if (filter != null) FilterMenu(app, index, filter) { pickKey = ListPick.Smart(SmartList.TODAY).key }
                     },
                 )
             },
@@ -366,8 +368,13 @@ private fun ListDrawer(app: ZenApp, index: TaskIndex?, current: ListPick, onPick
                 val p = ListPick.InProject(project.id)
                 DrawerRow(project.name, Icons.AutoMirrored.Filled.List, ZenColors.hex(project.color), count(p), current == p) { onPick(p) }
             }
+            var newFilter by remember { mutableStateOf(false) }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f)) { DrawerHeading("Smart lists") }
+                IconButton(onClick = { newFilter = true }, modifier = Modifier.padding(end = 12.dp)) { Icon(Icons.Filled.Add, "New smart list") }
+            }
+            if (newFilter) FilterEditorDialog(app, index, null, close = { newFilter = false }) { onPick(ListPick.Custom(it.id)) }
             if (!index?.filters.isNullOrEmpty()) {
-                DrawerHeading("Smart lists")
                 for (f in index!!.filters) {
                     val p = ListPick.Custom(f.id)
                     DrawerRow((f.icon?.let { "$it " } ?: "") + f.name, Icons.Outlined.FilterAlt, null, count(p), current == p) { onPick(p) }

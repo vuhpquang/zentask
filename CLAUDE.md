@@ -180,6 +180,9 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
   rename / delete sections. An empty list still shows one column.
 - Focus (P9e): pick the task a session is for (`ZenApp.focusTaskId`, saved with the record), "Start focus" in a task's
   "…" menu (`ZenApp.focusOn` → `showFocus` switches the area), history by day with task names; long-press deletes.
+- Lists (P9f): group / sort sheet per list (synced `ViewOptions`), subtasks under their parent, custom smart lists
+  (`ui/FilterEditor.kt`: "+" next to Smart lists in the drawer, "…" on a smart list to edit / delete), quick date
+  picks (Today / Tomorrow / Next week) in the date dialog.
 - Compose gotcha: `Modifier.border(0.dp, …)` still draws a hairline; add the border conditionally.
 
 ## Gotchas

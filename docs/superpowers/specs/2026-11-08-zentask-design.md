@@ -215,8 +215,8 @@ Bố cục học theo TickTick (theo ảnh chủ dự án gửi), dark mode là 
 | **P5** Calendar | Google OAuth + iCal fallback ở server, Day/Week/Month view, task + event, kéo thả đặt giờ | Week view như ảnh mẫu |
 | **P6** Habit + Countdown | Habit list, check-in, streak/thống kê, countdown list, countdown trên calendar | Thay được TickTick hoàn toàn trên Mac |
 | **P7** Android + Galaxy Watch | Compose app, Wear app (today tasks, check habit) | P7a (2026-11-08): Android app — task list/drawer/quick add/detail, Calendar tuần, Habits, Countdown, Focus, Settings + sync. P7b: nhắc nhở (exact alarm, nút Done), widget Today, Focus chạy nền. P7c: Wear app độc lập (task hôm nay, check-in habit, tự sync) |
-| **P8** Notifications (Mac + Android) | Chủ dự án yêu cầu làm sớm (2026-11-09), thay cho Windows. Mục 15 | Nhắc task, habit, countdown và tóm tắt mỗi ngày trên Mac và Android, có trang cài đặt |
-| **P9** Android đủ như Mac | Tag/Won't do/vuốt trong task; sửa, xoá habit + countdown, thống kê habit; Calendar lưới Ngày/Tuần/Tháng + View Options; Matrix, Kanban; lịch sử Focus | — |
+| **P8** Notifications (Mac + Android) | Chủ dự án yêu cầu làm sớm (2026-11-09), thay cho Windows. Mục 15 | Xong 2026-11-09 (0.11.0): nhắc task, habit, countdown và tóm tắt mỗi ngày trên Mac và Android, có trang cài đặt |
+| **P9** Android đủ như Mac | Tag/Won't do/vuốt trong task; sửa, xoá habit + countdown, thống kê habit; Calendar lưới Ngày/Tuần/Tháng + View Options; Matrix, Kanban; lịch sử Focus; nhóm/sắp xếp, subtask trong list, smart list tự tạo | Xong 2026-11-09 (0.12.0) |
 | ~~Windows~~ | Bỏ (chủ dự án quyết định 2026-11-09) | — |
 
 ## 14. Để lại cho người build quyết định
