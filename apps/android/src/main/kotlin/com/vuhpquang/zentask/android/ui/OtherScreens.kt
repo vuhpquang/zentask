@@ -49,6 +49,7 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -177,13 +178,23 @@ private fun AgendaCard(app: ZenApp, e: CalendarEntry) {
 @Composable
 fun HabitsScreen(app: ZenApp) {
     val revision by app.revision.collectAsState()
-    val rows = loaded(revision) { app.core.habitRows().filter { !it.archived } } ?: emptyList()
+    var showArchived by remember { mutableStateOf(false) }
+    val all = loaded(revision) { app.core.habitRows() } ?: emptyList()
+    val rows = all.filter { it.archived == showArchived }
+    var openId by remember { mutableStateOf<String?>(null) }
+    all.firstOrNull { it.habit.id == openId }?.let { row -> HabitDetailSheet(app, row) { openId = null } }
     val week = loaded(revision) { app.core.habitWeek() } ?: emptyList()
     val today = app.core.todayStamp()
     var creating by remember { mutableStateOf(false) }
-    if (creating) NewHabitDialog(app) { creating = false }
+    if (creating) HabitEditorDialog(app, null) { creating = false }
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Habits") }) },
+        topBar = {
+            TopAppBar(title = { Text(if (showArchived) "Archived habits" else "Habits") }, actions = {
+                if (showArchived || all.any { it.archived }) {
+                    TextButton(onClick = { showArchived = !showArchived }) { Text(if (showArchived) "Active" else "Archived") }
+                }
+            })
+        },
         floatingActionButton = { FloatingActionButton(onClick = { creating = true }) { Icon(Icons.Filled.Add, "New habit") } },
     ) { padding ->
         LazyColumn(Modifier.padding(padding).padding(horizontal = 16.dp)) {
@@ -200,10 +211,10 @@ fun HabitsScreen(app: ZenApp) {
                     }
                 }
             }
-            if (rows.isEmpty()) item { Text("No habits yet. Habits from TickTick and the Mac app show up here.", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 24.dp)) }
+            if (rows.isEmpty()) item { Text(if (showArchived) "No archived habits" else "No habits yet. Tap + to add one; habits from TickTick and the Mac app show up here too.", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 24.dp)) }
             items(rows, key = { it.habit.id }) { row ->
                 val color = ZenColors.hex(row.habit.color) ?: MaterialTheme.colorScheme.primary
-                Card(Modifier.fillMaxWidth().padding(vertical = 6.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
+                Card(onClick = { openId = row.habit.id }, modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
                     Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                         Box(Modifier.size(40.dp).clip(CircleShape).background(color.copy(alpha = 0.2f)), contentAlignment = Alignment.Center) {
                             Text(row.habit.icon?.takeIf { it.length <= 2 } ?: row.habit.name.take(1), color = color, fontWeight = FontWeight.Bold)
@@ -213,7 +224,7 @@ fun HabitsScreen(app: ZenApp) {
                             Text(row.habit.name, fontWeight = FontWeight.SemiBold)
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(Icons.Filled.LocalFireDepartment, null, tint = ZenColors.medium, modifier = Modifier.size(14.dp))
-                                Text(" ${row.stats.currentStreak} ${row.stats.unit} · ${row.schedule}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(" ${row.stats.currentStreak} ${if (row.stats.currentStreak == 1) row.stats.unit.removeSuffix("s") else row.stats.unit} · ${row.schedule}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             if (row.habit.type == Habit.TYPE_REAL) {
                                 Text("${fmt(row.todayValue)} / ${fmt(row.habit.goal)} ${row.habit.unit}", style = MaterialTheme.typography.labelMedium)
@@ -253,15 +264,25 @@ private fun Ring(progress: Float, modifier: Modifier, color: Color = MaterialThe
 @Composable
 fun CountdownScreen(app: ZenApp) {
     val revision by app.revision.collectAsState()
-    val cards = loaded(revision) { app.core.countdownCards().filter { it.countdown.archivedAt == null } } ?: return
+    var showArchived by remember { mutableStateOf(false) }
+    val allCards = loaded(revision) { app.core.countdownCards() } ?: return
+    val cards = allCards.filter { (it.countdown.archivedAt != null) == showArchived }
     var creating by remember { mutableStateOf(false) }
-    if (creating) NewCountdownDialog(app) { creating = false }
+    var acting by remember { mutableStateOf<com.vuhpquang.zentask.model.Countdown?>(null) }
+    if (creating) CountdownEditorDialog(app, null) { creating = false }
+    acting?.let { c -> CountdownActionsDialog(app, c) { acting = null } }
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Countdown") }) },
+        topBar = {
+            TopAppBar(title = { Text(if (showArchived) "Archived countdowns" else "Countdown") }, actions = {
+                if (showArchived || allCards.any { it.countdown.archivedAt != null }) {
+                    TextButton(onClick = { showArchived = !showArchived }) { Text(if (showArchived) "Active" else "Archived") }
+                }
+            })
+        },
         floatingActionButton = { FloatingActionButton(onClick = { creating = true }) { Icon(Icons.Filled.Add, "New countdown") } },
     ) { padding ->
         if (cards.isEmpty()) {
-            Box(Modifier.padding(padding).fillMaxSize(), contentAlignment = Alignment.Center) { Text("No countdowns yet", color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            Box(Modifier.padding(padding).fillMaxSize(), contentAlignment = Alignment.Center) { Text(if (showArchived) "No archived countdowns" else "No countdowns yet", color = MaterialTheme.colorScheme.onSurfaceVariant) }
             return@Scaffold
         }
         LazyVerticalGrid(GridCells.Adaptive(160.dp), Modifier.padding(padding).padding(12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -269,7 +290,7 @@ fun CountdownScreen(app: ZenApp) {
                 val color = ZenColors.hex(card.countdown.color) ?: MaterialTheme.colorScheme.primary
                 val date = Instant.ofEpochMilli(card.dateMillis).atZone(zone).toLocalDate()
                 Column(
-                    Modifier.aspectRatio(1.1f).clip(RoundedCornerShape(16.dp))
+                    Modifier.aspectRatio(1.1f).clip(RoundedCornerShape(16.dp)).clickable { acting = card.countdown }
                         .background(Brush.verticalGradient(listOf(color, color.copy(alpha = 0.75f).compositeOver(Color.Black)))).padding(14.dp),
                     verticalArrangement = Arrangement.SpaceBetween,
                 ) {
@@ -277,7 +298,13 @@ fun CountdownScreen(app: ZenApp) {
                     Row(verticalAlignment = Alignment.Bottom) {
                         if (card.daysLeft != 0) Text("${kotlin.math.abs(card.daysLeft)}", color = Color.White, fontSize = 40.sp, fontWeight = FontWeight.Bold)
                         Text(
-                            when { card.daysLeft == 0 -> "Today"; card.daysLeft > 0 -> " days left"; else -> " days ago" },
+                            when {
+                                card.daysLeft == 0 -> "Today"
+                                card.daysLeft == 1 -> " day left"
+                                card.daysLeft == -1 -> " day ago"
+                                card.daysLeft > 0 -> " days left"
+                                else -> " days ago"
+                            },
                             color = Color.White, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(bottom = 8.dp),
                             fontSize = if (card.daysLeft == 0) 32.sp else 14.sp,
                         )
@@ -490,105 +517,3 @@ private fun <T> loaded(vararg keys: Any?, load: () -> T): T? =
 // MARK: New habit / countdown
 
 /** A habit: yes/no or an amount a day (goal + unit), every day or on weekdays. Details are edited on the Mac. */
-@Composable
-private fun NewHabitDialog(app: ZenApp, close: () -> Unit) {
-    var name by remember { mutableStateOf("") }
-    var amount by remember { mutableStateOf(false) }
-    var goal by remember { mutableStateOf("8") }
-    var unit by remember { mutableStateOf("") }
-    var weekdays by remember { mutableStateOf(false) }
-    val goalValue = goal.replace(',', '.').toDoubleOrNull()
-    androidx.compose.material3.AlertDialog(
-        onDismissRequest = close,
-        title = { Text("New habit") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                androidx.compose.material3.OutlinedTextField(name, { name = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                    SegmentedButton(selected = !amount, onClick = { amount = false }, shape = SegmentedButtonDefaults.itemShape(0, 2)) { Text("Yes / no") }
-                    SegmentedButton(selected = amount, onClick = { amount = true }, shape = SegmentedButtonDefaults.itemShape(1, 2)) { Text("Amount") }
-                }
-                if (amount) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        androidx.compose.material3.OutlinedTextField(goal, { goal = it }, label = { Text("Goal a day") }, singleLine = true, modifier = Modifier.weight(1f),
-                            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal))
-                        androidx.compose.material3.OutlinedTextField(unit, { unit = it }, label = { Text("Unit") }, singleLine = true, modifier = Modifier.weight(1f))
-                    }
-                }
-                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
-                    SegmentedButton(selected = !weekdays, onClick = { weekdays = false }, shape = SegmentedButtonDefaults.itemShape(0, 2)) { Text("Every day") }
-                    SegmentedButton(selected = weekdays, onClick = { weekdays = true }, shape = SegmentedButtonDefaults.itemShape(1, 2)) { Text("Weekdays") }
-                }
-            }
-        },
-        confirmButton = {
-            androidx.compose.material3.TextButton(
-                enabled = name.isNotBlank() && (!amount || (goalValue != null && goalValue > 0)),
-                onClick = {
-                    app.core.habitActions.create(
-                        name = name, icon = null, color = "#5B5FE9",
-                        type = if (amount) com.vuhpquang.zentask.model.Habit.TYPE_REAL else com.vuhpquang.zentask.model.Habit.TYPE_BOOLEAN,
-                        goal = if (amount) goalValue ?: 1.0 else 1.0, step = 1.0, unit = if (amount) unit.trim() else "",
-                        repeatRule = if (weekdays) "RRULE:FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR" else "RRULE:FREQ=DAILY;INTERVAL=1",
-                    )
-                    close()
-                },
-            ) { Text("Create") }
-        },
-        dismissButton = { androidx.compose.material3.TextButton(onClick = close) { Text("Cancel") } },
-    )
-}
-
-/** A countdown to a date; birthdays and anniversaries repeat every year. Shown in the calendar. */
-@Composable
-private fun NewCountdownDialog(app: ZenApp, close: () -> Unit) {
-    var name by remember { mutableStateOf("") }
-    var type by remember { mutableStateOf("COUNTDOWN") }
-    var date by remember { mutableStateOf(LocalDate.now(zone).plusDays(7)) }
-    var pickingDate by remember { mutableStateOf(false) }
-    val types = listOf("COUNTDOWN" to "Countdown", "BIRTHDAY" to "Birthday", "ANNIVERSARY" to "Anniversary")
-    androidx.compose.material3.AlertDialog(
-        onDismissRequest = close,
-        title = { Text("New countdown") },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                androidx.compose.material3.OutlinedTextField(name, { name = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
-                androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    for ((t, label) in types) {
-                        androidx.compose.material3.FilterChip(selected = type == t, onClick = { type = t }, label = { Text(label) })
-                    }
-                }
-                androidx.compose.material3.OutlinedButton(onClick = { pickingDate = true }, modifier = Modifier.fillMaxWidth()) {
-                    Text(date.format(java.time.format.DateTimeFormatter.ofPattern("EEE, d MMM yyyy")))
-                }
-            }
-        },
-        confirmButton = {
-            androidx.compose.material3.TextButton(enabled = name.isNotBlank(), onClick = {
-                val stamp = date.year * 10_000 + date.monthValue * 100 + date.dayOfMonth
-                app.core.countdownActions.create(
-                    name = name, date = stamp, type = type, repeat = if (type == "COUNTDOWN") "none" else "yearly",
-                    color = if (type == "BIRTHDAY") "#EC4899" else "#5B5FE9", icon = null, note = "", showInCalendar = true,
-                )
-                close()
-            }) { Text("Create") }
-        },
-        dismissButton = { androidx.compose.material3.TextButton(onClick = close) { Text("Cancel") } },
-    )
-    if (pickingDate) {
-        val state = androidx.compose.material3.rememberDatePickerState(
-            initialSelectedDateMillis = date.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli(),
-        )
-        androidx.compose.material3.DatePickerDialog(
-            onDismissRequest = { pickingDate = false },
-            confirmButton = {
-                androidx.compose.material3.TextButton(onClick = {
-                    state.selectedDateMillis?.let { date = Instant.ofEpochMilli(it).atZone(java.time.ZoneOffset.UTC).toLocalDate() }
-                    pickingDate = false
-                }) { Text("OK") }
-            },
-            dismissButton = { androidx.compose.material3.TextButton(onClick = { pickingDate = false }) { Text("Cancel") } },
-        ) { androidx.compose.material3.DatePicker(state) }
-    }
-}

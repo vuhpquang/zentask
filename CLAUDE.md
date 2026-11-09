@@ -167,6 +167,10 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
 - Tasks (P9a): swipe right = complete / reopen, left = Trash with an Undo snackbar (`ui/TaskExtras.kt`
   `SwipeTaskRow`; the snackbar runs in the list's scope because the row leaves the list); tag chips + tag dialog
   and the "…" menu (pin, duplicate, Won't do / Reopen, Trash; Restore / Delete forever in Trash) on task detail.
+- Habits & countdowns (P9b, `ui/HabitEditors.kt`): one editor for new/edit habit (colour, yes-no/amount, weekdays,
+  reminder times; rules it can't show are kept unless days are picked), a detail sheet (streaks, month grid to
+  check in past days, Edit / Archive / Delete), countdown editor + Edit / Archive / Delete, "Archived" toggles.
+- Compose gotcha: `Modifier.border(0.dp, …)` still draws a hairline; add the border conditionally.
 
 ## Gotchas
 
