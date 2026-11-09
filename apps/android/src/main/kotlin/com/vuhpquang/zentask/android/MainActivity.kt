@@ -99,6 +99,10 @@ private fun ZenTaskRoot(zen: ZenApp) {
     androidx.compose.runtime.LaunchedEffect(openTask) {
         openTask?.let { page = "task:$it"; zen.openTask.value = null }
     }
+    val showFocus by zen.showFocus.collectAsState()
+    androidx.compose.runtime.LaunchedEffect(showFocus) {
+        if (showFocus) { page = null; area = Area.Focus; zen.showFocus.value = false }
+    }
     when {
         page == "settings" -> { SettingsScreen(zen) { page = null }; return }
         page == "search" -> { SearchScreen(zen, open = { page = "task:$it" }) { page = null }; return }

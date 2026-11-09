@@ -268,6 +268,7 @@ fun FocusScreen(app: ZenApp) {
                     val shown = if (stopwatch) elapsed else (length - elapsed).coerceAtLeast(0)
                     Text("%02d:%02d".format(shown / 60, shown % 60), fontSize = 52.sp, fontWeight = FontWeight.Light)
                 }
+                FocusTaskPicker(app)
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     if (!running) {
                         Button(onClick = { now = System.currentTimeMillis(); app.startFocus() }) { Text("Start") }
@@ -277,23 +278,24 @@ fun FocusScreen(app: ZenApp) {
                 }
                 Row(Modifier.fillMaxWidth().padding(top = 24.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     StatCard("Today's pomos", "${stats.todayPomos}", Modifier.weight(1f))
-                    StatCard("Today's focus", "${stats.todayMinutes}m", Modifier.weight(1f))
+                    StatCard("Today's focus", durationText(stats.todayMinutes), Modifier.weight(1f))
                 }
                 Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     StatCard("Total pomos", "${stats.totalPomos}", Modifier.weight(1f))
-                    StatCard("Total focus", "${stats.totalMinutes / 60}h ${stats.totalMinutes % 60}m", Modifier.weight(1f))
+                    StatCard("Total focus", durationText(stats.totalMinutes), Modifier.weight(1f))
                 }
             }
             for (d in stats.days.take(14)) {
                 item(key = d.date.toString()) {
-                    Text(d.date.toString(), style = MaterialTheme.typography.titleSmall, modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 4.dp))
-                }
-                items(d.records, key = { it.id }) { r ->
-                    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                        Text("${hm(r.start)} – ${hm(r.end)}", Modifier.weight(1f))
-                        Text("${r.minutes}m", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    val date = java.time.LocalDate.of(d.date.year, d.date.month.ordinal + 1, d.date.day)
+                    val today = LocalDate.now(zone)
+                    Row(Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 4.dp)) {
+                        Text(when (date) { today -> "Today"; today.minusDays(1) -> "Yesterday"; else -> date.format(DateTimeFormatter.ofPattern("EEE, d MMM")) },
+                            style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+                        Text(durationText(d.minutes), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
+                items(d.records, key = { it.id }) { r -> FocusRecordRow(app, r) }
             }
         }
     }
@@ -439,3 +441,10 @@ internal fun <T> loaded(vararg keys: Any?, load: () -> T): T? =
 // MARK: New habit / countdown
 
 /** A habit: yes/no or an amount a day (goal + unit), every day or on weekdays. Details are edited on the Mac. */
+
+/** 45m, 1h, 2h 5m. */
+fun durationText(minutes: Int): String = when {
+    minutes < 60 -> "${minutes}m"
+    minutes % 60 == 0 -> "${minutes / 60}h"
+    else -> "${minutes / 60}h ${minutes % 60}m"
+}

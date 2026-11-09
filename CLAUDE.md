@@ -178,6 +178,8 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
   another quadrant = set priority); a list's "…" → "View as kanban" (`listActions.setViewMode`, synced with the Mac):
   columns per section, add a task at the bottom of a column, long-press to move it to another section, add /
   rename / delete sections. An empty list still shows one column.
+- Focus (P9e): pick the task a session is for (`ZenApp.focusTaskId`, saved with the record), "Start focus" in a task's
+  "…" menu (`ZenApp.focusOn` → `showFocus` switches the area), history by day with task names; long-press deletes.
 - Compose gotcha: `Modifier.border(0.dp, …)` still draws a hairline; add the border conditionally.
 
 ## Gotchas

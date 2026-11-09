@@ -30,6 +30,8 @@ class ZenApp(private val context: Context) {
 
     /** A task to open, set when a reminder notification is tapped. */
     val openTask = MutableStateFlow<String?>(null)
+    /** Set to show the Focus area (from a task's "Start focus"). */
+    val showFocus = MutableStateFlow(false)
     private val prefs = context.getSharedPreferences("zentask", Context.MODE_PRIVATE)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main + CoroutineExceptionHandler { _, e -> Log.e(TAG, "Unexpected error", e) })
 
@@ -55,6 +57,21 @@ class ZenApp(private val context: Context) {
     private val _focusStartedAt = MutableStateFlow(prefs.getLong("focus.startedAt", 0L))
     val focusStartedAt: StateFlow<Long> = _focusStartedAt.asStateFlow()
     private val _focusStopwatch = MutableStateFlow(prefs.getBoolean("focus.stopwatch", false))
+    /** The task the session is for (saved with the record), or null. */
+    private val _focusTaskId = MutableStateFlow(prefs.getString("focus.taskId", null))
+    val focusTaskId: StateFlow<String?> = _focusTaskId.asStateFlow()
+
+    fun setFocusTask(id: String?) {
+        _focusTaskId.value = id
+        prefs.edit().putString("focus.taskId", id).apply()
+    }
+
+    /** "Start focus" on a task: picks it, starts a session if none is running and shows the Focus area. */
+    fun focusOn(taskId: String) {
+        setFocusTask(taskId)
+        if (_focusStartedAt.value == 0L) startFocus()
+        showFocus.value = true
+    }
     val focusStopwatch: StateFlow<Boolean> = _focusStopwatch.asStateFlow()
     val pomoMillis: Long = com.vuhpquang.zentask.focus.PomodoroPlan().focusMinutes * 60_000L
 
@@ -75,7 +92,7 @@ class ZenApp(private val context: Context) {
         val start = _focusStartedAt.value
         if (start == 0L) return
         if (_focusStopwatch.value) {
-            core.focusActions.recordOrNull(start, System.currentTimeMillis(), com.vuhpquang.zentask.model.FocusRecord.KIND_STOPWATCH, null, "")
+            core.focusActions.recordOrNull(start, System.currentTimeMillis(), com.vuhpquang.zentask.model.FocusRecord.KIND_STOPWATCH, _focusTaskId.value, "")
         }
         reminders.cancelFocusEnd()
         setFocusStarted(0L)
@@ -85,7 +102,7 @@ class ZenApp(private val context: Context) {
     fun finishPomoIfDue(): Boolean {
         val start = _focusStartedAt.value
         if (start == 0L || _focusStopwatch.value || System.currentTimeMillis() < start + pomoMillis) return false
-        core.focusActions.record(start, start + pomoMillis, com.vuhpquang.zentask.model.FocusRecord.KIND_POMO, null, "")
+        core.focusActions.record(start, start + pomoMillis, com.vuhpquang.zentask.model.FocusRecord.KIND_POMO, _focusTaskId.value, "")
         setFocusStarted(0L)
         return true
     }

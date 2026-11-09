@@ -1,6 +1,10 @@
 package com.vuhpquang.zentask.android.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,6 +28,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material.icons.filled.Tag
+import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Checkbox
@@ -177,6 +182,10 @@ fun TaskMenu(app: ZenApp, task: Task, close: () -> Unit) {
                     if (task.pinnedAt != null) app.core.actions.unpin(task.id) else app.core.actions.pin(task.id)
                     open = false
                 })
+                if (!task.isDone && task.status != TaskStatus.WONT_DO) {
+                    DropdownMenuItem(text = { Text("Start focus") }, leadingIcon = { Icon(Icons.Filled.Timer, null) },
+                        onClick = { open = false; app.focusOn(task.id) })
+                }
                 DropdownMenuItem(text = { Text("Duplicate") }, leadingIcon = { Icon(Icons.Filled.ContentCopy, null) },
                     onClick = { app.core.actions.duplicate(task.id); open = false })
                 val wontDo = task.status == TaskStatus.WONT_DO
@@ -197,5 +206,52 @@ fun TaskMenu(app: ZenApp, task: Task, close: () -> Unit) {
             onConfirm = { runCatching { app.core.actions.deleteForever(task.id) }; confirmDelete = false; close() },
             onDismiss = { confirmDelete = false },
         )
+    }
+}
+
+/** "Focus on": the task the next session is saved with. */
+@Composable
+fun FocusTaskPicker(app: ZenApp) {
+    val taskId by app.focusTaskId.collectAsState()
+    val index by app.index.collectAsState()
+    var open by remember { mutableStateOf(false) }
+    val task = taskId?.let { index?.task(it) }
+    Box(Modifier.padding(bottom = 8.dp)) {
+        AssistChip(onClick = { open = true }, label = { Text(task?.title?.ifBlank { "Untitled" } ?: "Focus on a task…", maxLines = 1) },
+            leadingIcon = { Icon(Icons.Filled.Check, null) })
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            DropdownMenuItem(text = { Text("No task") }, onClick = { app.setFocusTask(null); open = false })
+            val today = index?.let { app.core.sections(it, com.vuhpquang.zentask.tasks.TaskFilter.Smart(com.vuhpquang.zentask.tasks.SmartList.NEXT_7_DAYS), app.core.viewOptions(com.vuhpquang.zentask.tasks.TaskFilter.Smart(com.vuhpquang.zentask.tasks.SmartList.NEXT_7_DAYS))) }
+                .orEmpty().flatMap { it.rows }.map { it.task }.filter { it.status == TaskStatus.OPEN }.take(30)
+            for (t in today) DropdownMenuItem(text = { Text(t.title.ifBlank { "Untitled" }, maxLines = 1) }, onClick = { app.setFocusTask(t.id); open = false })
+        }
+    }
+}
+
+/** One finished session: time, length, its task; long-press to delete. */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+@Composable
+fun FocusRecordRow(app: ZenApp, r: com.vuhpquang.zentask.model.FocusRecord) {
+    val index by app.index.collectAsState()
+    var confirm by remember { mutableStateOf(false) }
+    val fmt = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
+    fun t(ms: Long) = java.time.Instant.ofEpochMilli(ms).atZone(java.time.ZoneId.systemDefault()).toLocalTime().format(fmt)
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
+            .combinedClickable(onClick = { r.taskId?.let { app.openTask.value = it } }, onLongClick = { confirm = true })
+            .padding(vertical = 8.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(if (r.kind == com.vuhpquang.zentask.model.FocusRecord.KIND_STOPWATCH) Icons.Filled.Timer else Icons.Filled.Check, null,
+            tint = ZenColors.violet, modifier = Modifier.size(18.dp))
+        Column(Modifier.weight(1f).padding(start = 10.dp)) {
+            Text("${t(r.start)} – ${t(r.end)}")
+            r.taskId?.let { id -> index?.task(id)?.let { Text(it.title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1) } }
+        }
+        Text("${r.minutes}m", color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+    if (confirm) {
+        Confirm("Delete this session?", "It's removed from your focus stats on every device.", "Delete",
+            onConfirm = { app.core.focusActions.delete(r.id); confirm = false }, onDismiss = { confirm = false })
     }
 }
