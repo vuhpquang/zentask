@@ -443,10 +443,19 @@ private fun TaskList(app: ZenApp, index: TaskIndex?, pick: ListPick, snackbar: a
             if (!isFolded || section.title.isEmpty()) {
                 items(section.rows, key = { section.key + ":" + it.task.id }) { row ->
                     // Trash has its own Restore / Delete forever in the task's menu.
-                    SwipeTaskRow(app, row.task, enabled = row.task.trashedAt == null, trashed = { offerUndoTrash(app, it, snackbar, scope) }) {
-                        TaskRowItem(app, index, row, showList = pick !is ListPick.InProject, barColor = ZenColors.hex(section.color), showDetails = !viewOptions.hideDetails) { open(row.task.id) }
+                    Column {
+                        SwipeTaskRow(app, row.task, enabled = row.task.trashedAt == null, trashed = { offerUndoTrash(app, it, snackbar, scope) }) {
+                            TaskRowItem(app, index, row, showList = pick !is ListPick.InProject, barColor = ZenColors.hex(section.color), showDetails = !viewOptions.hideDetails) { open(row.task.id) }
+                        }
+                        // Subtasks under their parent, indented like on the Mac; each has its own check and swipe.
+                        for (sub in row.subtasks) {
+                            SwipeTaskRow(app, sub, enabled = sub.trashedAt == null, trashed = { offerUndoTrash(app, it, snackbar, scope) }) {
+                                SubtaskRow(app, sub) { open(sub.id) }
+                            }
+                        }
                     }
                 }
+
             }
         }
         item { Spacer(Modifier.height(96.dp)) }
@@ -818,3 +827,16 @@ fun Confirm(title: String, text: String, confirm: String, onConfirm: () -> Unit,
 
 @Suppress("unused")
 private val circle = CircleShape
+
+@Composable
+private fun SubtaskRow(app: ZenApp, task: Task, open: () -> Unit) {
+    Row(Modifier.fillMaxWidth().clickable(onClick = open).padding(start = 48.dp, end = 16.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        CheckCircleButton(task) { toggleComplete(app, task) }
+        Spacer(Modifier.width(12.dp))
+        Text(
+            task.title.ifEmpty { "Untitled" }, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            textDecoration = if (task.isDone) TextDecoration.LineThrough else null,
+            color = if (task.isDone) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
+        )
+    }
+}
