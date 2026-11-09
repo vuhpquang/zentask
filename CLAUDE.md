@@ -174,6 +174,10 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
   Settings → Calendar, tap an empty slot = new 30-min task), Month grid (tap a day = Day view), List (2 weeks),
   swipe left/right to page, View options sheet writing the synced `CalendarViewOptions`. Tapping a task opens it via
   `ZenApp.openTask`.
+- Boards (P9d, `ui/Boards.kt`): "Eisenhower Matrix" in the drawer (`ListPick.Matrix`; long-press a task to move it to
+  another quadrant = set priority); a list's "…" → "View as kanban" (`listActions.setViewMode`, synced with the Mac):
+  columns per section, add a task at the bottom of a column, long-press to move it to another section, add /
+  rename / delete sections. An empty list still shows one column.
 - Compose gotcha: `Modifier.border(0.dp, …)` still draws a hairline; add the border conditionally.
 
 ## Gotchas

@@ -50,6 +50,7 @@ import androidx.compose.material.icons.outlined.Circle
 import androidx.compose.material.icons.outlined.FilterAlt
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Repeat
@@ -125,6 +126,8 @@ sealed interface ListPick {
     data class InProject(val id: String) : ListPick
     data class WithTag(val name: String) : ListPick
     data class Custom(val id: String) : ListPick
+    /** The Eisenhower Matrix (open tasks by priority). */
+    data object Matrix : ListPick
 
     val filter: TaskFilter
         get() = when (this) {
@@ -132,6 +135,7 @@ sealed interface ListPick {
             is InProject -> TaskFilter.InProject(id)
             is WithTag -> TaskFilter.WithTag(name)
             is Custom -> TaskFilter.Custom(id)
+            Matrix -> TaskFilter.Smart(SmartList.ALL)
         }
 
     val key: String
@@ -140,6 +144,7 @@ sealed interface ListPick {
             is InProject -> "project:$id"
             is WithTag -> "tag:$name"
             is Custom -> "custom:$id"
+            Matrix -> "matrix:"
         }
 
     companion object {
@@ -149,6 +154,7 @@ sealed interface ListPick {
                 "project" -> InProject(value)
                 "tag" -> WithTag(value)
                 "custom" -> Custom(value)
+                "matrix" -> Matrix
                 else -> Smart(SmartList.entries.firstOrNull { it.name == value } ?: SmartList.TODAY)
             }
         }
@@ -238,13 +244,19 @@ fun TasksScreen(app: ZenApp, openSettings: () -> Unit, openSearch: () -> Unit) {
             },
             snackbarHost = { androidx.compose.material3.SnackbarHost(snackbar) },
             floatingActionButton = {
-                if (pick !is ListPick.Smart || pick.list !in setOf(SmartList.COMPLETED, SmartList.WONT_DO, SmartList.TRASH)) {
+                val kanban = (pick as? ListPick.InProject)?.let { p -> index?.projects?.firstOrNull { it.id == p.id }?.viewMode == "kanban" } == true
+                if (pick != ListPick.Matrix && !kanban && (pick !is ListPick.Smart || pick.list !in setOf(SmartList.COMPLETED, SmartList.WONT_DO, SmartList.TRASH))) {
                     FloatingActionButton(onClick = { adding = true }) { Icon(Icons.Filled.Add, "Add task") }
                 }
             },
         ) { padding ->
             Box(Modifier.padding(padding).fillMaxSize()) {
-                TaskList(app, index, pick, snackbar) { openTaskId = it }
+                val project = (pick as? ListPick.InProject)?.let { p -> index?.projects?.firstOrNull { it.id == p.id } }
+                when {
+                    pick == ListPick.Matrix -> MatrixBoard(app, index) { openTaskId = it }
+                    project != null && project.viewMode == "kanban" -> KanbanBoard(app, index, project) { openTaskId = it }
+                    else -> TaskList(app, index, pick, snackbar) { openTaskId = it }
+                }
             }
         }
     }
@@ -263,6 +275,11 @@ private fun ListMenu(app: ZenApp, project: Project, left: () -> Unit) {
         IconButton(onClick = { open = true }) { Icon(Icons.Filled.MoreVert, "List options") }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             DropdownMenuItem(text = { Text("Edit list") }, onClick = { open = false; editing = true })
+            val kanban = project.viewMode == "kanban"
+            DropdownMenuItem(text = { Text(if (kanban) "View as list" else "View as kanban") }, onClick = {
+                open = false
+                app.core.listActions.setViewMode(project.id, if (kanban) "list" else "kanban")
+            })
             DropdownMenuItem(text = { Text("Move to Trash") }, onClick = { open = false; trashing = true })
         }
     }
@@ -315,6 +332,7 @@ private fun title(index: TaskIndex?, pick: ListPick): String = when (pick) {
     is ListPick.InProject -> listName(index, pick.id)
     is ListPick.WithTag -> "#" + pick.name
     is ListPick.Custom -> index?.filters?.firstOrNull { it.id == pick.id }?.name ?: "Smart list"
+    ListPick.Matrix -> "Eisenhower Matrix"
 }
 
 @Composable
@@ -328,6 +346,7 @@ private fun ListDrawer(app: ZenApp, index: TaskIndex?, current: ListPick, onPick
                 val p = ListPick.Smart(list)
                 DrawerRow(smartTitle(list), smartIcon(list), null, count(p), current == p) { onPick(p) }
             }
+            DrawerRow("Eisenhower Matrix", Icons.Filled.GridView, null, 0, current == ListPick.Matrix) { onPick(ListPick.Matrix) }
             var creating by remember { mutableStateOf(false) }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(Modifier.weight(1f)) { DrawerHeading("Lists") }
