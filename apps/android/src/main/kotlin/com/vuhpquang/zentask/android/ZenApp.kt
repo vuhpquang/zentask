@@ -26,6 +26,7 @@ import kotlinx.coroutines.launch
 class ZenApp(private val context: Context) {
     val core: ZenTaskCore = ZenTaskCore.open("zentask.db")
     private val reminders = Reminders(context)
+    val updater = AppUpdater(context)
 
     /** A task to open, set when a reminder notification is tapped. */
     val openTask = MutableStateFlow<String?>(null)

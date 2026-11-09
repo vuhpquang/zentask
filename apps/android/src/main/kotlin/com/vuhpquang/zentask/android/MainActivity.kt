@@ -5,6 +5,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
@@ -52,6 +54,15 @@ class MainActivity : ComponentActivity() {
         setContent {
             val mode by zen.themeMode.collectAsState()
             ZenTaskTheme(mode) { ZenTaskRoot(zen) }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        val updater = (application as ZenTaskApplication).zen.updater
+        lifecycleScope.launch {
+            updater.resumeAfterPermission()
+            updater.checkIfDue()
         }
     }
 

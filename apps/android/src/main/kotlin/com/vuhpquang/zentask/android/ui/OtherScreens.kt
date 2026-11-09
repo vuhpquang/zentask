@@ -6,6 +6,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -375,7 +376,7 @@ fun SettingsScreen(app: ZenApp, close: () -> Unit) {
     Scaffold(topBar = {
         TopAppBar(title = { Text("Settings") }, navigationIcon = { IconButton(onClick = close) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } })
     }) { padding ->
-        Column(Modifier.padding(padding).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(Modifier.padding(padding).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Account", style = MaterialTheme.typography.titleMedium)
             if (signedIn) {
                 Text(syncText(status), color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -399,6 +400,41 @@ fun SettingsScreen(app: ZenApp, close: () -> Unit) {
                     FilterChip(selected = mode == key, onClick = { app.setThemeMode(key) }, label = { Text(label) })
                 }
             }
+            UpdatesSection(app.updater)
+        }
+    }
+}
+
+/** Settings → Updates: version, check, download and install the newer APK. */
+@Composable
+private fun UpdatesSection(updater: com.vuhpquang.zentask.android.AppUpdater) {
+    val state by updater.state.collectAsState()
+    val scope = rememberCoroutineScope()
+    Text("Updates", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 12.dp))
+    Text("ZenTask ${updater.currentVersion}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+    when (val s = state) {
+        is com.vuhpquang.zentask.android.AppUpdater.State.Available -> {
+            Text("Version ${s.update.version} is available", color = MaterialTheme.colorScheme.primary)
+            Button(onClick = { scope.launch { updater.install() } }) { Text("Update now") }
+        }
+        is com.vuhpquang.zentask.android.AppUpdater.State.Downloading -> {
+            Text("Downloading… ${s.percent}%", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            androidx.compose.material3.LinearProgressIndicator(progress = { s.percent / 100f }, modifier = Modifier.fillMaxWidth())
+        }
+        com.vuhpquang.zentask.android.AppUpdater.State.Installing ->
+            Text("Installing… ZenTask closes when it's done; open it again from the notification.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        com.vuhpquang.zentask.android.AppUpdater.State.NeedsPermission -> {
+            Text("Allow ZenTask to install apps in the screen that opened, then come back.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Button(onClick = { scope.launch { updater.install() } }) { Text("Update now") }
+        }
+        com.vuhpquang.zentask.android.AppUpdater.State.Checking -> Text("Checking…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        else -> {
+            when (s) {
+                com.vuhpquang.zentask.android.AppUpdater.State.UpToDate -> Text("ZenTask is up to date", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                is com.vuhpquang.zentask.android.AppUpdater.State.Failed -> Text(s.message, color = MaterialTheme.colorScheme.error)
+                else -> {}
+            }
+            OutlinedButton(onClick = { scope.launch { updater.check() } }) { Text("Check for updates") }
         }
     }
 }

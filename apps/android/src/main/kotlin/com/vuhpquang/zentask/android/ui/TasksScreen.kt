@@ -359,6 +359,13 @@ private fun ListDrawer(app: ZenApp, index: TaskIndex?, current: ListPick, onPick
                 val p = ListPick.Smart(list)
                 DrawerRow(smartTitle(list), smartIcon(list), null, 0, current == p) { onPick(p) }
             }
+            val update by app.updater.state.collectAsState()
+            (update as? com.vuhpquang.zentask.android.AppUpdater.State.Available)?.let { u ->
+                NavigationDrawerItem(
+                    label = { Text("Update to ${u.update.version}", color = MaterialTheme.colorScheme.primary) },
+                    selected = false, onClick = openSettings, modifier = Modifier.padding(horizontal = 12.dp),
+                )
+            }
             NavigationDrawerItem(label = { Text("Settings") }, selected = false, onClick = openSettings, modifier = Modifier.padding(horizontal = 12.dp))
         }
     }

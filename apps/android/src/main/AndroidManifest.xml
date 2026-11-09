@@ -5,6 +5,8 @@
     <!-- Task reminders fire at the minute set, like a calendar app's. -->
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- In-app update: installs the newer APK from the GitHub release. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <application
         android:name=".ZenTaskApplication"
@@ -30,6 +32,7 @@
             <meta-data android:name="android.appwidget.provider" android:resource="@xml/today_widget_info" />
         </receiver>
         <receiver android:name=".ReminderReceiver" android:exported="false" />
+        <receiver android:name=".UpdateInstallReceiver" android:exported="false" />
         <receiver android:name=".BootReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

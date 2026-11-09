@@ -183,9 +183,32 @@ class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED && intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
         val zen = (context.applicationContext as ZenTaskApplication).zen
+        if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) showUpdated(context, zen.updater.currentVersion)
         val result = goAsync()
         CoroutineScope(Dispatchers.Default).launch {
             try { zen.rescheduleReminders(force = true) } finally { result.finish() }
         }
+    }
+
+    /** An in-app update quits the app; say it worked and offer to open it again. */
+    private fun showUpdated(context: Context, version: String) {
+        val nm = NotificationManagerCompat.from(context)
+        if (!nm.areNotificationsEnabled()) return
+        val open = PendingIntent.getActivity(
+            context, 0, Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val n = NotificationCompat.Builder(context, Reminders.CHANNEL)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("ZenTask updated to $version")
+            .setContentText("Tap to open")
+            .setAutoCancel(true)
+            .setContentIntent(open)
+            .build()
+        try { nm.notify(UPDATED_NOTIFICATION_ID, n) } catch (_: SecurityException) {}
+    }
+
+    private companion object {
+        const val UPDATED_NOTIFICATION_ID = 0x5A3F
     }
 }
