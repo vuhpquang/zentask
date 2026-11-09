@@ -51,6 +51,7 @@ import androidx.compose.material.icons.outlined.FilterAlt
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Repeat
@@ -214,6 +215,7 @@ fun TasksScreen(app: ZenApp, openSettings: () -> Unit, openSearch: () -> Unit) {
     val drawer = rememberDrawerState(androidx.compose.material3.DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val snackbar = remember { androidx.compose.material3.SnackbarHostState() }
+    var sorting by remember { mutableStateOf(false) }
 
     openTaskId?.let { id ->
         TaskDetailScreen(app, id) { openTaskId = null }
@@ -237,6 +239,7 @@ fun TasksScreen(app: ZenApp, openSettings: () -> Unit, openSearch: () -> Unit) {
                     navigationIcon = { IconButton(onClick = { scope.launch { drawer.open() } }) { Icon(Icons.Filled.Menu, "Lists") } },
                     actions = {
                         IconButton(onClick = openSearch) { Icon(Icons.Filled.Search, "Search") }
+                        if (pick != ListPick.Matrix) IconButton(onClick = { sorting = true }) { Icon(Icons.AutoMirrored.Filled.Sort, "Group and sort") }
                         val project = (pick as? ListPick.InProject)?.let { p -> index?.projects?.firstOrNull { it.id == p.id } }
                         if (project != null && project.id != Project.INBOX_ID) ListMenu(app, project) { pickKey = ListPick.Smart(SmartList.INBOX).key }
                     },
@@ -261,6 +264,7 @@ fun TasksScreen(app: ZenApp, openSettings: () -> Unit, openSearch: () -> Unit) {
         }
     }
     if (adding) QuickAddSheet(app, index, pick) { adding = false }
+    if (sorting) SortSheet(app, pick) { sorting = false }
 }
 
 private val LIST_COLORS = listOf("#5B5FE9", "#8B5CF6", "#EC4899", "#EF4444", "#F59E0B", "#10B981", "#06B6D4", "#64748B")
@@ -413,8 +417,9 @@ private fun DrawerRow(label: String, icon: ImageVector, tint: Color?, count: Int
 @Composable
 private fun TaskList(app: ZenApp, index: TaskIndex?, pick: ListPick, snackbar: androidx.compose.material3.SnackbarHostState, open: (String) -> Unit) {
     val scope = rememberCoroutineScope()
+    val viewOptions = remember(index, pick) { app.core.viewOptions(pick.filter) }
     val sections = remember(index, pick) {
-        index?.let { app.core.sections(it, pick.filter, app.core.viewOptions(pick.filter)) }.orEmpty()
+        index?.let { app.core.sections(it, pick.filter, viewOptions) }.orEmpty()
     }
     val folded = remember(pick) { mutableStateListOf("done") }
     if (index != null && sections.isEmpty()) {
@@ -439,7 +444,7 @@ private fun TaskList(app: ZenApp, index: TaskIndex?, pick: ListPick, snackbar: a
                 items(section.rows, key = { section.key + ":" + it.task.id }) { row ->
                     // Trash has its own Restore / Delete forever in the task's menu.
                     SwipeTaskRow(app, row.task, enabled = row.task.trashedAt == null, trashed = { offerUndoTrash(app, it, snackbar, scope) }) {
-                        TaskRowItem(app, index, row, showList = pick !is ListPick.InProject, barColor = ZenColors.hex(section.color)) { open(row.task.id) }
+                        TaskRowItem(app, index, row, showList = pick !is ListPick.InProject, barColor = ZenColors.hex(section.color), showDetails = !viewOptions.hideDetails) { open(row.task.id) }
                     }
                 }
             }
@@ -480,7 +485,7 @@ fun CheckCircleButton(task: Task, onToggle: () -> Unit) {
 }
 
 @Composable
-private fun TaskRowItem(app: ZenApp, index: TaskIndex?, row: TaskRow, showList: Boolean, barColor: Color?, open: () -> Unit) {
+private fun TaskRowItem(app: ZenApp, index: TaskIndex?, row: TaskRow, showList: Boolean, barColor: Color?, showDetails: Boolean = true, open: () -> Unit) {
     val task = row.task
     Row(
         Modifier.fillMaxWidth().clickable(onClick = open).padding(start = if (barColor != null) 0.dp else 16.dp, end = 16.dp, top = 10.dp, bottom = 10.dp),
@@ -500,7 +505,7 @@ private fun TaskRowItem(app: ZenApp, index: TaskIndex?, row: TaskRow, showList: 
                 color = if (task.isDone) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface,
                 maxLines = 2, overflow = TextOverflow.Ellipsis,
             )
-            preview(task)?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+            if (showDetails) preview(task)?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis) }
             val day = index?.let { app.core.taskDayMillis(it, task) }
             val meta = buildList {
                 if (day != null) add(dateText(day, task))

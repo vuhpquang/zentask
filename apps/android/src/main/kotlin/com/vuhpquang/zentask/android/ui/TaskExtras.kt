@@ -1,6 +1,7 @@
 package com.vuhpquang.zentask.android.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -255,3 +256,49 @@ fun FocusRecordRow(app: ZenApp, r: com.vuhpquang.zentask.model.FocusRecord) {
             onConfirm = { app.core.focusActions.delete(r.id); confirm = false }, onDismiss = { confirm = false })
     }
 }
+
+/** "Group and sort" for the list being viewed (synced per list, the same choices as the Mac's ⇅ menu). */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class, androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+fun SortSheet(app: ZenApp, pick: ListPick, close: () -> Unit) {
+    val filter = pick.filter
+    var o by remember { mutableStateOf(app.core.viewOptions(filter)) }
+    fun set(n: com.vuhpquang.zentask.lists.ViewOptions) { o = n; app.core.setViewOptions(filter, n) }
+    val groups = buildList {
+        addAll(listOf("" to "Default", "list" to "List", "date" to "Date", "priority" to "Priority", "tag" to "Tag"))
+        if (pick is ListPick.InProject) add("column" to "Section")
+        add("none" to "None")
+    }
+    val sorts = listOf("" to "Default", "date" to "Date", "priority" to "Priority", "title" to "Title", "manual" to "Manual")
+    val orders = when (if (pick is ListPick.InProject && o.sort.isEmpty()) "manual" else o.sort) {
+        "priority" -> listOf("" to "Highest first", "desc" to "Lowest first")
+        "date", "" -> listOf("" to "Earliest first", "desc" to "Latest first")
+        "title" -> listOf("" to "A to Z", "desc" to "Z to A")
+        else -> listOf("" to "Normal", "desc" to "Reversed")
+    }
+    androidx.compose.material3.ModalBottomSheet(onDismissRequest = close, sheetState = androidx.compose.material3.rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        Column(Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Group and sort", style = MaterialTheme.typography.titleLarge)
+            for ((title, all, current, change) in listOf(
+                Quad("Group by", groups, o.group) { v: String -> set(o.copy(group = v)) },
+                Quad("Sort by", sorts, o.sort) { v: String -> set(o.copy(sort = v)) },
+                Quad("Order", orders, o.order) { v: String -> set(o.copy(order = v)) },
+            )) {
+                Text(title, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(top = 8.dp))
+                androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for ((value, label) in all) androidx.compose.material3.FilterChip(selected = current == value, onClick = { change(value) }, label = { Text(label) })
+                }
+            }
+            Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Hide completed", Modifier.weight(1f))
+                androidx.compose.material3.Switch(checked = o.hideCompleted, onCheckedChange = { set(o.copy(hideCompleted = it)) })
+            }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Hide notes preview", Modifier.weight(1f))
+                androidx.compose.material3.Switch(checked = o.hideDetails, onCheckedChange = { set(o.copy(hideDetails = it)) })
+            }
+        }
+    }
+}
+
+private data class Quad(val title: String, val all: List<Pair<String, String>>, val current: String, val change: (String) -> Unit)
