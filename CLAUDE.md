@@ -173,7 +173,8 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
   check in past days, Edit / Archive / Delete), countdown editor + Edit / Archive / Delete, "Archived" toggles.
 - Calendar (P9c, `ui/CalendarScreens.kt`): Day / 3 days / Week time grid (all-day row, now line, opens at the hour in
   Settings → Calendar, tap an empty slot = new 30-min task), Month grid (tap a day = Day view), List (2 weeks),
-  swipe left/right to page, View options sheet writing the synced `CalendarViewOptions`. Tapping a task opens it via
+  swipe left/right to page, pinch to zoom the hours (prefs `zentask.calendar` / `hourHeight`, 28–160 dp; two-finger
+  events are consumed in the Initial pass so one finger still scrolls), View options sheet writing the synced `CalendarViewOptions`. Tapping a task opens it via
   `ZenApp.openTask`.
 - Boards (P9d, `ui/Boards.kt`): "Eisenhower Matrix" in the drawer (`ListPick.Matrix`; long-press a task to move it to
   another quadrant = set priority); a list's "…" → "View as kanban" (`listActions.setViewMode`, synced with the Mac):
@@ -209,13 +210,14 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
   `.remeasuresRows(data:hasRows:)` (`Tasks/RowRemeasure.swift`) rebuilds the rows once after the first data and
   when the window comes back visible after the data changed behind it. Use it on any new task `List`.
 - The main window has no title bar (`.windowStyle(.hiddenTitleBar)`): the traffic lights sit over the rail in every
-  area. Don't add window toolbar items (they float over the content); put actions in the area's own header.
+  area. The rail (`Theme.Rail.width`, 84) must stay wider than the traffic lights (~72 pt on macOS 26). Don't add window toolbar items (they float over the content); put actions in the area's own header.
   Debug: `open -n build/ZenTask.app --env ZENTASK_OPEN_AREA=calendar` opens straight on Calendar.
 - Menus recolour every icon with the tint, and themes set the tint to their accent, so a coloured icon in a menu
   (priority flags, list colours) needs both `Symbols.tinted(…)` and `.tint(sameColour)` on its item, or every flag
   turns the theme's colour. Use `Symbols.priorityPicker` for a priority menu.
 - A `.listStyle(.sidebar)` List (task sidebar, Settings) tints icons with the AccentColor asset, not `.tint`: give
-  icons `themeColors.accent` explicitly. Cards fill with the `.background` shape style, which `Themed()` sets to
+  icons `themeColors.accent` explicitly. Its selection is drawn in that asset too, so the task sidebar has no List selection:
+  rows use `SidebarSelect` (tap, themed highlight drawn inside the row, own count; `listRowBackground` is ignored there). Cards fill with the `.background` shape style, which `Themed()` sets to
   `ThemeColors.card` (mixed from the theme background) via `.backgroundStyle`, so use `.background` for cards.
 - The macOS app links `-lsqlite3` (SQLDelight's native driver); keep it in `project.yml` `OTHER_LDFLAGS`.
 - This office network inspects TLS (Fortinet): the Android emulator doesn't trust it, so anything hitting

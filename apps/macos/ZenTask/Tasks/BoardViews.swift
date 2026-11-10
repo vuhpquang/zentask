@@ -240,7 +240,7 @@ struct SummaryView: View {
                 .padding(.bottom, Theme.Space.l)
             }
         }
-        .task(id: "\(period)-\(tasks.index.map { ObjectIdentifier($0).hashValue } ?? 0)") { load() }
+        .task(id: "\(period)-\(tasks.index.map { ObjectIdentifier($0).hashValue } ?? 0)") { await load() }
         .onChange(of: period) { _, _ in copied = false }
     }
 
@@ -268,8 +268,10 @@ struct SummaryView: View {
         }
     }
 
-    private func load() {
+    /// Builds the summary off the main thread: it walks every task, which made opening Summary stutter.
+    private func load() async {
         guard let index = tasks.index else { return }
+        let core = tasks.core
         let cal = CalendarModel.mondayFirst()
         let today = cal.startOfDay(for: .now)
         let (from, to): (Date, Date) = switch period {
@@ -282,6 +284,10 @@ struct SummaryView: View {
         default:
             { let start = cal.dateInterval(of: .weekOfYear, for: today)?.start ?? today; return (start, cal.date(byAdding: .day, value: 6, to: start) ?? start) }()
         }
-        summary = tasks.core.summary(index: index, fromDay: Int64(from.timeIntervalSince1970 * 1000), toDay: Int64(to.timeIntervalSince1970 * 1000))
+        let fromMs = Int64(from.timeIntervalSince1970 * 1000), toMs = Int64(to.timeIntervalSince1970 * 1000)
+        let built = await _Concurrency.Task.detached(priority: .userInitiated) {
+            core.summary(index: index, fromDay: fromMs, toDay: toMs)
+        }.value
+        if !_Concurrency.Task.isCancelled { summary = built }
     }
 }

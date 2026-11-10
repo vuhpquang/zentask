@@ -11,16 +11,15 @@ struct SidebarView: View {
 
     var body: some View {
         @Bindable var tasks = tasks
-        List(selection: Binding(get: { tasks.sidebar }, set: { if let v = $0 { tasks.sidebar = v } })) {
+        // No List selection: the system draws it in the AccentColor asset, so a theme's accent never showed and the
+        // themed icons vanished on it. Rows draw their own highlight (`select`).
+        List {
             Section {
                 ForEach(smart.filter { tasks.shows($0) }, id: \.self) { list in
                     row(TasksModel.title(list), symbol: TasksModel.symbol(list), item: .smart(list))
                 }
-                Button { tasks.showingSummary = true } label: {
-                    Label { Text("Summary") } icon: { icon("doc.text.magnifyingglass") }
-                        .foregroundStyle(tasks.showingSummary ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
-                }
-                .buttonStyle(.plain)
+                Label { Text("Summary") } icon: { icon("doc.text.magnifyingglass") }
+                    .modifier(SidebarSelect(selected: tasks.showingSummary, count: 0) { tasks.showingSummary = true })
             }
             Section {
                 ForEach(ungroupedProjects, id: \.id) { project in
@@ -50,8 +49,7 @@ struct SidebarView: View {
                     } icon: {
                         if let emoji = filter.icon, !emoji.isEmpty { Text(emoji) } else { icon("line.3.horizontal.decrease.circle") }
                     }
-                        .badge(tasks.count(.custom(filter.id)))
-                        .tag(SidebarItem.custom(filter.id))
+                        .modifier(select(.custom(filter.id)))
                         .contextMenu {
                             Button("Edit…") { tasks.sheet = .editFilter(filter.id) }
                             Button("Delete…", role: .destructive) { tasks.confirmDeleteFilter = filter }
@@ -70,8 +68,7 @@ struct SidebarView: View {
                         } icon: {
                             Image(systemName: "number").foregroundStyle(Color(hex: tag.color) ?? .secondary)
                         }
-                        .badge(tasks.count(.tag(tag.name)))
-                        .tag(SidebarItem.tag(tag.name))
+                        .modifier(select(.tag(tag.name)))
                         .dropDestination(for: String.self) { ids, _ in tasks.drop(ids, onto: .tag(tag.name)) }
                     }
                 }
@@ -88,7 +85,7 @@ struct SidebarView: View {
             Section {
                 ForEach(status.filter { tasks.shows($0) }, id: \.self) { list in
                     Label { Text(TasksModel.title(list)) } icon: { icon(TasksModel.symbol(list)) }
-                        .tag(SidebarItem.smart(list))
+                        .modifier(select(.smart(list), counted: false))
                         .dropDestination(for: String.self) { ids, _ in tasks.drop(ids, onto: .smart(list)) }
                 }
             }
@@ -109,10 +106,13 @@ struct SidebarView: View {
         Image(systemName: symbol).foregroundStyle(themeColors.accent)
     }
 
+    private func select(_ item: SidebarItem, counted: Bool = true) -> SidebarSelect {
+        SidebarSelect(selected: !tasks.showingSummary && tasks.sidebar == item, count: counted ? tasks.count(item) : 0) { tasks.sidebar = item }
+    }
+
     private func row(_ title: String, symbol: String, item: SidebarItem) -> some View {
         Label { Text(title) } icon: { icon(symbol) }
-            .badge(tasks.count(item))
-            .tag(item)
+            .modifier(select(item))
             .dropDestination(for: String.self) { ids, _ in tasks.drop(ids, onto: item) }
     }
 
@@ -122,10 +122,42 @@ struct SidebarView: View {
         } icon: {
             Image(systemName: "list.bullet").foregroundStyle(Color(hex: project.color) ?? .secondary)
         }
-        .badge(tasks.count(.project(project.id)))
-        .tag(SidebarItem.project(project.id))
+        .modifier(select(.project(project.id)))
         .contextMenu { ListMenu(project: project) }
         .dropDestination(for: String.self) { ids, _ in tasks.drop(ids, onto: .project(project.id)) }
+    }
+}
+
+/// A clickable sidebar row with the theme's selection highlight (a tinted rounded rectangle, like the rail's) and its
+/// count. Drawn inside the row: a sidebar-style List ignores `listRowBackground`, and its own selection uses the
+/// AccentColor asset, never the theme.
+struct SidebarSelect: ViewModifier {
+    @Environment(\.themeColors) private var themeColors
+    let selected: Bool
+    let count: Int
+    let action: () -> Void
+
+    func body(content: Content) -> some View {
+        HStack(spacing: Theme.Space.xs) {
+            content.layoutPriority(1)
+            Spacer(minLength: 0)
+            if count > 0 {
+                Text("\(count)").font(.subheadline).monospacedDigit().foregroundStyle(.secondary).fixedSize()
+            }
+        }
+        .fontWeight(selected ? .semibold : .regular)
+        .padding(.vertical, Theme.Sidebar.selectionInsetV)
+        .padding(.horizontal, Theme.Sidebar.selectionInsetH)
+        .background(
+            RoundedRectangle(cornerRadius: Theme.Radius.sidebarRow, style: .continuous)
+                .fill(selected ? AnyShapeStyle(themeColors.accent.opacity(Theme.Opacity.chip)) : AnyShapeStyle(.clear))
+        )
+        .padding(.vertical, -Theme.Sidebar.selectionInsetV)
+        .padding(.horizontal, -Theme.Sidebar.selectionInsetH)
+        .contentShape(Rectangle())
+        .onTapGesture(perform: action)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 }
 

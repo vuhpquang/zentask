@@ -16,6 +16,7 @@ enum Theme {
     enum Radius {
         static let card: CGFloat = 16
         static let tile: CGFloat = 10
+        static let sidebarRow: CGFloat = 8
     }
 
     /** Priority colours (ZenTask's own): system colours, so they resolve per appearance. */
@@ -134,9 +135,17 @@ enum Theme {
         static let pillRadius: CGFloat = 6
     }
 
+    /** Task sidebar rows: the themed selection highlight reaches this far past the row's content. */
+    enum Sidebar {
+        static let selectionInsetV: CGFloat = 4
+        static let selectionInsetH: CGFloat = 6
+    }
+
     /** The always-visible icon rail on the left of the window (spec §11). */
     enum Rail {
-        static let width: CGFloat = 64
+        /// Wide enough for the window's traffic lights (they end ~72 pt in on macOS 26), so the green one doesn't
+        /// cross the rail's edge into the sidebar.
+        static let width: CGFloat = 84
         static let hit: CGFloat = 44
         static let icon: CGFloat = 22
         static let radius: CGFloat = 12
