@@ -40,13 +40,15 @@ enum SettingsPane: String, CaseIterable, Identifiable {
 
 /// Settings window (⌘,): a sidebar of panes (nine don't fit as toolbar tabs) and grouped forms.
 struct SettingsView: View {
+    @Environment(\.themeColors) private var themeColors
     @AppStorage(SettingsPane.storageKey) private var paneId = SettingsPane.general.rawValue
 
     var body: some View {
         let pane = SettingsPane(rawValue: paneId) ?? .general
         NavigationSplitView {
             List(SettingsPane.allCases, selection: Binding(get: { pane }, set: { if let p = $0 { paneId = p.rawValue } })) { p in
-                Label(p.title, systemImage: p.symbol).tag(p)
+                // A sidebar List tints icons with the AccentColor asset; use the theme's accent instead.
+                Label { Text(p.title) } icon: { Image(systemName: p.symbol).foregroundStyle(themeColors.accent) }.tag(p)
             }
             .navigationSplitViewColumnWidth(Theme.Size.settingsSidebar)
             .toolbar(removing: .sidebarToggle)

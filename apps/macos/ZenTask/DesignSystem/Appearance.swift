@@ -16,6 +16,23 @@ struct ThemeColors: Equatable {
     var surface: Color?
 }
 
+extension ThemeColors {
+    /// Cards (kanban, habits, focus) sit on the background: a little lighter in dark, near white in light.
+    /// nil = the theme keeps the system background, so cards keep the system colour too.
+    func card(_ scheme: ColorScheme) -> Color? {
+        background.map { scheme == .dark ? $0.mix(with: .white, by: Theme.Opacity.cardLift) : $0.mix(with: .white, by: Theme.Opacity.cardLight) }
+    }
+}
+
+/// `.background` (the shape style cards fill with) is the system colour unless the environment sets one.
+private struct CardBackground: ViewModifier {
+    let card: Color?
+
+    func body(content: Content) -> some View {
+        if let card { content.backgroundStyle(card) } else { content }
+    }
+}
+
 /// A colour theme. ZenTask's own is Default; the others use well-known open palettes (Catppuccin, Dracula,
 /// Nord, Solarized, Rosé Pine). A theme without a light (or dark) variant always shows its own.
 struct AppTheme: Identifiable, Equatable {
@@ -98,6 +115,7 @@ private struct ThemeColorsApplier: ViewModifier {
     func body(content: Content) -> some View {
         let c = theme.colors(scheme)
         content
+            .modifier(CardBackground(card: c.card(scheme)))
             .tint(c.accent)
             .environment(\.themeColors, c)
             .background(c.background ?? Color(nsColor: .windowBackgroundColor))

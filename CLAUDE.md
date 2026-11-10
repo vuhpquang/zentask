@@ -214,6 +214,9 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
 - Menus recolour every icon with the tint, and themes set the tint to their accent, so a coloured icon in a menu
   (priority flags, list colours) needs both `Symbols.tinted(…)` and `.tint(sameColour)` on its item, or every flag
   turns the theme's colour. Use `Symbols.priorityPicker` for a priority menu.
+- A `.listStyle(.sidebar)` List (task sidebar, Settings) tints icons with the AccentColor asset, not `.tint`: give
+  icons `themeColors.accent` explicitly. Cards fill with the `.background` shape style, which `Themed()` sets to
+  `ThemeColors.card` (mixed from the theme background) via `.backgroundStyle`, so use `.background` for cards.
 - The macOS app links `-lsqlite3` (SQLDelight's native driver); keep it in `project.yml` `OTHER_LDFLAGS`.
 - This office network inspects TLS (Fortinet): the Android emulator doesn't trust it, so anything hitting
   GitHub/the server from the emulator fails with "Trust anchor not found". To test, build a throwaway APK with a

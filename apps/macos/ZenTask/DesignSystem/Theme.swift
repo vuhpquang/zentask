@@ -110,6 +110,9 @@ enum Theme {
         static let chip: Double = 0.15
         static let pill: Double = 0.18
         static let card: Double = 0.5
+        /// How much white a themed card mixes into the background: dark themes, light themes.
+        static let cardLift: Double = 0.12
+        static let cardLight: Double = 0.7
         static let chipFill: Double = 0.14
         /// Archived habits and countdowns.
         static let archived: Double = 0.7

@@ -17,7 +17,7 @@ struct SidebarView: View {
                     row(TasksModel.title(list), symbol: TasksModel.symbol(list), item: .smart(list))
                 }
                 Button { tasks.showingSummary = true } label: {
-                    Label("Summary", systemImage: "doc.text.magnifyingglass")
+                    Label { Text("Summary") } icon: { icon("doc.text.magnifyingglass") }
                         .foregroundStyle(tasks.showingSummary ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
                 }
                 .buttonStyle(.plain)
@@ -30,7 +30,7 @@ struct SidebarView: View {
                     DisclosureGroup {
                         ForEach(tasks.listProjects.filter { $0.groupId == group.id }, id: \.id) { projectRow($0) }
                     } label: {
-                        Label(group.name, systemImage: "folder")
+                        Label { Text(group.name) } icon: { icon("folder") }
                             .contextMenu {
                                 Button("Rename…") { tasks.sheet = .renameFolder(group.id) }
                                 Button("Delete folder") { tasks.core.listActions.deleteFolder(id: group.id) }
@@ -48,7 +48,7 @@ struct SidebarView: View {
                     Label {
                         Text(filter.name)
                     } icon: {
-                        if let icon = filter.icon, !icon.isEmpty { Text(icon) } else { Image(systemName: "line.3.horizontal.decrease.circle") }
+                        if let emoji = filter.icon, !emoji.isEmpty { Text(emoji) } else { icon("line.3.horizontal.decrease.circle") }
                     }
                         .badge(tasks.count(.custom(filter.id)))
                         .tag(SidebarItem.custom(filter.id))
@@ -81,13 +81,13 @@ struct SidebarView: View {
                     DisclosureGroup {
                         ForEach(tasks.archivedProjects, id: \.id) { projectRow($0) }
                     } label: {
-                        Label("Archived", systemImage: "archivebox")
+                        Label { Text("Archived") } icon: { icon("archivebox") }
                     }
                 }
             }
             Section {
                 ForEach(status.filter { tasks.shows($0) }, id: \.self) { list in
-                    Label(TasksModel.title(list), systemImage: TasksModel.symbol(list))
+                    Label { Text(TasksModel.title(list)) } icon: { icon(TasksModel.symbol(list)) }
                         .tag(SidebarItem.smart(list))
                         .dropDestination(for: String.self) { ids, _ in tasks.drop(ids, onto: .smart(list)) }
                 }
@@ -104,8 +104,13 @@ struct SidebarView: View {
         return tasks.listProjects.filter { $0.groupId == nil || !groupIds.contains($0.groupId!) }
     }
 
+    /// A sidebar-style List tints icons with the app's AccentColor asset, not `.tint`, so themed icons set it here.
+    private func icon(_ symbol: String) -> some View {
+        Image(systemName: symbol).foregroundStyle(themeColors.accent)
+    }
+
     private func row(_ title: String, symbol: String, item: SidebarItem) -> some View {
-        Label(title, systemImage: symbol)
+        Label { Text(title) } icon: { icon(symbol) }
             .badge(tasks.count(item))
             .tag(item)
             .dropDestination(for: String.self) { ids, _ in tasks.drop(ids, onto: item) }
