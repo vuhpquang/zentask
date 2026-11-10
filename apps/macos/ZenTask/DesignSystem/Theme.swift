@@ -250,6 +250,8 @@ enum Theme {
         static let heroIcon: CGFloat = 44
         static let summaryWidth: CGFloat = 420
         static let settingsWidth: CGFloat = 540
+        static let settingsSidebar: CGFloat = 190
+        static let settingsHeight: CGFloat = 560
         static let sidebarMin: CGFloat = 200
         static let sheetWidth: CGFloat = 380
         static let minRow: CGFloat = 40

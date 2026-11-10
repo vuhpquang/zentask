@@ -311,6 +311,8 @@ struct TaskMenu: View {
                         Button { actions.setPriority(id: task.id, priority: p.value) } label: {
                             Label { Text(p.title) } icon: { Symbols.tinted(p.value == 0 ? "flag" : "flag.fill", Theme.PriorityColor.nsColor(p.value)) }
                         }
+                        // A palette row recolours its icons with the tint (the theme's accent), so each flag sets its own.
+                        .tint(Theme.PriorityColor.color(p.value))
                     }
                 }
                 .controlGroupStyle(.palette)
@@ -328,6 +330,7 @@ struct TaskMenu: View {
                     Button { actions.move(id: task.id, projectId: p.id) } label: {
                         Label { Text(p.name) } icon: { Symbols.tinted("list.bullet", NSColor(Color(hex: p.color) ?? .secondary)) }
                     }
+                    .tint(Color(hex: p.color) ?? .secondary)
                 }
             } label: { Label("Move to", systemImage: "arrow.right.square") }
             Menu {
@@ -356,12 +359,27 @@ struct TaskMenu: View {
 }
 
 /// SF Symbols that keep their colour inside menus (NSMenu draws SwiftUI images as templates).
+/// Menus also recolour icons with the tint (a theme's accent), so the item needs `.tint(sameColour)` too.
 enum Symbols {
     static func tinted(_ name: String, _ color: NSColor) -> Image {
         let config = NSImage.SymbolConfiguration(paletteColors: [color])
         let image = NSImage(systemSymbolName: name, accessibilityDescription: nil)?.withSymbolConfiguration(config) ?? NSImage()
         image.isTemplate = false
         return Image(nsImage: image)
+    }
+
+    /// A priority picker for a menu: coloured flags, a check on the current one.
+    static func priorityPicker(_ selection: Binding<Int32>) -> some View {
+        Picker("Priority", selection: selection) {
+            ForEach(PriorityOption.all, id: \.value) { p in
+                Label { Text(p.title) } icon: { tinted(p.value == 0 ? "flag" : "flag.fill", Theme.PriorityColor.nsColor(p.value)) }
+                    .tag(p.value)
+                    .tint(Theme.PriorityColor.color(p.value))
+            }
+        }
+        .pickerStyle(.inline)
+        .labelsHidden()
+        .labelStyle(.titleAndIcon)
     }
 }
 

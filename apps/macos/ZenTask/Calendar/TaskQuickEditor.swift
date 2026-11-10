@@ -42,12 +42,10 @@ struct TaskQuickEditor: View {
                 .popover(isPresented: $editingDate) { DueEditor(task: task) }
                 Spacer()
                 Menu {
-                    ForEach(PriorityOption.all, id: \.value) { option in
-                        Button {
-                            priority = option.value
-                            tasks.core.actions.setPriority(id: task.id, priority: option.value)
-                        } label: { Label(option.title, systemImage: option.value == p ? "checkmark" : "flag") }
-                    }
+                    Symbols.priorityPicker(Binding(get: { p }, set: { value in
+                        priority = value
+                        tasks.core.actions.setPriority(id: task.id, priority: value)
+                    }))
                 } label: {
                     Image(systemName: p > 0 ? "flag.fill" : "flag").foregroundStyle(Theme.PriorityColor.color(p))
                 }

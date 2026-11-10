@@ -55,9 +55,7 @@ struct TaskComposer: View {
                     .font(.callout.weight(.medium))
                 Spacer()
                 Menu {
-                    ForEach(PriorityOption.all, id: \.value) { p in
-                        Button { priority = p.value } label: { Label(p.title, systemImage: priority == p.value ? "checkmark" : "flag") }
-                    }
+                    Symbols.priorityPicker($priority)
                 } label: {
                     Image(systemName: priority > 0 ? "flag.fill" : "flag")
                         .foregroundStyle(Theme.PriorityColor.color(priority))

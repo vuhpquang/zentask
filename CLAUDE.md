@@ -79,7 +79,8 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
 - `apps/macos/` — xcodegen project (`project.yml`); never hand-edit or commit the `.xcodeproj`.
   Links the **release** XCFramework in both configs. `AppModel` (@Observable) owns `ZenTaskCore`; DB in
   `~/Library/Application Support/ZenTask[-dev]/zentask.db`; server token + TickTick cookie in `~/Library/Application Support/ZenTaskSecrets/<bundle id>.json` (0600; not the Keychain: a self-signed app gets a per-build keychain partition, so every update prompted twice; older Keychain items are moved on first read)
-  (service = bundle id). Settings (⌘,) = Account + TickTick tabs. Tokens in `DesignSystem/Theme.swift`.
+  (service = bundle id). Settings (⌘,) = `Settings/SettingsView.swift`: a sidebar of `SettingsPane`s (General … Hotkeys;
+  the last one shown is UserDefaults `settings.pane`; nine panes overflowed as toolbar tabs, so no tabs). Tokens in `DesignSystem/Theme.swift`.
   Main window = `Tasks/TasksView` (sidebar | list | detail) driven by `TasksModel`, which reloads the
   `TaskIndex` off the main thread on `core.recordChanges` (80 ms debounce). `Services/Reminders` schedules
   local notifications from `core.plannedReminders`. The window is `MainWindow` = `AppRail` (always-visible
@@ -210,6 +211,9 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
 - The main window has no title bar (`.windowStyle(.hiddenTitleBar)`): the traffic lights sit over the rail in every
   area. Don't add window toolbar items (they float over the content); put actions in the area's own header.
   Debug: `open -n build/ZenTask.app --env ZENTASK_OPEN_AREA=calendar` opens straight on Calendar.
+- Menus recolour every icon with the tint, and themes set the tint to their accent, so a coloured icon in a menu
+  (priority flags, list colours) needs both `Symbols.tinted(…)` and `.tint(sameColour)` on its item, or every flag
+  turns the theme's colour. Use `Symbols.priorityPicker` for a priority menu.
 - The macOS app links `-lsqlite3` (SQLDelight's native driver); keep it in `project.yml` `OTHER_LDFLAGS`.
 - This office network inspects TLS (Fortinet): the Android emulator doesn't trust it, so anything hitting
   GitHub/the server from the emulator fails with "Trust anchor not found". To test, build a throwaway APK with a

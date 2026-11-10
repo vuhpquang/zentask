@@ -95,6 +95,7 @@ private struct CheckForUpdatesButton: View {
 
     var body: some View {
         Button("Check for Updates…") {
+            UserDefaults.standard.set(SettingsPane.general.rawValue, forKey: SettingsPane.storageKey)
             openSettings()
             Task { await Updater.shared.check() }
         }

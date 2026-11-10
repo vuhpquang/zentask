@@ -2,30 +2,75 @@ import SwiftUI
 @preconcurrency import ZenTaskShared
 import UniformTypeIdentifiers
 
-/// Settings window (⌘,): stock tabs and grouped forms.
-struct SettingsView: View {
-    var body: some View {
-        TabView {
-            GeneralSettings()
-                .tabItem { Label("General", systemImage: "gearshape") }
-            AccountSettings()
-                .tabItem { Label("Account", systemImage: "person.crop.circle") }
-            TickTickSettings()
-                .tabItem { Label("TickTick", systemImage: "arrow.down.circle") }
-            SmartListSettings()
-                .tabItem { Label("Smart lists", systemImage: "line.3.horizontal.decrease.circle") }
-            NotificationSettings()
-                .tabItem { Label("Notifications", systemImage: "bell.badge") }
-            CalendarSettings()
-                .tabItem { Label("Calendars", systemImage: "calendar") }
-            DateTimeSettings()
-                .tabItem { Label("Date & Time", systemImage: "clock") }
-            AppearanceSettings()
-                .tabItem { Label("Appearance", systemImage: "paintpalette") }
-            HotkeySettings()
-                .tabItem { Label("Hotkeys", systemImage: "command") }
+/// The Settings panes, in sidebar order. Raw values are stored (`settings.pane`): add, never rename.
+enum SettingsPane: String, CaseIterable, Identifiable {
+    case general, account, ticktick, smartLists, notifications, calendars, dateTime, appearance, hotkeys
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .general: "General"
+        case .account: "Account"
+        case .ticktick: "TickTick"
+        case .smartLists: "Smart lists"
+        case .notifications: "Notifications"
+        case .calendars: "Calendars"
+        case .dateTime: "Date & Time"
+        case .appearance: "Appearance"
+        case .hotkeys: "Hotkeys"
         }
-        .frame(width: Theme.Size.settingsWidth)
+    }
+
+    var symbol: String {
+        switch self {
+        case .general: "gearshape"
+        case .account: "person.crop.circle"
+        case .ticktick: "arrow.down.circle"
+        case .smartLists: "line.3.horizontal.decrease.circle"
+        case .notifications: "bell.badge"
+        case .calendars: "calendar"
+        case .dateTime: "clock"
+        case .appearance: "paintpalette"
+        case .hotkeys: "command"
+        }
+    }
+
+    static let storageKey = "settings.pane"
+}
+
+/// Settings window (⌘,): a sidebar of panes (nine don't fit as toolbar tabs) and grouped forms.
+struct SettingsView: View {
+    @AppStorage(SettingsPane.storageKey) private var paneId = SettingsPane.general.rawValue
+
+    var body: some View {
+        let pane = SettingsPane(rawValue: paneId) ?? .general
+        NavigationSplitView {
+            List(SettingsPane.allCases, selection: Binding(get: { pane }, set: { if let p = $0 { paneId = p.rawValue } })) { p in
+                Label(p.title, systemImage: p.symbol).tag(p)
+            }
+            .navigationSplitViewColumnWidth(Theme.Size.settingsSidebar)
+            .toolbar(removing: .sidebarToggle)
+        } detail: {
+            content(pane)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .navigationTitle(pane.title)
+        }
+        .frame(width: Theme.Size.settingsSidebar + Theme.Size.settingsWidth, height: Theme.Size.settingsHeight)
+    }
+
+    @ViewBuilder
+    private func content(_ pane: SettingsPane) -> some View {
+        switch pane {
+        case .general: GeneralSettings()
+        case .account: AccountSettings()
+        case .ticktick: TickTickSettings()
+        case .smartLists: SmartListSettings()
+        case .notifications: NotificationSettings()
+        case .calendars: CalendarSettings()
+        case .dateTime: DateTimeSettings()
+        case .appearance: AppearanceSettings()
+        case .hotkeys: HotkeySettings()
+        }
     }
 }
 
