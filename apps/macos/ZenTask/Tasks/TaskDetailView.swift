@@ -113,7 +113,7 @@ struct TaskDetailView: View {
                 }
                 .buttonStyle(.plain)
                 .popover(isPresented: $pickingList) {
-                    let targets = [("inbox", "Inbox", Color.accentColor)] + tasks.listProjects.map { ($0.id, $0.name, Color(hex: $0.color) ?? .accentColor) }
+                    let targets = [("inbox", "Inbox", Color.themeAccent)] + tasks.listProjects.map { ($0.id, $0.name, Color(hex: $0.color) ?? .themeAccent) }
                     PickerList(items: targets.map { ($0.1, "list.bullet", $0.2, $0.0 == (pickedList ?? task.projectId)) }) { i in
                         pickedList = targets[i].0
                         pickingList = false
@@ -123,7 +123,7 @@ struct TaskDetailView: View {
 
                 if let rule = task.repeatRule {
                     Button { editingDate = true } label: {
-                        Chip(text: tasks.core.describeRepeat(rule: rule), symbol: "repeat", tint: .accentColor, filled: true)
+                        Chip(text: tasks.core.describeRepeat(rule: rule), symbol: "repeat", tint: .themeAccent, filled: true)
                     }
                     .buttonStyle(.plain)
                 }
@@ -133,7 +133,7 @@ struct TaskDetailView: View {
                     Button {
                         tasks.core.actions.setTags(id: task.id, tags: task.tags.filter { $0 != tag })
                     } label: {
-                        Chip(text: "#" + tag, symbol: nil, tint: Color(hex: tasks.tagColor(tag)) ?? .accentColor, filled: true)
+                        Chip(text: "#" + tag, symbol: nil, tint: Color(hex: tasks.tagColor(tag)) ?? .themeAccent, filled: true)
                     }
                     .buttonStyle(.plain)
                     .help("Remove tag")
@@ -160,11 +160,11 @@ struct TaskDetailView: View {
     private var dateTint: Color {
         guard tasks.day(of: task) != nil else { return .secondary }
         if let day = tasks.day(of: task), !task.isDone, day < Calendar.current.startOfDay(for: .now) { return .red }
-        return .accentColor
+        return .themeAccent
     }
 
     private var listTint: Color {
-        Color(hex: tasks.projects.first { $0.id == task.projectId }?.color) ?? .accentColor
+        Color(hex: tasks.projects.first { $0.id == task.projectId }?.color) ?? .themeAccent
     }
 
     private func card<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
@@ -194,7 +194,7 @@ struct TaskDetailView: View {
                 if !items.isEmpty { Text("\(done)/\(items.count)").font(.callout).foregroundStyle(.secondary).monospacedDigit() }
             }
             if !items.isEmpty {
-                ProgressView(value: Double(done), total: Double(items.count)).tint(.accentColor)
+                ProgressView(value: Double(done), total: Double(items.count)).tint(.themeAccent)
             }
             ForEach(items, id: \.id) { item in
                 HStack(spacing: Theme.Space.m) {

@@ -59,7 +59,7 @@ struct CalendarSettings: View {
                             Label {
                                 Text(info.source.name.isEmpty ? "Calendar" : info.source.name)
                             } icon: {
-                                Circle().fill(Color(hex: info.source.color) ?? .accentColor).frame(width: 10, height: 10)
+                                Circle().fill(Color(hex: info.source.color) ?? .themeAccent).frame(width: 10, height: 10)
                             }
                         }
                     }

@@ -83,6 +83,7 @@ struct TaskListView: View {
                 }
             }
             .listStyle(.inset)
+            .themedSelection()
             .themedListBackground(themeColors)
             .environment(\.defaultMinListRowHeight, Theme.Size.minRow)
             .remeasuresRows(data: tasks.index.map(ObjectIdentifier.init), hasRows: !tasks.sections.isEmpty)
@@ -128,12 +129,12 @@ struct TaskListView: View {
             TaskRowView(task: row.task, row: row, showProject: showsProject, details: !tasks.options.hideDetails)
                 .tag(row.task.id)
                 .draggable(row.task.id)
-                .listRowBackground(Color(hex: section.color).map { GroupBar(color: $0) })
+                .listRowBackground(RowBackground(selected: tasks.selection == row.task.id, groupColor: Color(hex: section.color)))
             // Subtasks are their own rows: selectable, reachable with the arrow keys, draggable alone.
             ForEach(row.subtasks, id: \.id) { sub in
                 TaskRowView(task: sub, row: nil, showProject: false, details: !tasks.options.hideDetails)
                     .padding(.leading, Theme.Row.indent)
-                    .listRowBackground(Color(hex: section.color).map { GroupBar(color: $0) })
+                    .listRowBackground(RowBackground(selected: tasks.selection == sub.id, groupColor: Color(hex: section.color)))
                     .tag(sub.id)
                     .draggable(sub.id)
             }

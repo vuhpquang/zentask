@@ -165,7 +165,7 @@ struct TaskComposer: View {
         switch t.kind {
         case .list:
             return listChoices.filter { matches($0.1) }.map { id, name in
-                Suggestion(id: "l:" + id, title: name, symbol: "list.bullet", tint: Color(hex: tasks.projects.first { $0.id == id }?.color) ?? .accentColor) { listId = id }
+                Suggestion(id: "l:" + id, title: name, symbol: "list.bullet", tint: Color(hex: tasks.projects.first { $0.id == id }?.color) ?? .themeAccent) { listId = id }
             }
         case .priority:
             return PriorityOption.all.filter { matches($0.title) }.map { p in
@@ -173,13 +173,13 @@ struct TaskComposer: View {
             }
         case .tag:
             var out = tasks.tags.filter { matches($0.name) || matches($0.label) }.map { t in
-                Suggestion(id: "t:" + t.name, title: "#" + (t.label.isEmpty ? t.name : t.label), symbol: "number", tint: Color(hex: t.color) ?? .accentColor) {
+                Suggestion(id: "t:" + t.name, title: "#" + (t.label.isEmpty ? t.name : t.label), symbol: "number", tint: Color(hex: t.color) ?? .themeAccent) {
                     if !tags.contains(t.name) { tags.append(t.name) }
                 }
             }
             let typed = t.query.trimmingCharacters(in: .whitespaces)
             if !typed.isEmpty, !tasks.tags.contains(where: { SearchOverlay.fold($0.name) == SearchOverlay.fold(typed) }) {
-                out.append(Suggestion(id: "new:" + typed, title: "Create #\(typed)", symbol: "plus", tint: .accentColor) {
+                out.append(Suggestion(id: "new:" + typed, title: "Create #\(typed)", symbol: "plus", tint: .themeAccent) {
                     if !tags.contains(typed) { tags.append(typed) }
                 })
             }

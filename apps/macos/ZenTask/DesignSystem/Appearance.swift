@@ -33,6 +33,16 @@ private struct CardBackground: ViewModifier {
     }
 }
 
+extension Color {
+    /// The current theme's accent, resolved per appearance when drawn. Use it instead of `.accentColor`, which is the
+    /// AccentColor asset (ZenTask's default indigo) whatever the theme.
+    static let themeAccent = Color(nsColor: NSColor(name: "ZenTask.themeAccent") { appearance in
+        let dark = appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        let theme = AppTheme.named(UserDefaults.standard.string(forKey: "appearance.theme") ?? "default")
+        return NSColor(theme.colors(dark ? .dark : .light).accent)
+    })
+}
+
 /// A colour theme. ZenTask's own is Default; the others use well-known open palettes (Catppuccin, Dracula,
 /// Nord, Solarized, Rosé Pine). A theme without a light (or dark) variant always shows its own.
 struct AppTheme: Identifiable, Equatable {
@@ -41,7 +51,7 @@ struct AppTheme: Identifiable, Equatable {
     let light: ThemeColors?
     let dark: ThemeColors?
 
-    static func hex(_ s: String) -> Color { Color(hex: s) ?? .accentColor }
+    static func hex(_ s: String) -> Color { Color(hex: s) ?? .indigo }
 
     static let all: [AppTheme] = [
         AppTheme(id: "default", name: "Default",
@@ -78,13 +88,13 @@ struct AppTheme: Identifiable, Equatable {
     }
 
     func colors(_ scheme: ColorScheme) -> ThemeColors {
-        (scheme == .dark ? (dark ?? light) : (light ?? dark)) ?? ThemeColors(accent: .accentColor)
+        (scheme == .dark ? (dark ?? light) : (light ?? dark)) ?? ThemeColors(accent: AppTheme.all[0].light!.accent)
     }
 }
 
 extension EnvironmentValues {
     /// The active theme's colours (backgrounds nil = system).
-    @Entry var themeColors = ThemeColors(accent: .accentColor)
+    @Entry var themeColors = ThemeColors(accent: .themeAccent)
 }
 
 /// Applies Settings → Appearance to a window's content: forced light/dark, accent, background colours.

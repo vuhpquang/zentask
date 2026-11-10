@@ -210,14 +210,18 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
   `.remeasuresRows(data:hasRows:)` (`Tasks/RowRemeasure.swift`) rebuilds the rows once after the first data and
   when the window comes back visible after the data changed behind it. Use it on any new task `List`.
 - The main window has no title bar (`.windowStyle(.hiddenTitleBar)`): the traffic lights sit over the rail in every
-  area. The rail (`Theme.Rail.width`, 84) must stay wider than the traffic lights (~72 pt on macOS 26). Don't add window toolbar items (they float over the content); put actions in the area's own header.
+  area. The rail (`Theme.Rail.width`, 78, like TickTick's) must stay wider than the traffic lights: on
+  macOS 26 they are 16 pt buttons 23 pt apart ending ~70 pt in, in every app (measured Firefox, Wisp). Don't add window toolbar items (they float over the content); put actions in the area's own header.
   Debug: `open -n build/ZenTask.app --env ZENTASK_OPEN_AREA=calendar` opens straight on Calendar.
 - Menus recolour every icon with the tint, and themes set the tint to their accent, so a coloured icon in a menu
   (priority flags, list colours) needs both `Symbols.tinted(…)` and `.tint(sameColour)` on its item, or every flag
   turns the theme's colour. Use `Symbols.priorityPicker` for a priority menu.
 - A `.listStyle(.sidebar)` List (task sidebar, Settings) tints icons with the AccentColor asset, not `.tint`: give
-  icons `themeColors.accent` explicitly. Its selection is drawn in that asset too, so the task sidebar has no List selection:
-  rows use `SidebarSelect` (tap, themed highlight drawn inside the row, own count; `listRowBackground` is ignored there). Cards fill with the `.background` shape style, which `Themed()` sets to
+  icons `themeColors.accent` explicitly. Its selection is drawn in that asset too, so the task sidebar and Settings have no List
+  selection: rows use `SidebarSelect` (tap, themed highlight drawn inside the row, own count; `listRowBackground` is
+  ignored there). The task list keeps its selection but `.themedSelection()` turns off AppKit's highlight and rows draw
+  `RowBackground`. Never use `Color.accentColor` (the asset): use `.tint`, `themeColors.accent` or `Color.themeAccent`.
+  There is no public API to change an app's accent at runtime. Cards fill with the `.background` shape style, which `Themed()` sets to
   `ThemeColors.card` (mixed from the theme background) via `.backgroundStyle`, so use `.background` for cards.
 - The macOS app links `-lsqlite3` (SQLDelight's native driver); keep it in `project.yml` `OTHER_LDFLAGS`.
 - This office network inspects TLS (Fortinet): the Android emulator doesn't trust it, so anything hitting

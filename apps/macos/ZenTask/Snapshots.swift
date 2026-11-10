@@ -63,9 +63,11 @@ enum Snapshots {
             both(AnyView(SearchOverlay(open: { _, _ in }, close: {})).environment(tasks), size: CGSize(width: 600, height: 340), name: "search", dir: dir)
             both(AnyView(AppearanceSettings().frame(width: Theme.Size.settingsWidth)), size: CGSize(width: 540, height: 420), name: "settings-appearance", dir: dir)
             both(AnyView(GeneralSettings().frame(width: Theme.Size.settingsWidth)), size: CGSize(width: 540, height: 760), name: "settings-general", dir: dir)
+            let cal0 = CalendarModel(core: model.core)
             for themeId in ["dracula", "catppuccin", "nord"] {
                 UserDefaults.standard.set(themeId, forKey: "appearance.theme")
                 both(AnyView(MainWindow().modifier(Themed())).environment(model).environment(tasks).environment(panel).environment(focus), size: windowSize, name: "theme-\(themeId)", dir: dir)
+                both(AnyView(SettingsView().modifier(Themed())).environment(model).environment(tasks).environment(cal0), size: CGSize(width: Theme.Size.settingsSidebar + Theme.Size.settingsWidth, height: Theme.Size.settingsHeight), name: "settings-\(themeId)", dir: dir)
             }
             UserDefaults.standard.removeObject(forKey: "appearance.theme")
             NSApp.appearance = nil
@@ -74,6 +76,10 @@ enum Snapshots {
             if let checklist = tasks.sections.flatMap(\.rows).first(where: { $0.checklistTotal > 0 }) ?? tasks.sections.first?.rows.first {
                 tasks.selection = checklist.task.id
                 both(AnyView(MainWindow()).environment(model).environment(tasks).environment(panel).environment(focus), size: windowSize, name: "tasks-detail", dir: dir)
+                UserDefaults.standard.set("nord", forKey: "appearance.theme")
+                both(AnyView(MainWindow().modifier(Themed())).environment(model).environment(tasks).environment(panel).environment(focus), size: windowSize, name: "theme-nord-selected", dir: dir)
+                UserDefaults.standard.removeObject(forKey: "appearance.theme")
+                NSApp.appearance = nil
                 // List grouped by list with one group folded, and the calendar panel open.
                 let cal = CalendarModel(core: model.core)
                 tasks.setOptions(tasks.options.with(sort: "priority", group: "list"))

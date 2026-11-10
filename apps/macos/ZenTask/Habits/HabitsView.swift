@@ -580,7 +580,7 @@ enum HabitLook {
     static func color(_ habit: Habit) -> Color {
         if let c = Color(hex: habit.color) { return c }
         let i = abs(habit.id.unicodeScalars.reduce(0) { $0 &+ Int($1.value) }) % Palette.colors.count
-        return Color(hex: Palette.colors[i]) ?? .accentColor
+        return Color(hex: Palette.colors[i]) ?? .themeAccent
     }
 
     /// The icon when it is an emoji (TickTick's own icon names are not shown as text).

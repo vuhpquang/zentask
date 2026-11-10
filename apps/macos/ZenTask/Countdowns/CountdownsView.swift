@@ -229,7 +229,7 @@ enum CountdownLook {
     static func color(_ c: Countdown) -> Color {
         if let color = Color(hex: c.color) { return color }
         let i = abs(c.id.unicodeScalars.reduce(0) { $0 &+ Int($1.value) }) % Palette.colors.count
-        return Color(hex: Palette.colors[i]) ?? .accentColor
+        return Color(hex: Palette.colors[i]) ?? .themeAccent
     }
 
     /// "days left", "days ago" or "Today".

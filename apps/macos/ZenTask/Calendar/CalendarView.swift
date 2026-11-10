@@ -578,7 +578,7 @@ func entryColor(_ entry: CalendarEntry) -> Color {
         return entry.priority == 0 ? Color.secondary : Theme.PriorityColor.color(Int32(entry.priority))
     }
     if entry.kind == "focus" { return Color(hex: Theme.Calendar.focusColor) ?? .purple }
-    return Color(hex: entry.color) ?? .accentColor
+    return Color(hex: entry.color) ?? .themeAccent
 }
 
 /// Fill, text and edge of an entry in the chosen style. Classic: solid with white text. Modern: a tint with a

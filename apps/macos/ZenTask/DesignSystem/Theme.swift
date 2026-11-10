@@ -143,9 +143,9 @@ enum Theme {
 
     /** The always-visible icon rail on the left of the window (spec §11). */
     enum Rail {
-        /// Wide enough for the window's traffic lights (they end ~72 pt in on macOS 26), so the green one doesn't
+        /// Wide enough for the window's traffic lights (16 pt buttons ending ~70 pt in on macOS 26, in every app: TickTick's rail is ~78 pt too), so the green one doesn't
         /// cross the rail's edge into the sidebar.
-        static let width: CGFloat = 84
+        static let width: CGFloat = 78
         static let hit: CGFloat = 44
         static let icon: CGFloat = 22
         static let radius: CGFloat = 12

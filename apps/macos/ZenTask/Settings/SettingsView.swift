@@ -46,15 +46,20 @@ struct SettingsView: View {
     var body: some View {
         let pane = SettingsPane(rawValue: paneId) ?? .general
         NavigationSplitView {
-            List(SettingsPane.allCases, selection: Binding(get: { pane }, set: { if let p = $0 { paneId = p.rawValue } })) { p in
-                // A sidebar List tints icons with the AccentColor asset; use the theme's accent instead.
-                Label { Text(p.title) } icon: { Image(systemName: p.symbol).foregroundStyle(themeColors.accent) }.tag(p)
+            // No List selection: a sidebar List draws it (and tints icons) with the AccentColor asset, not the theme.
+            List(SettingsPane.allCases) { p in
+                Label { Text(p.title) } icon: { Image(systemName: p.symbol).foregroundStyle(themeColors.accent) }
+                    .modifier(SidebarSelect(selected: p == pane, count: 0) { paneId = p.rawValue })
             }
+            .themedListBackground(themeColors, surface: true)
             .navigationSplitViewColumnWidth(Theme.Size.settingsSidebar)
             .toolbar(removing: .sidebarToggle)
         } detail: {
             content(pane)
+                // Grouped forms draw their own grey; with a themed background they let it show through.
+                .scrollContentBackground(themeColors.background == nil ? .automatic : .hidden)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .background(themeColors.background ?? .clear)
                 .navigationTitle(pane.title)
         }
         .frame(width: Theme.Size.settingsSidebar + Theme.Size.settingsWidth, height: Theme.Size.settingsHeight)

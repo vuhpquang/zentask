@@ -67,9 +67,9 @@ struct ListGlyph: View {
             Image(systemName: TasksModel.symbol(list)).font(.title3).foregroundStyle(.tint)
         case .project(let id):
             let p = tasks.projects.first { $0.id == id }
-            Image(systemName: "list.bullet").font(.title3).foregroundStyle(Color(hex: p?.color) ?? .accentColor)
+            Image(systemName: "list.bullet").font(.title3).foregroundStyle(Color(hex: p?.color) ?? .themeAccent)
         case .tag(let name):
-            Image(systemName: "number").font(.title3).foregroundStyle(Color(hex: tasks.tagColor(name)) ?? .accentColor)
+            Image(systemName: "number").font(.title3).foregroundStyle(Color(hex: tasks.tagColor(name)) ?? .themeAccent)
         case .custom(let id):
             if let icon = tasks.filters.first(where: { $0.id == id })?.icon, !icon.isEmpty {
                 Text(icon).font(.title3)
@@ -237,6 +237,66 @@ struct GroupBar: View {
                 .fill(color)
                 .frame(width: Theme.List.barWidth)
             Spacer(minLength: 0)
+        }
+    }
+}
+
+/// A task row's background: the group colour bar and, when selected, the theme's highlight. The List's own
+/// selection is switched off (`themedSelection()`): AppKit draws it in the AccentColor asset, never the theme.
+struct RowBackground: View {
+    @Environment(\.themeColors) private var themeColors
+    let selected: Bool
+    let groupColor: Color?
+
+    var body: some View {
+        ZStack {
+            if selected {
+                RoundedRectangle(cornerRadius: Theme.Radius.sidebarRow, style: .continuous)
+                    .fill(themeColors.accent.opacity(Theme.Opacity.chip))
+                    .padding(.horizontal, Theme.Space.xs)
+            }
+            if let groupColor { GroupBar(color: groupColor) }
+        }
+    }
+}
+
+extension View {
+    /// Keeps the List's selection (keyboard, focus, multi-row logic) but stops AppKit drawing it; rows draw
+    /// `RowBackground` instead.
+    func themedSelection() -> some View { background(SelectionHighlightOff()) }
+}
+
+/// Finds the table behind the SwiftUI List it sits beside and turns off its selection drawing.
+private struct SelectionHighlightOff: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { Finder() }
+    func updateNSView(_ view: NSView, context: Context) { (view as? Finder)?.apply() }
+
+    final class Finder: NSView {
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            DispatchQueue.main.async { [weak self] in self?.apply() }
+        }
+
+        func apply() {
+            // Walk up until an ancestor holds exactly one table: that is this List's.
+            var node = superview
+            while let n = node {
+                let tables = Self.tables(in: n)
+                if tables.count == 1 {
+                    if tables[0].selectionHighlightStyle != .none { tables[0].selectionHighlightStyle = .none }
+                    return
+                }
+                if tables.count > 1 { return }
+                node = n.superview
+            }
+        }
+
+        private static func tables(in view: NSView) -> [NSTableView] {
+            var out: [NSTableView] = []
+            for sub in view.subviews {
+                if let t = sub as? NSTableView { out.append(t) } else { out += tables(in: sub) }
+            }
+            return out
         }
     }
 }

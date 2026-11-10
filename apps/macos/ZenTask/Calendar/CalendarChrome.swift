@@ -261,7 +261,7 @@ private struct FixedColorRow: View {
                 .help("Each one keeps its own colour")
                 ForEach(Theme.Calendar.fixedColors, id: \.self) { hex in
                     Button { set(hex) } label: {
-                        Circle().fill(Color(hex: hex) ?? .accentColor)
+                        Circle().fill(Color(hex: hex) ?? .themeAccent)
                             .frame(width: Theme.Calendar.swatch, height: Theme.Calendar.swatch)
                             .overlay { if value.caseInsensitiveCompare(hex) == .orderedSame { Circle().strokeBorder(.primary, lineWidth: 2) } }
                     }
@@ -283,7 +283,7 @@ private struct StyleChoice: View {
         Button(action: pick) {
             VStack(spacing: Theme.Space.s) {
                 VStack(spacing: 2) {
-                    sample("Task", "9:00 – 10:00", .accentColor)
+                    sample("Task", "9:00 – 10:00", .themeAccent)
                     sample("Event", "10:00 – 11:00", .orange)
                 }
                 .frame(width: Theme.Calendar.stylePreview)
