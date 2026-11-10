@@ -231,6 +231,22 @@ class TaskActions(
         }
     }
 
+    /**
+     * Moves the task to the day starting at [day] (a local midnight), keeping its time of day and its
+     * length (a timed block or an all-day range). A task with no date gets that day, all-day.
+     */
+    fun moveToDay(id: String, day: Long) {
+        val t = store.get(tasks, id) ?: return
+        val anchor = t.startDate ?: t.dueDate ?: return setDue(id, day, allDay = true)
+        val z = t.timeZone?.let { runCatching { TimeZone.of(it) }.getOrNull() } ?: zone()
+        val from = Instant.fromEpochMilliseconds(anchor).toLocalDateTime(z).date
+        val to = Instant.fromEpochMilliseconds(day).toLocalDateTime(z).date
+        val days = (to.toEpochDays() - from.toEpochDays()).toLong()
+        if (days == 0L) return
+        fun shift(ms: Long?) = ms?.let { Instant.fromEpochMilliseconds(it).plus(days, DateTimeUnit.DAY, z).toEpochMilliseconds() }
+        store.update(tasks, id) { it.copy(startDate = shift(it.startDate), dueDate = shift(it.dueDate)) }
+    }
+
     /** A task getting its first date (with no reminders yet) gets the default reminder, like a new dated task. */
     private fun firstDateDefaults(before: Task, after: Task): Task {
         val hadDate = before.startDate != null || before.dueDate != null

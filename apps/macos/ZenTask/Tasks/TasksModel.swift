@@ -339,7 +339,7 @@ final class TasksModel {
             case .smart(.inbox): actions.move(id: task.id, projectId: "inbox")
             case .smart(.today), .smart(.tomorrow):
                 let day = Calendar.current.startOfDay(for: item == .smart(.today) ? .now : Calendar.current.date(byAdding: .day, value: 1, to: .now)!)
-                actions.setDue(id: task.id, due: KotlinLong(value: Int64(day.timeIntervalSince1970 * 1000)), allDay: true)
+                actions.moveToDay(id: task.id, day: Int64(day.timeIntervalSince1970 * 1000))
             case .tag(let name): actions.setTags(id: task.id, tags: task.tags + [name])
             default: return false
             }

@@ -67,6 +67,33 @@ class TaskActionsTest {
     }
 
     @Test
+    fun movingToADayKeepsTheTimeAndLength() {
+        val timed = actions.create("Call", filter = null, due = ms("2026-11-09T15:30"), allDay = false)
+        actions.moveToDay(timed.id, ms("2026-11-12T00:00"))
+        assertEquals(ms("2026-11-12T15:30"), get(timed.id).dueDate)
+        assertEquals(false, get(timed.id).isAllDay)
+
+        val block = actions.create("Meeting", filter = null)
+        actions.setSpan(block.id, ms("2026-11-09T10:00"), ms("2026-11-09T11:30"))
+        actions.moveToDay(block.id, ms("2026-11-08T00:00"))
+        assertEquals(ms("2026-11-08T10:00"), get(block.id).startDate)
+        assertEquals(ms("2026-11-08T11:30"), get(block.id).dueDate)
+
+        val trip = actions.create("Trip", filter = null)
+        actions.setAllDaySpan(trip.id, ms("2026-11-12T00:00"), ms("2026-11-14T00:00"))
+        actions.moveToDay(trip.id, ms("2026-11-20T00:00"))
+        assertEquals(ms("2026-11-20T00:00"), get(trip.id).startDate)
+        assertEquals(ms("2026-11-23T00:00"), get(trip.id).dueDate)
+        assertTrue(get(trip.id).isAllDay)
+
+        // No date yet: the day, all-day.
+        val idea = actions.create("Idea", filter = null)
+        actions.moveToDay(idea.id, ms("2026-11-10T00:00"))
+        assertEquals(ms("2026-11-10T00:00"), get(idea.id).dueDate)
+        assertTrue(get(idea.id).isAllDay)
+    }
+
+    @Test
     fun completingRecurringTaskMakesCopyAndAdvances() {
         recurring()
         actions.complete("r")

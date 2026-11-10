@@ -216,6 +216,9 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
 - Menus recolour every icon with the tint, and themes set the tint to their accent, so a coloured icon in a menu
   (priority flags, list colours) needs both `Symbols.tinted(…)` and `.tint(sameColour)` on its item, or every flag
   turns the theme's colour. Use `Symbols.priorityPicker` for a priority menu.
+- A `.controlGroupStyle(.palette)` row in a menu shows icons only: give each button `.help(title)` (it becomes the
+  item's tooltip). Quick dates (Today / Tomorrow / Next week, sidebar drops) use `TaskActions.moveToDay`, which keeps
+  the task's time and length; only an undated task becomes all-day. `setDue(…, allDay: true)` would drop the time.
 - A `.listStyle(.sidebar)` List (task sidebar, Settings) tints icons with the AccentColor asset, not `.tint`: give
   icons `themeColors.accent` explicitly. Its selection is drawn in that asset too, so the task sidebar and Settings have no List
   selection: rows use `SidebarSelect` (tap, themed highlight drawn inside the row, own count; `listRowBackground` is

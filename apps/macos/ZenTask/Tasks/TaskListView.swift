@@ -298,11 +298,12 @@ struct TaskMenu: View {
         } else {
             Section("Date") {
                 ControlGroup {
-                    Button { setDay(0) } label: { Label("Today", systemImage: "sun.max") }
-                    Button { setDay(1) } label: { Label("Tomorrow", systemImage: "sunrise") }
-                    Button { setDay(7) } label: { Label("Next week", systemImage: "calendar.badge.plus") }
-                    Button { tasks.selection = task.id; tasks.requestDateEdit = task.id } label: { Label("Pick a date…", systemImage: "calendar") }
-                    Button { actions.setDue(id: task.id, due: nil, allDay: false) } label: { Label("No date", systemImage: "xmark.square") }
+                    // .help = the tooltip on hover (a palette row shows icons only).
+                    Button { setDay(0) } label: { Label("Today", systemImage: "sun.max") }.help("Today")
+                    Button { setDay(1) } label: { Label("Tomorrow", systemImage: "sunrise") }.help("Tomorrow")
+                    Button { setDay(7) } label: { Label("Next week", systemImage: "calendar.badge.plus") }.help("Next week")
+                    Button { tasks.selection = task.id; tasks.requestDateEdit = task.id } label: { Label("Pick a date…", systemImage: "calendar") }.help("Pick a date…")
+                    Button { actions.setDue(id: task.id, due: nil, allDay: false) } label: { Label("No date", systemImage: "xmark.square") }.help("No date")
                 }
                 .controlGroupStyle(.palette)
             }
@@ -312,6 +313,7 @@ struct TaskMenu: View {
                         Button { actions.setPriority(id: task.id, priority: p.value) } label: {
                             Label { Text(p.title) } icon: { Symbols.tinted(p.value == 0 ? "flag" : "flag.fill", Theme.PriorityColor.nsColor(p.value)) }
                         }
+                        .help(p.title)
                         // A palette row recolours its icons with the tint (the theme's accent), so each flag sets its own.
                         .tint(Theme.PriorityColor.color(p.value))
                     }
@@ -355,7 +357,8 @@ struct TaskMenu: View {
 
     private func setDay(_ offset: Int) {
         let day = Calendar.current.date(byAdding: .day, value: offset, to: Calendar.current.startOfDay(for: .now))!
-        tasks.core.actions.setDue(id: task.id, due: KotlinLong(value: Int64(day.timeIntervalSince1970 * 1000)), allDay: true)
+        // Keeps the task's time (and length); only an undated task becomes all-day.
+        tasks.core.actions.moveToDay(id: task.id, day: Int64(day.timeIntervalSince1970 * 1000))
     }
 }
 
