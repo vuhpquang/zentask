@@ -5,6 +5,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.foundation.gestures.calculateZoom
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -88,7 +94,10 @@ private val zone: ZoneId get() = ZoneId.systemDefault()
 private fun midnight(d: LocalDate) = d.atStartOfDay(zone).toInstant().toEpochMilli()
 private fun hm(ms: Long) = Instant.ofEpochMilli(ms).atZone(zone).toLocalTime().format(DateTimeFormatter.ofPattern("HH:mm"))
 
-private val HOUR_HEIGHT = 56.dp
+/** Height of one hour in the time grid, in dp: default and pinch limits. */
+private const val DEFAULT_HOUR_DP = 56f
+private const val MIN_HOUR_DP = 28f
+private const val MAX_HOUR_DP = 160f
 private val GUTTER = 44.dp
 private const val SWIPE_DISTANCE = 120f
 
@@ -202,8 +211,14 @@ private fun TimeGrid(app: ZenApp, days: List<CalendarDay>, options: CalendarView
     val scroll = rememberScrollState()
     val density = LocalDensity.current
     val today = LocalDate.now(zone)
+    // Pinch to zoom the hours (kept per device); the point under the fingers stays put.
+    val prefs = remember { context.getSharedPreferences("zentask.calendar", Context.MODE_PRIVATE) }
+    var hourDp by remember { mutableFloatStateOf(prefs.getFloat("hourHeight", DEFAULT_HOUR_DP).coerceIn(MIN_HOUR_DP, MAX_HOUR_DP)) }
+    var pendingScroll by remember { mutableStateOf<Int?>(null) }
+    val hourHeight = hourDp.dp
+    LaunchedEffect(hourDp) { pendingScroll?.let { scroll.scrollTo(it.coerceAtLeast(0)); pendingScroll = null } }
     // Open on the working hours, with room for the first hour's label.
-    LaunchedEffect(Unit) { scroll.scrollTo(with(density) { (HOUR_HEIGHT * workStart(context) - 12.dp).roundToPx() }) }
+    LaunchedEffect(Unit) { scroll.scrollTo(with(density) { (hourHeight * workStart(context) - 12.dp).roundToPx() }) }
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) { while (true) { delay(60_000); now = System.currentTimeMillis() } }
     Column(Modifier.fillMaxSize()) {
@@ -240,11 +255,37 @@ private fun TimeGrid(app: ZenApp, days: List<CalendarDay>, options: CalendarView
             }
         }
         HorizontalDivider()
-        Box(Modifier.fillMaxSize().verticalScroll(scroll)) {
-            Row(Modifier.fillMaxWidth().height(HOUR_HEIGHT * 24)) {
+        Box(
+            Modifier.fillMaxSize()
+                .pointerInput(Unit) {
+                    // Two fingers zoom; one finger is left to the scroll, taps and the day swipe.
+                    awaitEachGesture {
+                        awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                        var zoomed = false
+                        do {
+                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                            if (event.changes.count { it.pressed } >= 2) {
+                                val zoom = event.calculateZoom()
+                                if (zoom != 1f) {
+                                    val old = hourDp
+                                    val new = (old * zoom).coerceIn(MIN_HOUR_DP, MAX_HOUR_DP)
+                                    val focusY = event.calculateCentroid(useCurrent = true).y
+                                    pendingScroll = ((scroll.value + focusY) * (new / old) - focusY).toInt()
+                                    hourDp = new
+                                    zoomed = true
+                                }
+                                event.changes.forEach { it.consume() }
+                            }
+                        } while (event.changes.any { it.pressed })
+                        if (zoomed) prefs.edit().putFloat("hourHeight", hourDp).apply()
+                    }
+                }
+                .verticalScroll(scroll),
+        ) {
+            Row(Modifier.fillMaxWidth().height(hourHeight * 24)) {
                 Column(Modifier.width(GUTTER)) {
                     for (h in 0 until 24) {
-                        Box(Modifier.height(HOUR_HEIGHT).fillMaxWidth()) {
+                        Box(Modifier.height(hourHeight).fillMaxWidth()) {
                             if (h > 0) Text("%02d:00".format(h), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.offset(y = (-7).dp).padding(start = 4.dp))
                         }
@@ -257,18 +298,18 @@ private fun TimeGrid(app: ZenApp, days: List<CalendarDay>, options: CalendarView
                             .pointerInput(d.dayStart) {
                                 detectTapGestures { pos ->
                                     // Snap to the half hour that was tapped.
-                                    val minutes = (pos.y / HOUR_HEIGHT.toPx() * 60).toInt() / 30 * 30
+                                    val minutes = (pos.y / hourHeight.toPx() * 60).toInt() / 30 * 30
                                     onEmpty(d.dayStart + minutes * 60_000L)
                                 }
                             },
                     ) {
                         val colWidth = maxWidth
                         for (h in 1 until 24) {
-                            HorizontalDivider(Modifier.offset(y = HOUR_HEIGHT * h), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                            HorizontalDivider(Modifier.offset(y = hourHeight * h), color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                         }
                         for (p in d.timed) {
-                            val top = HOUR_HEIGHT * (p.startMinute / 60f)
-                            val height = (HOUR_HEIGHT * ((p.endMinute - p.startMinute).coerceAtLeast(20) / 60f)) - 2.dp
+                            val top = hourHeight * (p.startMinute / 60f)
+                            val height = (hourHeight * ((p.endMinute - p.startMinute).coerceAtLeast(20) / 60f)) - 2.dp
                             val w = colWidth / p.columns
                             Box(Modifier.offset(x = w * p.column, y = top).width(w - 2.dp).height(height)) {
                                 Block(p.entry, height, options) { openEntry(app, p.entry, onEvent) }
@@ -276,7 +317,7 @@ private fun TimeGrid(app: ZenApp, days: List<CalendarDay>, options: CalendarView
                         }
                         if (Instant.ofEpochMilli(d.dayStart).atZone(zone).toLocalDate() == today) {
                             val minutes = Instant.ofEpochMilli(now).atZone(zone).toLocalTime().let { it.hour * 60 + it.minute }.toFloat()
-                            Box(Modifier.offset(y = HOUR_HEIGHT * (minutes / 60f)).fillMaxWidth().height(2.dp).background(ZenColors.high))
+                            Box(Modifier.offset(y = hourHeight * (minutes / 60f)).fillMaxWidth().height(2.dp).background(ZenColors.high))
                         }
                     }
                 }
