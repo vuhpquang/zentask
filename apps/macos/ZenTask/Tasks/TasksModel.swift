@@ -184,8 +184,12 @@ final class TasksModel {
     var reminders: Reminders?
     private var pendingReload: _Concurrency.Task<Void, Never>?
 
+    /// Attachment bytes (cache + upload/download).
+    let files: AttachmentFiles
+
     init(core: ZenTaskCore) {
         self.core = core
+        files = AttachmentFiles(core: core)
     }
 
     func start() {
@@ -220,6 +224,7 @@ final class TasksModel {
         await recomputeTask?.value
         offerDayPlan()
         WidgetFeed.update(core: core, index: idx)
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil { files.syncSoon() }
         if let reminders { await reminders.reschedule(core.plannedReminders(index: idx, limit: 60)) }
     }
 

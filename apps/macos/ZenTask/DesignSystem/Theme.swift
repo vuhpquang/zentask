@@ -165,6 +165,12 @@ enum Theme {
         static let foldAnimation: Animation = .snappy(duration: 0.28)
     }
 
+    /** Task detail → Attachments. */
+    enum Attach {
+        static let tile: CGFloat = 96
+        static let radius: CGFloat = 10
+    }
+
     /** Sidebar → Statistics. */
     enum Stats {
         static let chartHeight: CGFloat = 180

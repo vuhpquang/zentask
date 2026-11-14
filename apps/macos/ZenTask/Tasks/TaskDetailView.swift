@@ -32,6 +32,7 @@ struct TaskDetailView: View {
                 card { notesEditor }
                 if task.kind == "CHECKLIST" || !tasks.items(of: task).isEmpty { card { checklist } }
                 card { subtasksSection }
+                card { AttachmentsSection(task: task) }
                 footer
             }
             .padding(Theme.Space.xl)
