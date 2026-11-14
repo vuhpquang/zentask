@@ -554,6 +554,68 @@ object McpTools {
                 ctx.countdowns.delete(c.id)
                 ToolResult("Deleted countdown ${c.name}", changed = listOf(c.id))
             },
+            Tool("list_places", "Saved places for location reminders (home, work, custom) with their Wi-Fi names.", schema(), writes = false) { _, ctx, _ ->
+                ToolResult(json(buildJsonObject {
+                    putJsonArray("places") {
+                        ctx.places.list().forEach { p ->
+                            add(buildJsonObject {
+                                put("id", p.id); put("name", p.name); put("kind", p.kind)
+                                put("latitude", p.latitude); put("longitude", p.longitude); put("radius_m", p.radius)
+                                if (p.wifi.isNotEmpty()) putJsonArray("wifi") { p.wifi.forEach { add(JsonPrimitive(it)) } }
+                            })
+                        }
+                    }
+                }))
+            },
+            Tool(
+                "set_location_reminder",
+                "Remind about a task when arriving at or leaving a saved place (see list_places). place=null clears it.",
+                schema(
+                    "id" to str("Task id"), "place" to nullable("Place name or id; null removes the location reminder"),
+                    "when" to enumStr("Arrive or leave (default arrive)", "arrive", "leave"),
+                    required = listOf("id", "place"),
+                ),
+                writes = true,
+            ) { a, ctx, zone ->
+                val t = task(ctx, a.req("id"))
+                val key = a.str("place")?.trim()
+                if (key.isNullOrEmpty()) {
+                    ctx.actions.setLocationReminder(t.id, null, null)
+                } else {
+                    val places = ctx.places.list()
+                    val p = places.firstOrNull { it.id == key || it.name.equals(key, ignoreCase = true) || it.kind == key.lowercase() }
+                        ?: throw ToolError("No place named \"$key\". Places: ${places.joinToString { it.name }.ifEmpty { "none yet (set them in the app)" }}")
+                    val trigger = when (a.str("when") ?: "arrive") { "leave" -> com.vuhpquang.zentask.model.Place.LEAVE; else -> com.vuhpquang.zentask.model.Place.ARRIVE }
+                    ctx.actions.setLocationReminder(t.id, p.id, trigger)
+                }
+                ToolResult(json(brief(ctx.store.get(EntityTypes.task, t.id)!!, ctx, zone)), changed = listOf(t.id))
+            },
+            Tool("list_templates", "Task templates (title, notes, checklist, subtasks) to make tasks from.", schema(), writes = false) { _, ctx, _ ->
+                ToolResult(json(buildJsonObject {
+                    putJsonArray("templates") {
+                        ctx.templates.list().forEach { t ->
+                            add(buildJsonObject {
+                                put("id", t.id); put("name", t.name); put("title", t.title)
+                                if (t.checklist.isNotEmpty()) put("checklist_items", t.checklist.size)
+                                if (t.subtasks.isNotEmpty()) put("subtasks", t.subtasks.size)
+                            })
+                        }
+                    }
+                }))
+            },
+            Tool(
+                "create_from_template", "Make a new task from a template (see list_templates), optionally in a list.",
+                schema("template" to str("Template name or id"), "list" to str("List name or id (default Inbox)"), required = listOf("template")),
+                writes = true,
+            ) { a, ctx, zone ->
+                val key = a.req("template").trim()
+                val all = ctx.templates.list()
+                val tpl = all.firstOrNull { it.id == key || it.name.equals(key, ignoreCase = true) }
+                    ?: throw ToolError("No template named \"$key\". Templates: ${all.joinToString { it.name }.ifEmpty { "none yet" }}")
+                val projectId = a.str("list")?.let { project(ctx, it).id }
+                val made = ctx.templates.use(tpl.id, null, projectId) ?: throw ToolError("The template is gone")
+                ToolResult(json(fullTask(made, ctx, zone)), changed = listOf(made.id))
+            },
             Tool(
                 "list_focus",
                 "Focus sessions (Pomodoro / stopwatch) in a date range, newest first, with the task each was for and the total minutes.",
@@ -1050,6 +1112,9 @@ object McpTools {
                 if (subs.isNotEmpty()) putJsonArray("subtasks") { subs.forEach { add(brief(it, ctx, zone)) } }
                 t.completedAt?.let { put("completed_at", Instant.fromEpochMilliseconds(it).toString()) }
                 if (t.reminders.isNotEmpty()) putJsonArray("reminders") { t.reminders.forEach { add(JsonPrimitive(it)) } }
+                t.placeId?.let { pid -> ctx.store.get(EntityTypes.place, pid)?.let { put("location_reminder", (if (t.placeTrigger == "leave") "leaving " else "arriving at ") + it.name) } }
+                val files = ctx.store.idsWhere(EntityTypes.attachment, "taskId", t.id).mapNotNull { ctx.store.get(EntityTypes.attachment, it) }.filter { !it.deleted }
+                if (files.isNotEmpty()) putJsonArray("attachments") { files.forEach { f -> add(JsonPrimitive("${f.name} (${f.size / 1024} KB)")) } }
             },
         )
     }

@@ -480,4 +480,15 @@ class McpToolsTest {
         assertEquals(0, focus["sessions"]!!.jsonPrimitive.int)
         assertTrue(client.tool(token, "list_focus", """{"from":"2026-02-01","to":"2026-01-01"}""").second)
     }
+
+    @Test
+    fun placesAndTemplates() = testApplication {
+        server()
+        val token = client.loginToken()
+        val id = obj(client.tool(token, "create_task", """{"title":"Buy milk"}""").first)["id"]!!.jsonPrimitive.content
+        assertTrue(client.tool(token, "set_location_reminder", """{"id":"$id","place":"Home"}""").second, "no places yet")
+        assertTrue(obj(client.tool(token, "list_templates").first)["templates"]!!.jsonArray.isEmpty())
+        assertTrue(client.tool(token, "create_from_template", """{"template":"Trip"}""").second)
+        assertTrue(obj(client.tool(token, "list_places").first)["places"]!!.jsonArray.isEmpty())
+    }
 }

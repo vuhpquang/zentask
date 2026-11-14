@@ -174,6 +174,7 @@ Các quyết định dưới đây là của người viết thiết kế; chủ
   - P4: `list_projects`, `create_project`, `update_project`, `delete_project`, column, filter.
   - P6: `list_habits`, `create_habit`, `check_in_habit` (yes/no: gọi lại vẫn là xong, không đảo trạng thái; `undo` để xoá ngày), `list_countdowns`, `create_countdown`.
   - 2026-11-14: `create_task`/`update_task` thêm `reminders` (on_time, 15m, 1h, 1d; task cả ngày: on_day, 1d, 7d), `repeat` (daily, weekdays, weekly, monthly, yearly hoặc RRULE) và `end` (khung giờ); `update_habit`, `delete_habit` (habit thêm `times_a_month`, `remind_from`, `reminders`); `update_countdown`, `delete_countdown` (nhắc dạng `7@09:00`); `list_focus`; `summarize_period` (xong/còn mở theo list trong một khoảng ngày).
+  - 0.15: `list_places`, `set_location_reminder` (nhắc khi tới/rời một địa điểm đã lưu), `list_templates`, `create_from_template`; `get_task` có thêm nhắc theo vị trí và danh sách file đính kèm.
   - P5: `list_events` (chỉ đọc).
 - **An toàn** (vì "mất dữ liệu" là anti-goal):
   - "Xoá" mặc định là đưa vào Trash. Xoá vĩnh viễn chỉ khi gọi `delete_task` với `permanent: true`.

@@ -35,6 +35,8 @@ class McpReplica(
         val lists: ListActions,
         val habits: HabitActions,
         val countdowns: CountdownActions,
+        val places: com.vuhpquang.zentask.tasks.PlaceActions,
+        val templates: com.vuhpquang.zentask.tasks.TemplateActions,
     ) {
         val index: TaskIndex by lazy { TaskIndex.load(store) }
     }
@@ -54,7 +56,8 @@ class McpReplica(
     suspend fun <T> transact(block: (Context) -> T): T = mutex.withLock {
         withContext(Dispatchers.IO) {
             pull()
-            val result = block(Context(store, actions, tagActions, listActions, habitActions, countdownActions))
+            val result = block(Context(store, actions, tagActions, listActions, habitActions, countdownActions,
+                com.vuhpquang.zentask.tasks.PlaceActions(store, wall), com.vuhpquang.zentask.tasks.TemplateActions(store, actions, wall)))
             push()
             pull() // advance the checkpoint past our own writes (so a restored server is noticed)
             result
