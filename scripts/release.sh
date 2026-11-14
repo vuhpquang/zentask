@@ -71,10 +71,20 @@ fi
 
 step "Building"
 SIGN_IDENTITY="$SIGN_IDENTITY" scripts/build-mac.sh Release
-codesign --force --deep --options runtime --timestamp=none --sign "$SIGN_IDENTITY" "$APP"
+# The widget extension must keep its sandbox entitlements (--deep would drop them): sign it first, then the app.
+for ext in "$APP"/Contents/PlugIns/*.appex; do
+    [[ -e "$ext" ]] || continue
+    codesign --force --options runtime --timestamp=none --sign "$SIGN_IDENTITY" \
+        --entitlements apps/macos/ZenTaskWidget/ZenTaskWidget.entitlements "$ext"
+done
+codesign --force --options runtime --timestamp=none --sign "$SIGN_IDENTITY" "$APP"
 
 step "Verifying the release"
 codesign --verify --deep --strict "$APP"
+for ext in "$APP"/Contents/PlugIns/*.appex; do
+    [[ -e "$ext" ]] || continue
+    codesign -d --entitlements - "$ext" 2>&1 | grep -q "com.apple.security.app-sandbox" || die "$(basename "$ext") lost its sandbox entitlement"
+done
 built="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")"
 [[ "$built" == "$VERSION" ]] || die "bundle says $built, expected $VERSION"
 codesign -d -r- "$APP" 2>&1 | grep -qiE "certificate leaf = H\"$RELEASE_CERT\"" \

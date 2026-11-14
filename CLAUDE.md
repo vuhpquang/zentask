@@ -251,6 +251,13 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
   a `MenuBarExtra` scene made the XCTest runner hang before connecting) showing `MenuBar/MenuBarPanel.swift`: Today's open tasks (tick, click opens the
   task in the main window) + a field adding to Today; Settings → General "Show Today in the menu bar"
   (UserDefaults `menubar.show`).
+- Desktop widgets: target `ZenTaskWidget` (WidgetKit extension: Today S/M/L, Countdown S/M; read-only, a click opens
+  `zentask://task/<id>`). Sandboxed, so it reads `~/Library/Application Support/ZenTask[-dev]/widget.json` through a
+  read-only temporary exception (`ZenTaskWidget.entitlements`); the app writes that file via `Services/WidgetFeed.swift`
+  after each reload (only on change) and calls `WidgetCenter.reloadAllTimelines()`. `Shared/WidgetSnapshot.swift` is
+  compiled into both targets. `release.sh` signs the .appex with its entitlements first, then the app WITHOUT `--deep`
+  (`--deep` drops the extension's sandbox and WidgetKit won't load it) and checks the entitlement survived.
+  The app loads its data at launch (`MenuBarController.start`) so widgets and the menu bar are fresh with no window open.
 - Motion: curves in `Theme.Anim`, always through `Motion.rows` / `.fade` / `.pop` (nil with Reduce Motion). A ticked
   task shows its check for `completeDelay` before `complete` runs (`TasksModel.completing`; tests await
   `finishCompleting()`). Rows animate only within one list and up to 300 rows; another list fades in (`listShown`).

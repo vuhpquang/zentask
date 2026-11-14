@@ -16,6 +16,8 @@ final class MenuBarController: NSObject, NSPopoverDelegate {
     func start(tasks: TasksModel) {
         guard self.tasks == nil else { return }
         self.tasks = tasks
+        // Load the data at launch even with no window open: the menu bar and the desktop widgets show it.
+        tasks.start()
         popover.behavior = .transient
         popover.delegate = self
         popover.contentViewController = NSHostingController(rootView: MenuBarPanel().environment(tasks).modifier(Themed()))

@@ -218,6 +218,7 @@ final class TasksModel {
         recompute()
         await recomputeTask?.value
         offerDayPlan()
+        WidgetFeed.update(core: core, index: idx)
         if let reminders { await reminders.reschedule(core.plannedReminders(index: idx, limit: 60)) }
     }
 
