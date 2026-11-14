@@ -62,6 +62,7 @@ if [[ "${SKIP_TESTS:-0}" != "1" ]]; then
     step "Running tests"
     ./gradlew -q :shared:allTests :server:test || die "Gradle tests failed"
     scripts/build-shared.sh release >/dev/null
+    git submodule update --init --recursive   # Vendor/app-shell (shared updater / About / Settings), pinned by commit
     (cd apps/macos && xcodegen generate -q)
     xcodebuild test -project apps/macos/ZenTask.xcodeproj -scheme ZenTask \
         -destination 'platform=macOS,arch=arm64' -derivedDataPath build/DerivedData -quiet \

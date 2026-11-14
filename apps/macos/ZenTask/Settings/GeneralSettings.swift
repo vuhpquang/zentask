@@ -40,7 +40,6 @@ struct GeneralSettings: View {
                     FeatureToggle(tab: tab)
                 }
             }
-            UpdatesSection()
         }
         .formStyle(.grouped)
     }
@@ -91,46 +90,3 @@ struct DateTimeSettings: View {
     }
 }
 
-/// Settings → General → Updates: version, check, install and relaunch.
-struct UpdatesSection: View {
-    @AppStorage(Updater.autoCheckKey) private var autoCheck = true
-    private var updater: Updater { Updater.shared }
-
-    var body: some View {
-        Section {
-            LabeledContent("Version", value: AppInfo.displayVersion)
-            HStack {
-                status
-                Spacer()
-                action
-            }
-            Toggle("Check for updates automatically", isOn: $autoCheck)
-        } header: {
-            Text("Updates")
-        } footer: {
-            if let checked = updater.lastChecked {
-                Text("Last checked \(checked.formatted(date: .abbreviated, time: .shortened))").foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    @ViewBuilder private var status: some View {
-        switch updater.state {
-        case .idle: Text("Not checked yet").foregroundStyle(.secondary)
-        case .checking: HStack(spacing: 6) { ProgressView().controlSize(.small); Text("Checking…") }
-        case .upToDate: Label("ZenTask is up to date", systemImage: "checkmark.circle").foregroundStyle(.secondary)
-        case .available(let v): Label("Version \(v) is available", systemImage: "arrow.down.circle.fill").foregroundStyle(.tint)
-        case .downloading: HStack(spacing: 6) { ProgressView().controlSize(.small); Text("Downloading…") }
-        case .installing: Text("Installing, ZenTask will reopen…")
-        case .failed(let message): ProblemLabel(text: message)
-        }
-    }
-
-    @ViewBuilder private var action: some View {
-        switch updater.state {
-        case .available: Button("Install and relaunch") { updater.install() }.buttonStyle(.borderedProminent)
-        case .checking, .downloading, .installing: EmptyView()
-        default: Button("Check now") { Task { await updater.check() } }
-        }
-    }
-}

@@ -65,6 +65,15 @@ enum Snapshots {
             both(AnyView(SearchOverlay(open: { _, _ in }, close: {})).environment(tasks), size: CGSize(width: 600, height: 340), name: "search", dir: dir)
             both(AnyView(AppearanceSettings().frame(width: Theme.Size.settingsWidth)), size: CGSize(width: 540, height: 420), name: "settings-appearance", dir: dir)
             both(AnyView(GeneralSettings().frame(width: Theme.Size.settingsWidth)), size: CGSize(width: 540, height: 760), name: "settings-general", dir: dir)
+            // The whole Settings window (app-shell's SettingsShell with ZenTask's style), incl. the shared panes.
+            let shellCalendar = CalendarModel(core: model.core)
+            for pane in [SettingsPane.general, .updates, .about] {
+                UserDefaults.standard.set(pane.rawValue, forKey: SettingsPane.storageKey)
+                both(AnyView(SettingsView().environment(model).environment(tasks).environment(shellCalendar).modifier(Themed())),
+                     size: CGSize(width: Theme.Size.settingsSidebar + Theme.Size.settingsWidth, height: Theme.Size.settingsHeight),
+                     name: "settings-shell-\(pane.rawValue)", dir: dir)
+            }
+            UserDefaults.standard.set(SettingsPane.general.rawValue, forKey: SettingsPane.storageKey)
             let cal0 = CalendarModel(core: model.core)
             for themeId in ["dracula", "catppuccin", "nord"] {
                 UserDefaults.standard.set(themeId, forKey: "appearance.theme")

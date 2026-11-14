@@ -4,6 +4,10 @@ options:
   deploymentTarget:
     macOS: "26.0"
   createIntermediateGroups: true
+packages:
+  # Shared updater / About / Settings shell — git submodule at the repo root (git submodule update --init).
+  AppShell:
+    path: ../../Vendor/app-shell
 settings:
   base:
     MARKETING_VERSION: 0.13.0
@@ -24,6 +28,14 @@ targets:
     dependencies:
       - framework: ../../shared/build/XCFrameworks/release/ZenTaskShared.xcframework
         embed: false
+      - package: AppShell
+        product: AppShellCore
+      - package: AppShell
+        product: UpdaterKit
+      - package: AppShell
+        product: AboutKit
+      - package: AppShell
+        product: SettingsKit
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.vuhpquang.zentask
@@ -31,7 +43,7 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: ZenTask
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity
-        INFOPLIST_KEY_NSHumanReadableCopyright: "© 2026 vuhpquang"
+        INFOPLIST_KEY_NSHumanReadableCopyright: "© 2026 Ha Phung Quang Vu"
         ASSETCATALOG_COMPILER_APPICON_NAME: ZenTask
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         OTHER_LDFLAGS: ["-lc++", "-lsqlite3"]

@@ -1,4 +1,7 @@
+import AboutKit
+import AppShellCore
 import SwiftUI
+import UpdaterKit
 
 @main
 struct ZenTaskApp: App {
@@ -18,7 +21,7 @@ struct ZenTaskApp: App {
         #if DEBUG
         if ProcessInfo.processInfo.environment["ZENTASK_UPDATE_DRYRUN"] != nil {
             let done = DispatchSemaphore(value: 0)
-            Task.detached { print(await Updater.shared.dryRun()); done.signal() }
+            Task { @MainActor in print(await Updater.shared.dryRun()); done.signal() }
             while done.wait(timeout: .now()) == .timedOut { RunLoop.main.run(until: Date().addingTimeInterval(0.1)) }
             exit(0)
         }
@@ -38,6 +41,7 @@ struct ZenTaskApp: App {
             IntentBridge.tasks = tasks
             IntentBridge.focus = _focus.wrappedValue
             Updater.shared.startAutomaticChecks()
+            WhatsNewTracker.showAfterUpdate()
             _focus.wrappedValue.start() // a running pomo keeps ticking and is recorded even before Focus is opened
             HotKeys.shared.start(handlers: [
                 .quickAdd: { tasks.start(); QuickAddWindow.shared.show(tasks: tasks) },
@@ -79,8 +83,12 @@ struct TaskCommands: Commands {
     @FocusedValue(\.focusQuickAdd) private var focusQuickAdd
 
     var body: some Commands {
-        CommandGroup(after: .appInfo) {
+        CommandGroup(replacing: .appInfo) {
+            Button("About ZenTask") { AboutWindow.show(app: .zenTask, updater: .shared) }
             CheckForUpdatesButton()
+            Button("What's New") {
+                WhatsNewWindow.show(app: .zenTask, version: AppIdentity.zenTask.version, tracker: .shared)
+            }
         }
         CommandGroup(replacing: .newItem) {
             Button("New Task") { focusQuickAdd?() }
@@ -90,15 +98,15 @@ struct TaskCommands: Commands {
     }
 }
 
-/// App menu → Check for Updates…: opens Settings (General shows the result) and checks.
+/// App menu → Check for Updates…: opens Settings → Updates and checks.
 private struct CheckForUpdatesButton: View {
     @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         Button("Check for Updates…") {
-            UserDefaults.standard.set(SettingsPane.general.rawValue, forKey: SettingsPane.storageKey)
+            UserDefaults.standard.set(SettingsPane.updates.rawValue, forKey: SettingsPane.storageKey)
             openSettings()
-            Task { await Updater.shared.check() }
+            Updater.shared.check(userInitiated: true)
         }
     }
 }

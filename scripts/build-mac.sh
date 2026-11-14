@@ -11,6 +11,7 @@ SIGN_IDENTITY="${SIGN_IDENTITY:--}"
 # The app always links the release XCFramework (see project.yml).
 scripts/build-shared.sh release
 
+git submodule update --init --recursive   # Vendor/app-shell (shared updater / About / Settings), pinned by commit
 step "Generating Xcode project"
 (cd apps/macos && xcodegen generate -q)
 

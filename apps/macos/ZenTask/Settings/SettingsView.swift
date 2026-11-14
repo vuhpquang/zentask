@@ -1,10 +1,14 @@
+import AppShellCore
+import SettingsKit
 import SwiftUI
+import UpdaterKit
 @preconcurrency import ZenTaskShared
 import UniformTypeIdentifiers
 
 /// The Settings panes, in sidebar order. Raw values are stored (`settings.pane`): add, never rename.
+/// `updates` and `about` are the shared app-shell panes; SettingsShell draws them after ZenTask's own.
 enum SettingsPane: String, CaseIterable, Identifiable {
-    case general, account, ticktick, smartLists, notifications, calendars, dateTime, appearance, hotkeys
+    case general, account, ticktick, smartLists, notifications, calendars, dateTime, appearance, hotkeys, updates, about
     var id: String { rawValue }
 
     var title: String {
@@ -18,6 +22,8 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .dateTime: "Date & Time"
         case .appearance: "Appearance"
         case .hotkeys: "Hotkeys"
+        case .updates: "Updates"
+        case .about: "About"
         }
     }
 
@@ -32,37 +38,49 @@ enum SettingsPane: String, CaseIterable, Identifiable {
         case .dateTime: "clock"
         case .appearance: "paintpalette"
         case .hotkeys: "command"
+        case .updates: "arrow.down.circle"
+        case .about: "info.circle"
         }
     }
 
     static let storageKey = "settings.pane"
+
+    /// ZenTask's own pages, in sidebar order.
+    static let own: [SettingsPane] = [.general, .account, .ticktick, .smartLists, .notifications, .calendars,
+                                      .dateTime, .appearance, .hotkeys]
 }
 
-/// Settings window (⌘,): a sidebar of panes (nine don't fit as toolbar tabs) and grouped forms.
+/// Settings window (⌘,): app-shell's SettingsShell — ZenTask's panes, then the shared Updates and About —
+/// styled with the theme (tinted sidebar icons, theme backgrounds, ZenTask's own selection, fixed size).
 struct SettingsView: View {
     @Environment(\.themeColors) private var themeColors
     @AppStorage(SettingsPane.storageKey) private var paneId = SettingsPane.general.rawValue
 
     var body: some View {
-        let pane = SettingsPane(rawValue: paneId) ?? .general
-        NavigationSplitView {
-            // No List selection: a sidebar List draws it (and tints icons) with the AccentColor asset, not the theme.
-            List(SettingsPane.allCases) { p in
-                Label { Text(p.title) } icon: { Image(systemName: p.symbol).foregroundStyle(themeColors.accent) }
-                    .modifier(SidebarSelect(selected: p == pane, count: 0) { paneId = p.rawValue })
-            }
-            .themedListBackground(themeColors, surface: true)
-            .navigationSplitViewColumnWidth(Theme.Size.settingsSidebar)
-            .toolbar(removing: .sidebarToggle)
-        } detail: {
-            content(pane)
-                // Grouped forms draw their own grey; with a themed background they let it show through.
-                .scrollContentBackground(themeColors.background == nil ? .automatic : .hidden)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                .background(themeColors.background ?? .clear)
-                .navigationTitle(pane.title)
-        }
-        .frame(width: Theme.Size.settingsSidebar + Theme.Size.settingsWidth, height: Theme.Size.settingsHeight)
+        SettingsShell(
+            app: .zenTask,
+            updater: .shared,
+            panes: SettingsPane.own.map { pane in
+                SettingsKit.SettingsPane(id: pane.rawValue, title: pane.title, systemImage: pane.symbol) { content(pane) }
+            },
+            selection: $paneId,
+            style: style
+        )
+    }
+
+    private var style: SettingsShellStyle {
+        let colors = themeColors
+        return SettingsShellStyle(
+            sidebarIconTint: colors.accent,
+            detailBackground: colors.background,
+            // A themed list background; no List selection, which would draw with the AccentColor asset, not the theme.
+            decorateSidebar: { AnyView($0.themedListBackground(colors, surface: true)) },
+            sidebarRow: { label, selected, select in
+                AnyView(label.modifier(SidebarSelect(selected: selected, count: 0, action: select)))
+            },
+            windowSize: CGSize(width: Theme.Size.settingsSidebar + Theme.Size.settingsWidth, height: Theme.Size.settingsHeight),
+            sidebarWidth: Theme.Size.settingsSidebar
+        )
     }
 
     @ViewBuilder
@@ -77,6 +95,7 @@ struct SettingsView: View {
         case .dateTime: DateTimeSettings()
         case .appearance: AppearanceSettings()
         case .hotkeys: HotkeySettings()
+        case .updates, .about: EmptyView() // drawn by SettingsShell
         }
     }
 }
