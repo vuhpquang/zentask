@@ -10,8 +10,8 @@ packages:
     path: ../../Vendor/app-shell
 settings:
   base:
-    MARKETING_VERSION: 0.15.1
-    CURRENT_PROJECT_VERSION: 40
+    MARKETING_VERSION: 0.15.2
+    CURRENT_PROJECT_VERSION: 41
     SWIFT_VERSION: "6.0"
     ARCHS: arm64
     ONLY_ACTIVE_ARCH: NO
