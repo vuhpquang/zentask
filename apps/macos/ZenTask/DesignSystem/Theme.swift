@@ -165,6 +165,14 @@ enum Theme {
         static let foldAnimation: Animation = .snappy(duration: 0.28)
     }
 
+    /** Places sheet (location reminders). */
+    enum Places {
+        static let width: CGFloat = 560
+        static let height: CGFloat = 640
+        static let mapHeight: CGFloat = 260
+        static let radiusLabel: CGFloat = 110
+    }
+
     /** Task detail → Attachments. */
     enum Attach {
         static let tile: CGFloat = 96

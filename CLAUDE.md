@@ -216,6 +216,10 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
   (`ui/Places.kt`, osmdroid map: tap to pin, radius, current Wi‑Fi), task chip "Location". Emulator: geofences fire only
   while something requests location (open a place editor and use "Use where I am"); toggled emulator Wi‑Fi often stays
   "connecting" (no IP), so Wi‑Fi arrivals can't be tested there.
+- Mac location reminders are Wi‑Fi only (owner's choice): `Services/WifiPlaces.swift` (CoreWLAN `ssidDidChange`; reading
+  the SSID needs Location Services, `NSLocationUsageDescription` in project.yml; inside-set in UserDefaults
+  `location.insideWifi`, first check silent), `Tasks/PlacesSheet.swift` (places list + MapKit editor, click to pin) and
+  `LocationChip` in task detail. Started from `TasksModel.start` outside tests/snapshots.
 - Markdown notes: notes stay plain text; shared `tasks/MarkdownLite.kt` splits them into blocks (headings, bullets,
   numbered, `- [ ]` to-dos, quotes, code, rules) + `toggleTodo` + `plain` (list previews). Shown formatted when not
   being edited and the text has Markdown: Mac `Tasks/MarkdownNotes.swift` (click edits, inline marks via

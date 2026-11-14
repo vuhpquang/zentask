@@ -122,6 +122,8 @@ struct TaskDetailView: View {
                     }
                 }
 
+                LocationChip(task: task)
+
                 if let rule = task.repeatRule {
                     Button { editingDate = true } label: {
                         Chip(text: tasks.core.describeRepeat(rule: rule), symbol: "repeat", tint: .themeAccent, filled: true)

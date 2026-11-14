@@ -47,7 +47,7 @@ enum SidebarItem: Hashable {
 
 /// Sheets the Tasks screen can show (create/edit lists, folders, sections, smart lists).
 enum ListSheet: Identifiable {
-    case newList, editList(String), newFolder, renameFolder(String), newSection(String), renameSection(String, String), newFilter, editFilter(String), planDay, saveTemplate(String), templates
+    case newList, editList(String), newFolder, renameFolder(String), newSection(String), renameSection(String, String), newFilter, editFilter(String), planDay, saveTemplate(String), templates, places
 
     var id: String {
         switch self {
@@ -62,6 +62,7 @@ enum ListSheet: Identifiable {
         case .planDay: "planDay"
         case .saveTemplate(let id): "saveTemplate." + id
         case .templates: "templates"
+        case .places: "places"
         }
     }
 }
@@ -195,6 +196,9 @@ final class TasksModel {
     func start() {
         guard !started else { return }
         started = true
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil, ProcessInfo.processInfo.environment["ZENTASK_SNAPSHOT"] == nil {
+            WifiPlaces.shared.start(core: core)
+        }
         _Concurrency.Task { await reload() }
         _Concurrency.Task {
             for await _ in core.recordChanges { scheduleReload() }

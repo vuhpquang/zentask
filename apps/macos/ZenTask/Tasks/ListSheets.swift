@@ -32,6 +32,7 @@ struct ListSheetView: View {
                 _ = tasks.core.templateActions.saveFrom(taskId: taskId, name: $0)
             }
         case .templates: TemplatesSheet()
+        case .places: PlacesSheet()
         }
     }
 }

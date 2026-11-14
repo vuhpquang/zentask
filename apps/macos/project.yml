@@ -55,6 +55,8 @@ targets:
     info:
       path: ZenTask/Info.plist
       properties:
+        NSLocationUsageDescription: ZenTask reads the Wi-Fi name to remind you about tasks when you arrive at or leave a saved place.
+        NSLocationWhenInUseUsageDescription: ZenTask reads the Wi-Fi name to remind you about tasks when you arrive at or leave a saved place.
         CFBundleURLTypes:
           - CFBundleURLName: com.vuhpquang.zentask.task-link
             CFBundleURLSchemes: [zentask]
