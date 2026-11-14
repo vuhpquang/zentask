@@ -817,6 +817,8 @@ fun TaskDetailScreen(app: ZenApp, taskId: String, close: () -> Unit) {
                 )
                 LaunchedEffect(editingNotes) { if (editingNotes) runCatching { focusNotes.requestFocus() } }
             }
+            val rev by app.revision.collectAsState()
+            AttachmentsSection(app, task.id, rev)
             val items = index?.items(task.id).orEmpty()
             if (items.isNotEmpty() || task.kind == Task.KIND_CHECKLIST) {
                 Text("Checklist", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp))

@@ -36,6 +36,8 @@ class ZenApp(private val context: Context) {
     val showFocus = MutableStateFlow(false)
     private val prefs = context.getSharedPreferences("zentask", Context.MODE_PRIVATE)
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main + CoroutineExceptionHandler { _, e -> Log.e(TAG, "Unexpected error", e) })
+    /** Attachment bytes (cache, upload, download). */
+    val files by lazy { AttachmentFiles(context, core, scope) }
 
     private val _index = MutableStateFlow<TaskIndex?>(null)
     val index: StateFlow<TaskIndex?> = _index.asStateFlow()
@@ -154,6 +156,7 @@ class ZenApp(private val context: Context) {
                     try {
                         reminders.sync(core.plannedReminders(index))
                         TodayWidget.refresh(context)
+                        files.syncSoon()
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
