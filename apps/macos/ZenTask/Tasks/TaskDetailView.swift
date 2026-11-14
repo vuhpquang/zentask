@@ -190,10 +190,21 @@ struct TaskDetailView: View {
                 .onTapGesture { focus = .notes }
                 .help("Click to edit")
             } else {
-                TextField("Write notes… (Markdown works: **bold**, - lists, - [ ] to-dos)", text: $draft.notes, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .lineLimit(3...)
+                // A text editor, not a TextField: Return makes a new line (a TextField ends editing on Return).
+                TextEditor(text: $draft.notes)
+                    .font(.body)
+                    .scrollContentBackground(.hidden)
+                    .scrollDisabled(true)
+                    .frame(minHeight: Theme.Detail.notesMinHeight)
                     .focused($focus, equals: .notes)
+                    .overlay(alignment: .topLeading) {
+                        if draft.notes.isEmpty {
+                            Text("Write notes… (Markdown works: **bold**, - lists, - [ ] to-dos)")
+                                .foregroundStyle(.tertiary)
+                                .padding(.leading, Theme.Space.xxs)
+                                .allowsHitTesting(false)
+                        }
+                    }
             }
         }
     }

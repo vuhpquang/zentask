@@ -42,6 +42,8 @@ enum Theme {
     }
 
     enum Detail {
+        /** Notes editor: about three lines before it grows. */
+        static let notesMinHeight: CGFloat = 60
         static let chipHeight: CGFloat = 30
         static let cardRadius: CGFloat = 12
         static let cardPadding: CGFloat = 14
