@@ -202,9 +202,23 @@ struct GroupHeaderRow: View {
     let count: Int
     let collapsed: Bool
     var color: Color?
+    /// A button at the trailing end (e.g. Overdue's "Move to today").
+    var trailing: (title: String, symbol: String, run: () -> Void)?
     let toggle: () -> Void
 
     var body: some View {
+        HStack {
+            header
+            if let trailing {
+                Button(trailing.title, systemImage: trailing.symbol, action: trailing.run)
+                    .buttonStyle(.borderless)
+                    .font(.callout)
+                    .help(trailing.title)
+            }
+        }
+    }
+
+    private var header: some View {
         Button {
             withMotion { toggle() }
         } label: {

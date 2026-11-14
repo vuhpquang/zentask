@@ -205,4 +205,17 @@ class TaskIndexTest {
         assertEquals(listOf("due friday"), s.open.flatMap { it.rows }.map { it.task.id }, "open tasks dated in the period (overdue counts)")
         assertTrue(s.text().contains("✓ shipped") && s.text().contains("☐ due friday"))
     }
+
+    @Test
+    fun dayPlanSuggestsOverdueComingUpAndImportant() {
+        val i = index(
+            t("late", "2026-11-05T09:00"), t("today", "2026-11-08T15:00"), t("soon", "2026-11-10T00:00", allDay = true),
+            t("far", "2026-11-20T00:00", allDay = true), t("vip", priority = 5), t("plain"),
+            t("done-late", "2026-11-01T09:00", status = TaskStatus.COMPLETED), t("archived-late", "2026-11-01T09:00", project = "old"),
+        )
+        val plan = i.dayPlan(now, zone)
+        assertEquals(listOf("plan:overdue", "plan:upcoming", "plan:important"), plan.map { it.key })
+        assertEquals(listOf(listOf("late"), listOf("soon"), listOf("vip")), plan.map { s -> s.rows.map { it.task.id } })
+        assertEquals(listOf("late"), i.overdue(now, zone).map { it.id })
+    }
 }

@@ -5,6 +5,7 @@ import SwiftUI
 struct GeneralSettings: View {
     @AppStorage("sound.complete") private var sound = "Pop"
     @AppStorage("quickadd.dates") private var recogniseDates = true
+    @AppStorage(TasksModel.planDayAutoKey) private var planDayAuto = true
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var loginError: String?
 
@@ -24,6 +25,12 @@ struct GeneralSettings: View {
                 Toggle("Recognise dates while typing a task", isOn: $recogniseDates)
             } footer: {
                 Text("\"tomorrow 9am\" becomes the task's date. Off: date words stay in the title. #tags, !priority and ~list always work.")
+                    .foregroundStyle(.secondary)
+            }
+            Section {
+                Toggle("Offer \"Plan my day\" each morning", isOn: $planDayAuto)
+            } footer: {
+                Text("The first time you open Today each day, pick overdue and upcoming tasks to do today. Also in Today's … menu.")
                     .foregroundStyle(.secondary)
             }
             Section("Show in the sidebar rail") {

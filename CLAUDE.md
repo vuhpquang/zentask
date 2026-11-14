@@ -190,6 +190,11 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
 - Lists (P9f): group / sort sheet per list (synced `ViewOptions`), subtasks under their parent, custom smart lists
   (`ui/FilterEditor.kt`: "+" next to Smart lists in the drawer, "…" on a smart list to edit / delete), quick date
   picks (Today / Tomorrow / Next week) in the date dialog.
+- Plan my day / overdue (both platforms): `TaskIndex.dayPlan` (Overdue, Coming up = next 7 days, Important = high
+  priority undated) and `TaskIndex.overdue`; `core.planToday(ids)` / `core.moveOverdueToToday` move tasks with
+  `moveToDay` (times kept). Mac: `Tasks/PlanDayView.swift` (sheet `.planDay`, Today's "…" menu, offered once a day on
+  Today: UserDefaults `planDay.auto` / `planDay.lastShown`), "Move to today" on the Overdue group header. Android: a
+  "Plan your day" card on Today (prefs `zentask.plan`/`lastShown`), sun icon in Today's top bar, Overdue header button.
 - Compose gotcha: `Modifier.border(0.dp, …)` still draws a hairline; add the border conditionally.
 
 ## Gotchas

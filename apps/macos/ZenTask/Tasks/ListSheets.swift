@@ -26,6 +26,7 @@ struct ListSheetView: View {
             NameSheet(title: "Rename section", initial: name, action: "Rename") { tasks.core.listActions.renameColumn(id: id, name: $0) }
         case .newFilter: FilterEditor(filter: nil)
         case .editFilter(let id): FilterEditor(filter: tasks.filters.first { $0.id == id })
+        case .planDay: PlanDayView()
         }
     }
 }

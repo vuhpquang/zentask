@@ -231,6 +231,32 @@ class TaskIndex(
         }
     }
 
+    /** Open, visible tasks (subtasks too) dated before today: what "Move overdue to today" moves. */
+    fun overdue(now: Instant, zone: TimeZone): List<Task> {
+        val today = now.toLocalDateTime(zone).date
+        return tasks.filter { visible(it) && it.isOpen && day(it, zone)?.let { d -> d < today } == true }
+    }
+
+    /**
+     * "Plan my day" suggestions, in this order: Overdue, Coming up (tomorrow to a week ahead, soonest first) and
+     * Important without a date (high priority). Open, visible, top-level tasks; at most [perSection] each.
+     */
+    fun dayPlan(now: Instant, zone: TimeZone, perSection: Int = 30): List<TaskSection> {
+        val today = now.toLocalDateTime(zone).date
+        val weekOut = today.plus(7, DateTimeUnit.DAY)
+        val open = rows(TaskFilter.Smart(SmartList.ALL), now, zone).filter { it.task.isOpen }
+        fun dayOf(r: TaskRow) = day(r.task, zone)
+        val overdue = open.filter { dayOf(it)?.let { d -> d < today } == true }.sortedBy { dayOf(it) }
+        val upcoming = open.filter { dayOf(it)?.let { d -> d > today && d <= weekOut } == true }
+            .sortedWith(compareBy<TaskRow>({ dayOf(it) }, { -it.task.priority }))
+        val important = open.filter { dayOf(it) == null && it.task.priority == Priority.HIGH }
+        return listOf(
+            TaskSection("Overdue", overdue.take(perSection), key = "plan:overdue"),
+            TaskSection("Coming up", upcoming.take(perSection), key = "plan:upcoming"),
+            TaskSection("Important, no date", important.take(perSection), key = "plan:important"),
+        ).filter { it.rows.isNotEmpty() }
+    }
+
     /**
      * The summary for [from]..[to]: tasks completed in the period, and open tasks dated in it (and overdue ones
      * when the period reaches today), grouped by list in list order.

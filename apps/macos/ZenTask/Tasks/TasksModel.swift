@@ -47,7 +47,7 @@ enum SidebarItem: Hashable {
 
 /// Sheets the Tasks screen can show (create/edit lists, folders, sections, smart lists).
 enum ListSheet: Identifiable {
-    case newList, editList(String), newFolder, renameFolder(String), newSection(String), renameSection(String, String), newFilter, editFilter(String)
+    case newList, editList(String), newFolder, renameFolder(String), newSection(String), renameSection(String, String), newFilter, editFilter(String), planDay
 
     var id: String {
         switch self {
@@ -59,6 +59,7 @@ enum ListSheet: Identifiable {
         case .renameSection(let id, _): "renameSection." + id
         case .newFilter: "newFilter"
         case .editFilter(let id): "editFilter." + id
+        case .planDay: "planDay"
         }
     }
 }
@@ -70,7 +71,7 @@ enum ListSheet: Identifiable {
 final class TasksModel {
     let core: ZenTaskCore
 
-    var sidebar: SidebarItem = .smart(.today) { didSet { showingSummary = false; recompute(); if oldValue != sidebar { selection = nil } } }
+    var sidebar: SidebarItem = .smart(.today) { didSet { showingSummary = false; recompute(); if oldValue != sidebar { selection = nil; offerDayPlan() } } }
     var selection: String?
     var showCompleted = false
     /// The task a "Delete permanently" confirmation is open for.
@@ -213,6 +214,7 @@ final class TasksModel {
         smartModes = Dictionary(uniqueKeysWithValues: TasksModel.allSmart.map { ($0, core.smartListMode(list: $0)) })
         recompute()
         await recomputeTask?.value
+        offerDayPlan()
         if let reminders { await reminders.reschedule(core.plannedReminders(index: idx, limit: 60)) }
     }
 
@@ -357,6 +359,33 @@ final class TasksModel {
     func finishCompleting() async { await completionTask?.value }
 
     func isCompleting(_ id: String) -> Bool { completing.contains(id) }
+
+    // MARK: Plan my day
+
+    /// Open tasks dated before today.
+    var overdueCount: Int { index.map { Int(core.overdueCount(index: $0)) } ?? 0 }
+
+    func moveOverdueToToday() {
+        guard let index else { return }
+        _ = core.moveOverdueToToday(index: index)
+    }
+
+    /// Settings → General: open "Plan my day" the first time Today is shown each day.
+    static let planDayAutoKey = "planDay.auto"
+    private static let planDayShownKey = "planDay.lastShown"
+
+    /// Opens "Plan my day" once a day, on Today, when there is something to plan (and the setting is on).
+    func offerDayPlan() {
+        guard sidebar == .smart(.today), sheet == nil, let index,
+              UserDefaults.standard.object(forKey: Self.planDayAutoKey) as? Bool ?? true,
+              ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil,
+              ProcessInfo.processInfo.environment["ZENTASK_SNAPSHOT"] == nil else { return }
+        let today = Int(core.todayStamp())
+        guard UserDefaults.standard.integer(forKey: Self.planDayShownKey) != today else { return }
+        guard !core.dayPlan(index: index).isEmpty else { return }
+        UserDefaults.standard.set(today, forKey: Self.planDayShownKey)
+        sheet = .planDay
+    }
 
     // MARK: Drag and drop
 

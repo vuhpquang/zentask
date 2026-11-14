@@ -247,6 +247,11 @@ class TaskActions(
         store.update(tasks, id) { it.copy(startDate = shift(it.startDate), dueDate = shift(it.dueDate)) }
     }
 
+    /** Moves each task to [today] (a local midnight) with [moveToDay]: times and lengths stay. */
+    fun moveAllToDay(ids: List<String>, today: Long) {
+        store.inTransaction { ids.forEach { moveToDay(it, today) } }
+    }
+
     /** A task getting its first date (with no reminders yet) gets the default reminder, like a new dated task. */
     private fun firstDateDefaults(before: Task, after: Task): Task {
         val hadDate = before.startDate != null || before.dueDate != null

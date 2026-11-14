@@ -29,6 +29,11 @@ struct TaskListView: View {
                     Button("Add section…", systemImage: "rectangle.split.1x2") { tasks.sheet = .newSection(project.id) }
                 }
                 Divider()
+                Button("Plan my day…", systemImage: "sun.horizon") { tasks.sheet = .planDay }
+                if tasks.overdueCount > 0 {
+                    Button("Move \(tasks.overdueCount) overdue to today", systemImage: "arrow.uturn.forward") { tasks.moveOverdueToToday() }
+                }
+                Divider()
                 Toggle("Calendar beside tasks", systemImage: "calendar", isOn: Binding(get: { tasks.showCalendarPanel }, set: { v in
                     withMotion { tasks.showCalendarPanel = v }
                 }))
@@ -69,7 +74,11 @@ struct TaskListView: View {
                             rows(section)
                         } else {
                             let folded = tasks.isCollapsed(section, in: scope)
-                            GroupHeaderRow(title: section.title, count: section.rows.count, collapsed: folded) { tasks.toggleCollapsed(section, in: scope) }
+                            GroupHeaderRow(
+                                title: section.title, count: section.rows.count, collapsed: folded,
+                                trailing: section.key == "date:Overdue" && !isReadOnlyList
+                                    ? ("Move to today", "arrow.uturn.forward", { tasks.moveOverdueToToday() }) : nil
+                            ) { tasks.toggleCollapsed(section, in: scope) }
                                 .dropDestination(for: String.self) { ids, _ in tasks.drop(ids, intoColumn: section.columnId) }
                                 .contextMenu {
                                     if let columnId = section.columnId {

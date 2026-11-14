@@ -94,6 +94,16 @@ class TaskActionsTest {
     }
 
     @Test
+    fun movingSeveralToTodayKeepsEachTime() {
+        val a = actions.create("A", filter = null, due = ms("2026-11-05T14:00"), allDay = false)
+        val b = actions.create("B", filter = null, due = ms("2026-11-06T00:00"), allDay = true)
+        actions.moveAllToDay(listOf(a.id, b.id), ms("2026-11-08T00:00"))
+        assertEquals(ms("2026-11-08T14:00"), get(a.id).dueDate)
+        assertEquals(ms("2026-11-08T00:00"), get(b.id).dueDate)
+        assertTrue(get(b.id).isAllDay)
+    }
+
+    @Test
     fun completingRecurringTaskMakesCopyAndAdvances() {
         recurring()
         actions.complete("r")

@@ -164,6 +164,12 @@ enum Theme {
         static let foldAnimation: Animation = .snappy(duration: 0.28)
     }
 
+    /** "Plan my day" sheet. */
+    enum PlanDay {
+        static let width: CGFloat = 520
+        static let height: CGFloat = 560
+    }
+
     /** Animation curves (always used through `Motion`, which turns them off with Reduce Motion). */
     enum Anim {
         /** Rows moving in, out or around a list. */

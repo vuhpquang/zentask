@@ -141,6 +141,22 @@ class ZenTaskCore(
 
     fun matrix(index: TaskIndex): List<Quadrant> = index.matrix(now(), zone())
 
+    /** Number of open tasks dated before today. */
+    fun overdueCount(index: TaskIndex): Int = index.overdue(now(), zone()).size
+
+    /** Moves every overdue task to today, keeping its time; returns how many moved. */
+    fun moveOverdueToToday(index: TaskIndex): Int {
+        val ids = index.overdue(now(), zone()).map { it.id }
+        actions.moveAllToDay(ids, today().atStartOfDayIn(zone()).toEpochMilliseconds())
+        return ids.size
+    }
+
+    /** "Plan my day" suggestions (overdue, coming up, important without a date). */
+    fun dayPlan(index: TaskIndex): List<TaskSection> = index.dayPlan(now(), zone())
+
+    /** Puts the picked tasks on today (keeping their times). */
+    fun planToday(ids: List<String>) = actions.moveAllToDay(ids, today().atStartOfDayIn(zone()).toEpochMilliseconds())
+
     /** Done and open tasks between two local days (epoch millis of their midnights), by list. */
     fun summary(index: TaskIndex, fromDay: Long, toDay: Long): Summary {
         val z = zone()

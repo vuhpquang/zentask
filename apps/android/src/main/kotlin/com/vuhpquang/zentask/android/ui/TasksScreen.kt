@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -42,6 +43,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.WbTwilight
 import androidx.compose.material.icons.filled.Tag
 import androidx.compose.material.icons.filled.Today
 import androidx.compose.material.icons.filled.ViewAgenda
@@ -216,6 +218,7 @@ fun TasksScreen(app: ZenApp, openSettings: () -> Unit, openSearch: () -> Unit) {
     val scope = rememberCoroutineScope()
     val snackbar = remember { androidx.compose.material3.SnackbarHostState() }
     var sorting by remember { mutableStateOf(false) }
+    var planning by remember { mutableStateOf(false) }
 
     openTaskId?.let { id ->
         TaskDetailScreen(app, id) { openTaskId = null }
@@ -239,6 +242,7 @@ fun TasksScreen(app: ZenApp, openSettings: () -> Unit, openSearch: () -> Unit) {
                     navigationIcon = { IconButton(onClick = { scope.launch { drawer.open() } }) { Icon(Icons.Filled.Menu, "Lists") } },
                     actions = {
                         IconButton(onClick = openSearch) { Icon(Icons.Filled.Search, "Search") }
+                        if (pick == ListPick.Smart(SmartList.TODAY)) IconButton(onClick = { planning = true }) { Icon(Icons.Filled.WbTwilight, "Plan my day") }
                         if (pick != ListPick.Matrix) IconButton(onClick = { sorting = true }) { Icon(Icons.AutoMirrored.Filled.Sort, "Group and sort") }
                         val project = (pick as? ListPick.InProject)?.let { p -> index?.projects?.firstOrNull { it.id == p.id } }
                         if (project != null && project.id != Project.INBOX_ID) ListMenu(app, project) { pickKey = ListPick.Smart(SmartList.INBOX).key }
@@ -267,6 +271,7 @@ fun TasksScreen(app: ZenApp, openSettings: () -> Unit, openSearch: () -> Unit) {
     }
     if (adding) QuickAddSheet(app, index, pick) { adding = false }
     if (sorting) SortSheet(app, pick) { sorting = false }
+    index?.let { idx -> if (planning) PlanDayDialog(app, idx) { planning = false } }
 }
 
 private val LIST_COLORS = listOf("#5B5FE9", "#8B5CF6", "#EC4899", "#EF4444", "#F59E0B", "#10B981", "#06B6D4", "#64748B")
@@ -429,7 +434,15 @@ private fun TaskList(app: ZenApp, index: TaskIndex?, pick: ListPick, snackbar: a
         index?.let { app.core.sections(it, pick.filter, viewOptions) }.orEmpty()
     }
     val folded = remember(pick) { mutableStateListOf("done") }
-    if (index != null && sections.isEmpty()) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val prefs = remember { context.getSharedPreferences("zentask.plan", android.content.Context.MODE_PRIVATE) }
+    var planDismissed by remember { mutableStateOf(prefs.getInt("lastShown", 0) == app.core.todayStamp()) }
+    var planning by remember { mutableStateOf(false) }
+    val planCount = remember(index) { index?.let { app.core.dayPlan(it).sumOf { s -> s.rows.size } } ?: 0 }
+    val showPlanCard = pick == ListPick.Smart(SmartList.TODAY) && !planDismissed && planCount > 0
+    fun dismissPlan() { planDismissed = true; prefs.edit().putInt("lastShown", app.core.todayStamp()).apply() }
+    if (planning && index != null) PlanDayDialog(app, index) { planning = false; dismissPlan() }
+    if (index != null && sections.isEmpty() && !showPlanCard) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Icon(Icons.Filled.CheckCircle, null, Modifier.size(48.dp), tint = MaterialTheme.colorScheme.outline)
@@ -440,11 +453,29 @@ private fun TaskList(app: ZenApp, index: TaskIndex?, pick: ListPick, snackbar: a
         return
     }
     LazyColumn(Modifier.fillMaxSize().animateContentSize()) {
+        if (showPlanCard) item(key = "plan") {
+            androidx.compose.material3.ElevatedCard(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp).animateItem()) {
+                Row(Modifier.padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.WbTwilight, null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Plan your day", fontWeight = FontWeight.SemiBold)
+                        Text("$planCount overdue or upcoming tasks to pick from", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    TextButton(onClick = { planning = true }) { Text("Plan") }
+                    IconButton(onClick = { dismissPlan() }) { Icon(Icons.Filled.Close, "Not today") }
+                }
+            }
+        }
         for (section in sections) {
             val isFolded = section.key in folded
             if (section.title.isNotEmpty()) {
                 item(key = "h:" + section.key) {
-                    Box(Modifier.animateItem()) { SectionHeader(section, isFolded) { if (isFolded) folded.remove(section.key) else folded.add(section.key) } }
+                    Box(Modifier.animateItem()) {
+                        SectionHeader(section, isFolded, trailing = if (section.key == "date:Overdue") ("Move to today" to { index?.let { app.core.moveOverdueToToday(it) }; Unit }) else null) {
+                            if (isFolded) folded.remove(section.key) else folded.add(section.key)
+                        }
+                    }
                 }
             }
             if (!isFolded || section.title.isEmpty()) {
@@ -470,7 +501,7 @@ private fun TaskList(app: ZenApp, index: TaskIndex?, pick: ListPick, snackbar: a
 }
 
 @Composable
-private fun SectionHeader(section: TaskSection, folded: Boolean, toggle: () -> Unit) {
+private fun SectionHeader(section: TaskSection, folded: Boolean, trailing: Pair<String, () -> Unit>? = null, toggle: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().clickable(onClick = toggle).padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -480,7 +511,48 @@ private fun SectionHeader(section: TaskSection, folded: Boolean, toggle: () -> U
         Text(section.title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.width(8.dp))
         Text("${section.rows.size}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (trailing != null) {
+            Spacer(Modifier.weight(1f))
+            TextButton(onClick = trailing.second) { Text(trailing.first) }
+        }
     }
+}
+
+/** "Plan my day": tick overdue / upcoming / important undated tasks to put on today (times kept). */
+@Composable
+fun PlanDayDialog(app: ZenApp, index: TaskIndex, close: () -> Unit) {
+    val sections = remember(index) { app.core.dayPlan(index) }
+    val picked = remember { mutableStateListOf<String>() }
+    AlertDialog(
+        onDismissRequest = close,
+        title = { Text("Plan my day") },
+        text = {
+            if (sections.isEmpty()) Text("Nothing to plan: no overdue, upcoming or important tasks.")
+            else LazyColumn(Modifier.heightIn(max = 460.dp)) {
+                for (s in sections) {
+                    item(key = s.key) { Text(s.title, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)) }
+                    items(s.rows, key = { s.key + it.task.id }) { row ->
+                        val id = row.task.id
+                        Row(Modifier.fillMaxWidth().clickable { if (id in picked) picked.remove(id) else picked.add(id) }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                            androidx.compose.material3.Checkbox(checked = id in picked, onCheckedChange = { if (it) picked.add(id) else picked.remove(id) })
+                            Column(Modifier.weight(1f)) {
+                                Text(row.task.title.ifEmpty { "Untitled" }, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                val day = app.core.taskDayMillis(index, row.task)
+                                if (day != null) Text(dateText(day, row.task), style = MaterialTheme.typography.labelSmall,
+                                    color = if (row.overdue) ZenColors.high else MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(enabled = picked.isNotEmpty(), onClick = { app.core.planToday(picked.toList()); close() }) {
+                Text(if (picked.isEmpty()) "Add to today" else "Add ${picked.size} to today")
+            }
+        },
+        dismissButton = { TextButton(onClick = close) { Text("Cancel") } },
+    )
 }
 
 @Composable
