@@ -128,6 +128,9 @@ data class Task(
     val completedAt: Long? = null,
     val pinnedAt: Long? = null,
     val trashedAt: Long? = null,
+    /** Location reminder: a [Place] id and when to remind, [Place.ARRIVE] or [Place.LEAVE]. */
+    val placeId: String? = null,
+    val placeTrigger: String? = null,
 ) : Entity {
     companion object {
         const val KIND_TEXT = "TEXT"
@@ -280,6 +283,52 @@ data class Countdown(
      */
     val reminders: List<String>? = null,
 ) : Entity
+
+/** A file on a task. The bytes live on the server under [fileId] (their SHA-256) and in each device's cache. */
+@Serializable
+data class Attachment(
+    override val id: String,
+    override val createdAt: Long = 0,
+    override val updatedAt: Long = 0,
+    override val deleted: Boolean = false,
+    override val ticktickId: String? = null,
+    val taskId: String = "",
+    val fileId: String = "",
+    val name: String = "",
+    val mime: String = "application/octet-stream",
+    val size: Long = 0,
+    val width: Int = 0,
+    val height: Int = 0,
+) : Entity {
+    val isImage: Boolean get() = mime.startsWith("image/")
+}
+
+/** A saved place for location reminders: map point + radius, and Wi‑Fi names that also mean "here". */
+@Serializable
+data class Place(
+    override val id: String,
+    override val createdAt: Long = 0,
+    override val updatedAt: Long = 0,
+    override val deleted: Boolean = false,
+    override val ticktickId: String? = null,
+    val name: String = "",
+    /** [KIND_HOME], [KIND_WORK] or [KIND_CUSTOM]. */
+    val kind: String = KIND_CUSTOM,
+    val latitude: Double = 0.0,
+    val longitude: Double = 0.0,
+    /** Metres. */
+    val radius: Double = 150.0,
+    val wifi: List<String> = emptyList(),
+    val sortOrder: Long = 0,
+) : Entity {
+    companion object {
+        const val KIND_HOME = "home"
+        const val KIND_WORK = "work"
+        const val KIND_CUSTOM = "custom"
+        const val ARRIVE = "arrive"
+        const val LEAVE = "leave"
+    }
+}
 
 /** A reusable task: title, notes, priority, tags, checklist and subtasks to stamp out as a new task. */
 @Serializable

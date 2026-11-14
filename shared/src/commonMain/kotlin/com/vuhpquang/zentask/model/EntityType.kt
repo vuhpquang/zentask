@@ -32,13 +32,15 @@ object EntityTypes {
     val preference = EntityType("preference", Preference.serializer())
     val focusRecord = EntityType("focusRecord", FocusRecord.serializer())
     val taskTemplate = EntityType("taskTemplate", TaskTemplate.serializer())
+    val attachment = EntityType("attachment", Attachment.serializer())
+    val place = EntityType("place", Place.serializer())
     val calendarAccount = EntityType("calendarAccount", CalendarAccount.serializer(), clientWritable = false)
     val calendarSource = EntityType("calendarSource", CalendarSource.serializer(), clientWritable = false)
     val calendarEvent = EntityType("calendarEvent", CalendarEvent.serializer(), clientWritable = false)
 
     val all: List<EntityType<*>> = listOf(
         projectGroup, project, column, task, checklistItem, tag, filter,
-        habit, habitSection, habitCheckin, countdown, preference, focusRecord, taskTemplate,
+        habit, habitSection, habitCheckin, countdown, preference, focusRecord, taskTemplate, attachment, place,
         calendarAccount, calendarSource, calendarEvent,
     )
 

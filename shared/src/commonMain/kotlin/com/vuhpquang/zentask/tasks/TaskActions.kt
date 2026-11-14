@@ -204,6 +204,7 @@ class TaskActions(
             check(t.trashedAt != null) { "Move the task to Trash before deleting it permanently" }
             (children(id).filter { it.trashedAt == t.trashedAt } + t).forEach { victim ->
                 store.idsWhere(EntityTypes.checklistItem, "taskId", victim.id).forEach { store.delete(EntityTypes.checklistItem, it) }
+                store.idsWhere(EntityTypes.attachment, "taskId", victim.id).forEach { store.delete(EntityTypes.attachment, it) }
                 store.delete(tasks, victim.id)
             }
         }
@@ -250,6 +251,12 @@ class TaskActions(
     /** Moves each task to [today] (a local midnight) with [moveToDay]: times and lengths stay. */
     fun moveAllToDay(ids: List<String>, today: Long) {
         store.inTransaction { ids.forEach { moveToDay(it, today) } }
+    }
+
+    /** Location reminder: remind at [placeId] on [trigger] (Place.ARRIVE / Place.LEAVE); null clears it. */
+    fun setLocationReminder(id: String, placeId: String?, trigger: String?) {
+        val t = trigger?.takeIf { it == com.vuhpquang.zentask.model.Place.ARRIVE || it == com.vuhpquang.zentask.model.Place.LEAVE }
+        store.update(tasks, id) { it.copy(placeId = placeId?.takeIf { t != null }, placeTrigger = t?.takeIf { placeId != null }) }
     }
 
     /** A task getting its first date (with no reminders yet) gets the default reminder, like a new dated task. */

@@ -110,6 +110,19 @@ class ZenTaskCore(
     val tagActions: TagActions = TagActions(store)
     val listActions: ListActions = ListActions(store)
     val habitActions: HabitActions = HabitActions(store)
+    val attachmentActions: com.vuhpquang.zentask.tasks.AttachmentActions = com.vuhpquang.zentask.tasks.AttachmentActions(store)
+    val placeActions: com.vuhpquang.zentask.tasks.PlaceActions = com.vuhpquang.zentask.tasks.PlaceActions(store)
+
+    /** Places with open tasks waiting on them (what the phone watches). */
+    fun locationWatches(): List<com.vuhpquang.zentask.tasks.LocationPlanner.Watch> =
+        com.vuhpquang.zentask.tasks.LocationPlanner.watches(store.list(EntityTypes.task), placeActions.list())
+
+    /** Open tasks to remind about on [trigger] at [placeId], and the notification text; null when none. */
+    fun locationReminder(placeId: String, trigger: String): Pair<List<com.vuhpquang.zentask.model.Task>, Pair<String, String>>? {
+        val place = placeActions.list().firstOrNull { it.id == placeId } ?: return null
+        val due = com.vuhpquang.zentask.tasks.LocationPlanner.due(store.list(EntityTypes.task), placeId, trigger).takeIf { it.isNotEmpty() } ?: return null
+        return due to com.vuhpquang.zentask.tasks.LocationPlanner.message(place, trigger, due)
+    }
     val templateActions: com.vuhpquang.zentask.tasks.TemplateActions = com.vuhpquang.zentask.tasks.TemplateActions(store, actions)
     val countdownActions: CountdownActions = CountdownActions(store)
 

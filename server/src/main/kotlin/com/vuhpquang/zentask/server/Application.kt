@@ -1,5 +1,8 @@
 package com.vuhpquang.zentask.server
 
+import com.vuhpquang.zentask.server.files.FileLimits
+import com.vuhpquang.zentask.server.files.fileRoutes
+
 import com.vuhpquang.zentask.ZenTaskInfo
 import com.vuhpquang.zentask.model.ZenJson
 import com.vuhpquang.zentask.server.auth.DEVICE_AUTH
@@ -92,6 +95,18 @@ fun Application.module(
         }
     }
     monitor.subscribe(ApplicationStopped) { replica.close() }
+    val filesRoot = config.dataDir.resolve("files")
+    val files = com.vuhpquang.zentask.server.files.DiskFileStore(filesRoot)
+    // Attachment bytes nothing points at any more: swept once a day.
+    launch {
+        delay(5 * 60_000)
+        while (isActive) {
+            runCatching { com.vuhpquang.zentask.server.files.collectGarbage(db, files, filesRoot, now()) }
+                .onSuccess { if (it > 0) log.info("Removed {} unused attachment files", it) }
+                .onFailure { log.warn("Attachment cleanup failed: {}", it.message) }
+            delay(24 * 3_600_000L)
+        }
+    }
 
     install(ContentNegotiation) { json(ZenJson) }
     install(Authentication) { deviceBearer(db) }
@@ -152,6 +167,7 @@ fun Application.module(
                 }
                 syncRoutes(db, now)
                 calendarRoutes(calendars)
+                fileRoutes(files, FileLimits()) { files.freeBytes() }
                 delete("/devices/{id}") {
                     if (db.revoke(call.parameters["id"].orEmpty())) {
                         call.respond(HttpStatusCode.NoContent)

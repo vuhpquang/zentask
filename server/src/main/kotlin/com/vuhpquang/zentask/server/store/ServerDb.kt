@@ -94,6 +94,14 @@ class ServerDb(file: Path, private val now: () -> Long = System::currentTimeMill
             st.executeQuery().use { rs -> buildList { while (rs.next()) add(rs.toRecord()) } }
         }
 
+    /** The values of JSON [field] across live records of [entity] (e.g. every attachment's fileId). */
+    @Synchronized
+    fun liveFieldValues(entity: String, field: String): Set<String> =
+        conn.prepareStatement("SELECT json_extract(fields, ?) FROM records WHERE entity = ? AND coalesce(json_extract(fields, '$.deleted'), 0) = 0").use { st ->
+            st.setString(1, "$.$field"); st.setString(2, entity)
+            st.executeQuery().use { rs -> buildSet { while (rs.next()) rs.getString(1)?.let(::add) } }
+        }
+
     data class Credential(val accountId: String, val provider: String, val email: String, val secretEnc: String, val status: String)
 
     @Synchronized
