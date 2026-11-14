@@ -308,7 +308,7 @@ final class TasksModel {
     // MARK: Actions
 
     /// Lists quick add may file into: the Inbox and open (not archived) lists.
-    private var quickAddProjects: [Project] { projects.filter { !$0.closed } }
+    var quickAddProjects: [Project] { projects.filter { !$0.closed } }
 
     func quickAdd(_ text: String, ignored: Set<Int> = []) {
         let skip = Set(withoutDates(text, ignored).map { KotlinInt(int: Int32($0)) })

@@ -164,6 +164,16 @@ enum Theme {
         static let foldAnimation: Animation = .snappy(duration: 0.28)
     }
 
+    /** The menu bar window. */
+    enum MenuBar {
+        static let width: CGFloat = 320
+        static let listHeight: CGFloat = 360
+        static let emptyHeight: CGFloat = 60
+        static let maxRows = 30
+        /** UserDefaults key: show the menu bar icon. */
+        static let showKey = "menubar.show"
+    }
+
     /** "Plan my day" sheet. */
     enum PlanDay {
         static let width: CGFloat = 520

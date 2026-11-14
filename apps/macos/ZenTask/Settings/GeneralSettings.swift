@@ -6,6 +6,7 @@ struct GeneralSettings: View {
     @AppStorage("sound.complete") private var sound = "Pop"
     @AppStorage("quickadd.dates") private var recogniseDates = true
     @AppStorage(TasksModel.planDayAutoKey) private var planDayAuto = true
+    @AppStorage(Theme.MenuBar.showKey) private var showMenuBar = true
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var loginError: String?
 
@@ -15,6 +16,7 @@ struct GeneralSettings: View {
         Form {
             Section {
                 Toggle("Open ZenTask when you log in", isOn: Binding(get: { launchAtLogin }, set: setLaunchAtLogin))
+                Toggle("Show Today in the menu bar", isOn: $showMenuBar)
                 if let loginError { Text(loginError).font(.caption).foregroundStyle(.red) }
                 Picker("Sound when completing a task", selection: $sound) {
                     ForEach(Self.sounds, id: \.self) { Text($0.isEmpty ? "None" : $0).tag($0) }

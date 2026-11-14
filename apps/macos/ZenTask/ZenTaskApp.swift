@@ -9,6 +9,7 @@ struct ZenTaskApp: App {
     @State private var countdowns: CountdownsModel
     @State private var panelCalendar: PanelCalendar
     @State private var focus: FocusModel
+    @AppStorage(Theme.MenuBar.showKey) private var showMenuBar = true
 
     init() {
         if let dir = ProcessInfo.processInfo.environment["ZENTASK_SNAPSHOT"] {
@@ -62,6 +63,14 @@ struct ZenTaskApp: App {
         // No title bar: the traffic lights sit over the rail, like the window's own chrome (every area).
         .windowStyle(.hiddenTitleBar)
         .commands { TaskCommands() }
+
+        MenuBarExtra("ZenTask", systemImage: "checkmark.circle", isInserted: $showMenuBar) {
+            MenuBarPanel()
+                .environment(model)
+                .environment(tasks)
+                .modifier(Themed())
+        }
+        .menuBarExtraStyle(.window)
 
         Settings {
             SettingsView()

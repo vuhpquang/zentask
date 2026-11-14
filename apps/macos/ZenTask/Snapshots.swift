@@ -46,6 +46,7 @@ enum Snapshots {
             for (name, view) in [("sheet-list", AnyView(ListEditor(project: nil))), ("sheet-filter", AnyView(FilterEditor(filter: nil)))] {
                 both(view.environment(model).environment(tasks), size: CGSize(width: 480, height: 620), name: name, dir: dir)
             }
+            both(AnyView(MenuBarPanel()).environment(model).environment(tasks), size: CGSize(width: Theme.MenuBar.width, height: 560), name: "menubar", dir: dir)
             both(AnyView(PlanDayView()).environment(model).environment(tasks), size: CGSize(width: Theme.PlanDay.width, height: Theme.PlanDay.height), name: "sheet-planday", dir: dir)
             both(AnyView(MatrixView(openTask: { _ in })).environment(model).environment(tasks), size: windowSize, name: "matrix", dir: dir)
             let now = Int64(Date.now.timeIntervalSince1970 * 1000)
