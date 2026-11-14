@@ -74,7 +74,8 @@ struct SettingsView: View {
             sidebarIconTint: colors.accent,
             detailBackground: colors.background,
             // A themed list background; no List selection, which would draw with the AccentColor asset, not the theme.
-            decorateSidebar: { AnyView($0.themedListBackground(colors, surface: true)) },
+            // Sidebar list style, like the task sidebar: its row height and icon size (a plain List draws them small).
+            decorateSidebar: { AnyView($0.listStyle(.sidebar).environment(\.sidebarRowSize, .medium).themedListBackground(colors, surface: true)) },
             sidebarRow: { label, selected, select in
                 AnyView(label.modifier(SidebarSelect(selected: selected, count: 0, action: select)))
             },
