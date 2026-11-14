@@ -423,4 +423,61 @@ class McpToolsTest {
         val audit = ServerDb(dir.resolve("zentask.db")).let { d -> d.auditRows().also { d.close() } }
         assertTrue(audit.any { (tool, changes) -> tool == "check_in_habit" && changes.contains("habitCheckin") }, audit.toString())
     }
+
+    @Test
+    fun taskRemindersRepeatAndTimeBlocks() = testApplication {
+        server()
+        val token = client.loginToken()
+        val made = obj(client.tool(token, "create_task", """{"title":"Standup","due":"2026-11-20T09:00","end":"2026-11-20T09:30","reminders":["15m","on_time"],"repeat":"weekdays"}""").first)
+        val id = made["id"]!!.jsonPrimitive.content
+        val full = obj(client.tool(token, "get_task", """{"id":"$id"}""").first)
+        assertEquals(listOf("TRIGGER:-PT15M", "TRIGGER:PT0S"), full["reminders"]!!.jsonArray.map { it.jsonPrimitive.content })
+        assertTrue(full["repeat"]!!.jsonPrimitive.content.isNotEmpty())
+        // Bad values are refused before anything changes.
+        val (_, bad) = client.tool(token, "update_task", """{"id":"$id","title":"Renamed","repeat":"every blue moon"}""")
+        assertTrue(bad)
+        assertEquals("Standup", obj(client.tool(token, "get_task", """{"id":"$id"}""").first)["title"]!!.jsonPrimitive.content)
+        // An all-day task takes days-before reminders; repeat null stops repeating.
+        val (allDay, err) = client.tool(token, "update_task", """{"id":"$id","due":"2026-11-21","reminders":["on_day","1d"],"repeat":null}""")
+        assertFalse(err, allDay)
+        val after = obj(client.tool(token, "get_task", """{"id":"$id"}""").first)
+        assertEquals(listOf("TRIGGER:PT9H", "TRIGGER:-PT15H"), after["reminders"]!!.jsonArray.map { it.jsonPrimitive.content })
+        assertEquals(null, after["repeat"])
+    }
+
+    @Test
+    fun habitAndCountdownEditing() = testApplication {
+        server()
+        val token = client.loginToken()
+        val (made, err) = client.tool(token, "create_habit", """{"name":"PMP","times_a_week":1,"remind_from":1,"reminders":["20:00"]}""")
+        assertFalse(err, made)
+        val (bad, badErr) = client.tool(token, "create_habit", """{"name":"Run","remind_from":3}""")
+        assertTrue(badErr, bad)
+        val updated = obj(client.tool(token, "update_habit", """{"habit":"PMP","times_a_month":2,"remind_from":10}""").first)
+        assertEquals("2 times a month", updated["schedule"]!!.jsonPrimitive.content)
+        assertFalse(client.tool(token, "update_habit", """{"habit":"PMP","archived":true}""").second)
+        assertFalse(client.tool(token, "delete_habit", """{"habit":"PMP"}""").second)
+        assertTrue(client.tool(token, "update_habit", """{"habit":"PMP","name":"x"}""").second, "deleted")
+
+        assertFalse(client.tool(token, "create_countdown", """{"name":"Exam","date":"2099-03-01","reminders":["7@09:00"]}""").second)
+        assertTrue(client.tool(token, "update_countdown", """{"countdown":"Exam","reminders":["soon"]}""").second)
+        assertFalse(client.tool(token, "update_countdown", """{"countdown":"Exam","name":"Final exam","reminders":null}""").second)
+        val cds = obj(client.tool(token, "list_countdowns").first)["countdowns"]!!.jsonArray.map { it.jsonObject["name"]!!.jsonPrimitive.content }
+        assertTrue("Final exam" in cds, cds.toString())
+        assertFalse(client.tool(token, "delete_countdown", """{"countdown":"Final exam"}""").second)
+    }
+
+    @Test
+    fun focusAndSummaryReadOnlyTools() = testApplication {
+        server()
+        val token = client.loginToken()
+        val id = obj(client.tool(token, "create_task", """{"title":"Write report"}""").first)["id"]!!.jsonPrimitive.content
+        client.tool(token, "complete_task", """{"id":"$id"}""")
+        // Wide enough for both the test clock (Jan 2027) and the real one.
+        val summary = obj(client.tool(token, "summarize_period", """{"from":"2026-11-01","to":"2027-01-31"}""").first)
+        assertEquals(1, summary["done"]!!.jsonPrimitive.int)
+        val focus = obj(client.tool(token, "list_focus", """{"from":"2026-01-01","to":"2026-01-07"}""").first)
+        assertEquals(0, focus["sessions"]!!.jsonPrimitive.int)
+        assertTrue(client.tool(token, "list_focus", """{"from":"2026-02-01","to":"2026-01-01"}""").second)
+    }
 }

@@ -7,18 +7,24 @@ import com.vuhpquang.zentask.lists.FilterRule
 import com.vuhpquang.zentask.lists.SortOrder
 import com.vuhpquang.zentask.model.EntityTypes
 import com.vuhpquang.zentask.model.Filter
+import com.vuhpquang.zentask.model.Countdown
 import com.vuhpquang.zentask.model.Habit
 import com.vuhpquang.zentask.model.Project
 import com.vuhpquang.zentask.model.Task
 import com.vuhpquang.zentask.model.TaskStatus
 import com.vuhpquang.zentask.model.ZenJson
 import com.vuhpquang.zentask.model.toFields
+import com.vuhpquang.zentask.notify.NotificationPlanner
 import com.vuhpquang.zentask.tasks.QuickAddParser
 import com.vuhpquang.zentask.tasks.Recurrence
 import com.vuhpquang.zentask.tasks.SmartList
 import com.vuhpquang.zentask.tasks.TaskFilter
 import com.vuhpquang.zentask.tasks.isDone
+import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.daysUntil
+import kotlinx.datetime.minus
+import kotlinx.datetime.plus
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
@@ -96,6 +102,9 @@ object McpTools {
                     "tags" to strArray("Tag names"),
                     "notes" to str("Notes (markdown)"),
                     "parent_id" to str("Make it a subtask of this task"),
+                    "end" to str("ISO date-time the task ends (with a timed `due`: a time block)"),
+                    "reminders" to strArray(REMINDERS_HELP),
+                    "repeat" to str(REPEAT_HELP),
                     "timezone" to str("IANA zone for dates, default Asia/Ho_Chi_Minh"),
                 ),
                 writes = true,
@@ -116,6 +125,9 @@ object McpTools {
                     "add_tags" to strArray("Tags to add"),
                     "remove_tags" to strArray("Tags to remove"),
                     "list" to str("Move to this list (name or id)"),
+                    "end" to str("ISO date-time the task ends (makes due…end a time block)"),
+                    "reminders" to strArray("Replace the reminders. " + REMINDERS_HELP + " [] = none"),
+                    "repeat" to nullable(REPEAT_HELP + " null stops repeating"),
                     "timezone" to str("IANA zone for dates, default Asia/Ho_Chi_Minh"),
                     required = listOf("id"),
                 ),
@@ -352,27 +364,70 @@ object McpTools {
                     "name" to str("Name"), "goal" to int("Daily amount to reach, e.g. 8 (makes it an amount habit)"),
                     "unit" to str("Unit of the amount, e.g. cups"), "step" to int("Amount one check-in adds (default 1)"),
                     "days" to strArray("Weekdays: MO TU WE TH FR SA SU"), "times_a_week" to int("N times a week on any days"),
+                    "times_a_month" to int("N times a month on any days"),
+                    "remind_from" to int("With times_a_week: weekday reminders start (1 = Monday … 7 = Sunday); with times_a_month: day of the month. Then daily until done"),
+                    "reminders" to strArray("Reminder times, HH:mm"),
                     "icon" to str("An emoji"), "color" to str("#RRGGBB"),
                     required = listOf("name"),
                 ),
                 writes = true,
             ) { a, ctx, _ ->
                 val goal = a.int("goal")
-                val days = a.strings("days").map { it.trim().uppercase().take(2) }
-                if (days.any { it !in WEEKDAYS }) throw ToolError("days must be among MO TU WE TH FR SA SU")
-                val times = a.int("times_a_week")?.also { if (it !in 1..7) throw ToolError("times_a_week must be 1 to 7") }
-                val rule = when {
-                    times != null -> "RRULE:FREQ=WEEKLY;TT_TIMES=$times"
-                    days.isNotEmpty() -> "RRULE:FREQ=WEEKLY;BYDAY=" + WEEKDAYS.filter { it in days }.joinToString(",")
-                    else -> "RRULE:FREQ=DAILY;INTERVAL=1"
-                }
+                val rule = habitRule(a) ?: "RRULE:FREQ=DAILY;INTERVAL=1"
                 if (goal != null && goal <= 0) throw ToolError("goal must be more than 0")
+                val from = remindFrom(a, rule)
+                val times = a.strings("reminders").map(::clock)
                 val h = ctx.habits.create(
                     title(a.req("name")), a.str("icon")?.take(8), a.str("color")?.let(::color),
                     if (goal != null) Habit.TYPE_REAL else Habit.TYPE_BOOLEAN, (goal ?: 1).toDouble(),
                     (a.int("step")?.takeIf { it > 0 } ?: 1).toDouble(), a.str("unit")?.take(30).orEmpty(), rule,
                 )
+                if (times.isNotEmpty()) ctx.habits.setReminders(h.id, times)
+                from?.let { ctx.habits.setRemindFrom(h.id, it) }
                 ToolResult("Created habit ${h.name} (${h.id})", changed = listOf(h.id))
+            },
+            Tool(
+                "update_habit",
+                "Change a habit. Only the fields you pass change. archived=true archives it (history kept), false restores it.",
+                schema(
+                    "habit" to str("Habit name or id"), "name" to str("New name"), "icon" to str("An emoji"), "color" to str("#RRGGBB"),
+                    "goal" to int("Daily amount (amount habits)"), "unit" to str("Unit"),
+                    "days" to strArray("Weekdays: MO TU WE TH FR SA SU"), "times_a_week" to int("N times a week"),
+                    "times_a_month" to int("N times a month"), "every_day" to bool("Back to every day"),
+                    "remind_from" to buildJsonObject {
+                        putJsonArray("type") { add(JsonPrimitive("integer")); add(JsonPrimitive("null")) }
+                        put("description", "Start-reminding day (see create_habit); null = every day")
+                    },
+                    "reminders" to strArray("Replace reminder times, HH:mm ([] = none)"),
+                    "archived" to bool("Archive (true) or restore (false)"),
+                    required = listOf("habit"),
+                ),
+                writes = true,
+            ) { a, ctx, zone ->
+                val h = habit(ctx, a.req("habit"))
+                val rule = if (a.bool("every_day") == true) "RRULE:FREQ=DAILY;INTERVAL=1" else habitRule(a) ?: h.repeatRule.orEmpty()
+                val goal = a.int("goal")?.also { if (it <= 0) throw ToolError("goal must be more than 0") }
+                val fromGiven = a.containsKey("remind_from")
+                val from = if (fromGiven) remindFrom(a, rule) else null
+                val times = if (a.containsKey("reminders")) a.strings("reminders").map(::clock) else null
+                val name = a.str("name")?.let(::title) ?: h.name
+                val type = if (goal != null) Habit.TYPE_REAL else h.type
+                ctx.habits.update(h, name, a.str("icon")?.take(8) ?: h.icon, a.str("color")?.let(::color) ?: h.color, type,
+                    goal?.toDouble() ?: h.goal, h.step, a.str("unit")?.take(30) ?: h.unit, rule)
+                times?.let { ctx.habits.setReminders(h.id, it) }
+                if (fromGiven) ctx.habits.setRemindFrom(h.id, from)
+                when (a.bool("archived")) { true -> ctx.habits.archive(h.id); false -> ctx.habits.unarchive(h.id); null -> {} }
+                val today = Clock.System.now().toLocalDateTime(zone).date
+                val row = HabitBoard.rows(listOf(ctx.store.get(EntityTypes.habit, h.id)!!), ctx.store.list(EntityTypes.habitCheckin), today, zone).single()
+                ToolResult(json(habitJson(row)), changed = listOf(h.id))
+            },
+            Tool(
+                "delete_habit", "Delete a habit and all its check-ins on every device. Prefer update_habit archived=true to keep the history.",
+                schema("habit" to str("Habit name or id"), required = listOf("habit")), writes = true,
+            ) { a, ctx, _ ->
+                val h = habit(ctx, a.req("habit"))
+                ctx.habits.delete(h.id)
+                ToolResult("Deleted habit ${h.name}", changed = listOf(h.id))
             },
             Tool(
                 "check_in_habit",
@@ -385,16 +440,7 @@ object McpTools {
                 ),
                 writes = true,
             ) { a, ctx, zone ->
-                val key = a.req("habit").trim()
-                val live = ctx.store.list(EntityTypes.habit).filter { !it.deleted }
-                val exact = live.filter { it.id == key || it.name.equals(key, ignoreCase = true) }
-                val folded = QuickAddParser.fold(key.lowercase())
-                val candidates = exact.ifEmpty { live.filter { QuickAddParser.fold(it.name.lowercase()).contains(folded) } }
-                val h = when (candidates.size) {
-                    1 -> candidates.single()
-                    0 -> throw ToolError("No habit named \"$key\". Call list_habits for the names")
-                    else -> throw ToolError("\"$key\" matches several habits: ${candidates.joinToString { "${it.name} (${it.id})" }}. Pass the id")
-                }
+                val h = habit(ctx, a.req("habit"))
                 val today = Clock.System.now().toLocalDateTime(zone).date
                 val day = a.str("date")?.let { s -> runCatching { LocalDate.parse(s.trim()) }.getOrElse { throw ToolError("Can't read the date \"$s\". Use 2026-11-09") } } ?: today
                 if (day > today) throw ToolError("Can't check in a future day")
@@ -452,6 +498,7 @@ object McpTools {
                     "type" to enumStr("Kind", "countdown", "birthday", "anniversary", "holiday"),
                     "yearly" to bool("Repeat every year"), "note" to str("Note"), "color" to str("#RRGGBB"),
                     "show_in_calendar" to bool("Show on the calendar (default true)"),
+                    "reminders" to strArray(COUNTDOWN_REMINDERS_HELP),
                     required = listOf("name", "date"),
                 ),
                 writes = true,
@@ -465,8 +512,60 @@ object McpTools {
                     title(a.req("name")), Stamp.of(d), type, if (yearly) "yearly" else "none", a.str("color")?.let(::color), null,
                     notes(a.str("note").orEmpty()), a.bool("show_in_calendar") ?: true,
                 )
+                if (a.containsKey("reminders")) ctx.countdowns.setReminders(c.id, countdownReminders(a))
                 ToolResult("Created countdown ${c.name} (${c.id})", changed = listOf(c.id))
             },
+            Tool(
+                "update_countdown",
+                "Change a countdown. Only the fields you pass change. reminders: null = the app's defaults. archived archives / restores.",
+                schema(
+                    "countdown" to str("Countdown name or id"), "name" to str("New name"), "date" to str("ISO date"),
+                    "type" to enumStr("Kind", "countdown", "birthday", "anniversary", "holiday"),
+                    "yearly" to bool("Repeat every year"), "note" to str("Note"), "color" to str("#RRGGBB"),
+                    "show_in_calendar" to bool("Show on the calendar"),
+                    "reminders" to buildJsonObject {
+                        putJsonArray("type") { add(JsonPrimitive("array")); add(JsonPrimitive("null")) }
+                        putJsonObject("items") { put("type", "string") }
+                        put("description", COUNTDOWN_REMINDERS_HELP + " null = the defaults from Settings")
+                    },
+                    "archived" to bool("Archive (true) or restore (false)"),
+                    required = listOf("countdown"),
+                ),
+                writes = true,
+            ) { a, ctx, _ ->
+                val c = countdown(ctx, a.req("countdown"))
+                val d = a.str("date")?.let { raw -> runCatching { LocalDate.parse(raw.trim()) }.getOrElse { throw ToolError("Can't read the date \"$raw\". Use 2027-01-20") } }
+                val type = a.str("type")?.uppercase()?.also { if (it !in listOf("COUNTDOWN", "BIRTHDAY", "ANNIVERSARY", "HOLIDAY")) throw ToolError("type must be countdown, birthday, anniversary or holiday") }
+                val reminders = if (a.containsKey("reminders")) (if (a["reminders"] is JsonNull) null else countdownReminders(a)) else c.reminders
+                ctx.countdowns.update(
+                    c, a.str("name")?.let(::title) ?: c.name, d?.let(Stamp::of) ?: c.date, type ?: c.type,
+                    a.bool("yearly")?.let { if (it) "yearly" else "none" } ?: c.repeat, a.str("color")?.let(::color) ?: c.color, c.icon,
+                    a.str("note")?.let(::notes) ?: c.note, a.bool("show_in_calendar") ?: c.showInCalendar,
+                )
+                if (a.containsKey("reminders")) ctx.countdowns.setReminders(c.id, reminders)
+                when (a.bool("archived")) { true -> ctx.countdowns.archive(c.id); false -> ctx.countdowns.unarchive(c.id); null -> {} }
+                ToolResult("Updated countdown ${c.name} (${c.id})", changed = listOf(c.id))
+            },
+            Tool(
+                "delete_countdown", "Delete a countdown on every device. Prefer update_countdown archived=true to keep it.",
+                schema("countdown" to str("Countdown name or id"), required = listOf("countdown")), writes = true,
+            ) { a, ctx, _ ->
+                val c = countdown(ctx, a.req("countdown"))
+                ctx.countdowns.delete(c.id)
+                ToolResult("Deleted countdown ${c.name}", changed = listOf(c.id))
+            },
+            Tool(
+                "list_focus",
+                "Focus sessions (Pomodoro / stopwatch) in a date range, newest first, with the task each was for and the total minutes.",
+                schema("from" to str("ISO date, default 7 days ago"), "to" to str("ISO date, default today"), "timezone" to str("IANA zone, default Asia/Ho_Chi_Minh")),
+                writes = false,
+            ) { a, ctx, zone -> listFocus(a, ctx, zone) },
+            Tool(
+                "summarize_period",
+                "What got done (and what is still open) in a date range, grouped by list, e.g. \"what did I finish this week\".",
+                schema("from" to str("ISO date, default 7 days ago"), "to" to str("ISO date, default today"), "timezone" to str("IANA zone, default Asia/Ho_Chi_Minh")),
+                writes = false,
+            ) { a, ctx, zone -> summarize(a, ctx, zone) },
             Tool("list_lists", "All lists with their folder and open-task count.", schema(), writes = false) { _, ctx, zone ->
                 val counts = ctx.index.counts(Clock.System.now(), zone)
                 val groups = ctx.store.list(EntityTypes.projectGroup).associate { it.id to it.name }
@@ -642,7 +741,164 @@ object McpTools {
             )
         }
         notes?.let { ctx.actions.setContent(created.id, it) }
+        applyTimeFields(a, ctx, zone, ctx.store.get(EntityTypes.task, created.id)!!)
         return ToolResult(json(brief(ctx.store.get(EntityTypes.task, created.id)!!, ctx, zone)), changed = listOf(created.id))
+    }
+
+    /** `end`, `reminders` and `repeat` (checked before writing, applied after the date is set). */
+    private fun applyTimeFields(a: JsonObject, ctx: McpReplica.Context, zone: TimeZone, t: Task) {
+        val end = a.str("end")?.let { date(it, zone) }
+        val start = t.startDate ?: t.dueDate
+        if (end != null) {
+            if (start == null || t.isAllDay) throw ToolError("`end` needs a timed `due` (e.g. 2026-11-09T09:00)")
+            if (end.first <= start) throw ToolError("`end` must be after `due`")
+        }
+        val reminders = if (a.containsKey("reminders")) a.strings("reminders").map { triggerOf(it, t.isAllDay) } else null
+        val repeatGiven = a.containsKey("repeat")
+        val repeat = a.str("repeat")?.takeIf { it.isNotBlank() }?.let(::repeatRule)
+        if (repeat != null && start == null) throw ToolError("A repeating task needs a date")
+        end?.let { ctx.actions.setSpan(t.id, start!!, it.first) }
+        reminders?.let { ctx.actions.setReminders(t.id, it) }
+        if (repeatGiven) ctx.actions.setRepeat(t.id, repeat, t.repeatFrom ?: "due")
+    }
+
+    /** Friendly reminder → TickTick trigger: "on_time", "15m", "1h", "1d" before; all-day tasks: "on_day", "1d", "2d", "7d"; or a raw TRIGGER. */
+    private fun triggerOf(raw: String, allDay: Boolean): String {
+        val s = raw.trim().lowercase()
+        if (s.startsWith("trigger:")) return raw.trim().uppercase()
+        if (s == "on_time" || s == "on_day" || s == "0") return if (allDay) "TRIGGER:PT9H" else "TRIGGER:PT0S"
+        val m = Regex("""^(\d{1,3})\s*([mhd])$""").matchEntire(s) ?: throw ToolError("Can't read the reminder \"$raw\". Use on_time, 15m, 1h, 1d")
+        val n = m.groupValues[1].toInt()
+        if (allDay) {
+            if (m.groupValues[2] != "d" || n < 1) throw ToolError("All-day tasks take on_day or days before (1d, 2d, 7d)")
+            return if (n == 1) "TRIGGER:-PT15H" else "TRIGGER:-P${n - 1}DT15H"
+        }
+        return when (m.groupValues[2]) { "m" -> "TRIGGER:-PT${n}M"; "h" -> "TRIGGER:-PT${n}H"; else -> "TRIGGER:-P${n}D" }
+    }
+
+    private fun repeatRule(raw: String): String {
+        val rule = when (raw.trim().lowercase()) {
+            "daily" -> "RRULE:FREQ=DAILY;INTERVAL=1"
+            "weekdays" -> "RRULE:FREQ=WEEKLY;INTERVAL=1;BYDAY=MO,TU,WE,TH,FR"
+            "weekly" -> "RRULE:FREQ=WEEKLY;INTERVAL=1"
+            "monthly" -> "RRULE:FREQ=MONTHLY;INTERVAL=1"
+            "yearly" -> "RRULE:FREQ=YEARLY;INTERVAL=1"
+            else -> raw.trim().let { if (it.uppercase().startsWith("RRULE:")) it else "RRULE:$it" }
+        }
+        if (!Recurrence.isSupported(rule)) throw ToolError("Can't repeat \"$raw\". Use daily, weekdays, weekly, monthly, yearly or an RRULE like FREQ=WEEKLY;BYDAY=MO,TH")
+        return rule
+    }
+
+    private fun habitRule(a: JsonObject): String? {
+        val days = a.strings("days").map { it.trim().uppercase().take(2) }
+        if (days.any { it !in WEEKDAYS }) throw ToolError("days must be among MO TU WE TH FR SA SU")
+        val week = a.int("times_a_week")?.also { if (it !in 1..7) throw ToolError("times_a_week must be 1 to 7") }
+        val month = a.int("times_a_month")?.also { if (it !in 1..31) throw ToolError("times_a_month must be 1 to 31") }
+        return when {
+            month != null -> "RRULE:FREQ=MONTHLY;TT_TIMES=$month"
+            week != null -> "RRULE:FREQ=WEEKLY;TT_TIMES=$week"
+            days.isNotEmpty() -> "RRULE:FREQ=WEEKLY;BYDAY=" + WEEKDAYS.filter { it in days }.joinToString(",")
+            else -> null
+        }
+    }
+
+    private fun remindFrom(a: JsonObject, rule: String): Int? {
+        val d = a.int("remind_from") ?: return null
+        val monthly = rule.contains("FREQ=MONTHLY")
+        val weekly = rule.contains("TT_TIMES") && !monthly
+        if (!monthly && !weekly) throw ToolError("remind_from only works with times_a_week or times_a_month")
+        if (weekly && d !in 1..7) throw ToolError("remind_from must be 1 (Monday) to 7 (Sunday)")
+        if (monthly && d !in 1..31) throw ToolError("remind_from must be a day of the month, 1 to 31")
+        return d
+    }
+
+    private fun clock(raw: String): String {
+        val m = NotificationPlanner.clockMinutes(raw) ?: throw ToolError("Can't read the time \"$raw\". Use HH:mm, e.g. 08:30")
+        return NotificationPlanner.countdownReminder(0, m).substringAfter('@')
+    }
+
+    private fun countdownReminders(a: JsonObject): List<String> = a.strings("reminders").map { r ->
+        val p = NotificationPlanner.parseCountdownReminder(r) ?: throw ToolError("Can't read the reminder \"$r\". Use <days before>@HH:mm, e.g. 7@09:00")
+        NotificationPlanner.countdownReminder(p.first, p.second)
+    }
+
+    private fun habit(ctx: McpReplica.Context, raw: String): Habit {
+        val key = raw.trim()
+        val live = ctx.store.list(EntityTypes.habit).filter { !it.deleted }
+        val exact = live.filter { it.id == key || it.name.equals(key, ignoreCase = true) }
+        val folded = QuickAddParser.fold(key.lowercase())
+        val candidates = exact.ifEmpty { live.filter { QuickAddParser.fold(it.name.lowercase()).contains(folded) } }
+        return when (candidates.size) {
+            1 -> candidates.single()
+            0 -> throw ToolError("No habit named \"$key\". Call list_habits for the names")
+            else -> throw ToolError("\"$key\" matches several habits: ${candidates.joinToString { "${it.name} (${it.id})" }}. Pass the id")
+        }
+    }
+
+    private fun countdown(ctx: McpReplica.Context, raw: String): Countdown {
+        val key = raw.trim()
+        val live = ctx.store.list(EntityTypes.countdown).filter { !it.deleted }
+        val exact = live.filter { it.id == key || it.name.equals(key, ignoreCase = true) }
+        val folded = QuickAddParser.fold(key.lowercase())
+        val candidates = exact.ifEmpty { live.filter { QuickAddParser.fold(it.name.lowercase()).contains(folded) } }
+        return when (candidates.size) {
+            1 -> candidates.single()
+            0 -> throw ToolError("No countdown named \"$key\". Call list_countdowns for the names")
+            else -> throw ToolError("\"$key\" matches several countdowns: ${candidates.joinToString { "${it.name} (${it.id})" }}. Pass the id")
+        }
+    }
+
+    /** from/to as dates (default: the last 7 days through today). */
+    private fun period(a: JsonObject, zone: TimeZone): Pair<LocalDate, LocalDate> {
+        fun day(k: String) = a.str(k)?.let { s -> runCatching { LocalDate.parse(s.trim()) }.getOrElse { throw ToolError("Can't read the date \"$s\". Use 2026-11-09") } }
+        val today = Clock.System.now().toLocalDateTime(zone).date
+        val to = day("to") ?: today
+        val from = day("from") ?: to.minus(6, DateTimeUnit.DAY)
+        if (from > to) throw ToolError("`from` is after `to`")
+        if (from.daysUntil(to) > 366) throw ToolError("Ask for a year at most")
+        return from to to
+    }
+
+    private fun listFocus(a: JsonObject, ctx: McpReplica.Context, zone: TimeZone): ToolResult {
+        val (from, to) = period(a, zone)
+        val start = from.atStartOfDayIn(zone).toEpochMilliseconds()
+        val end = to.plus(1, DateTimeUnit.DAY).atStartOfDayIn(zone).toEpochMilliseconds()
+        val records = ctx.store.list(EntityTypes.focusRecord).filter { !it.deleted && it.start >= start && it.start < end }.sortedByDescending { it.start }
+        val titles = ctx.store.list(EntityTypes.task).associate { it.id to it.title }
+        return ToolResult(json(buildJsonObject {
+            put("from", from.toString()); put("to", to.toString())
+            put("total_minutes", records.sumOf { it.minutes })
+            put("sessions", records.size)
+            putJsonArray("records") {
+                records.take(200).forEach { r ->
+                    add(buildJsonObject {
+                        put("start", Instant.fromEpochMilliseconds(r.start).toLocalDateTime(zone).toString().take(16))
+                        put("minutes", r.minutes); put("kind", r.kind)
+                        r.taskId?.let { id -> put("task_id", id); titles[id]?.let { put("task", it) } }
+                        if (r.note.isNotEmpty()) put("note", r.note)
+                    })
+                }
+            }
+        }))
+    }
+
+    private fun summarize(a: JsonObject, ctx: McpReplica.Context, zone: TimeZone): ToolResult {
+        val (from, to) = period(a, zone)
+        val s = ctx.index.summary(from, to, Clock.System.now(), zone)
+        fun sections(list: List<com.vuhpquang.zentask.tasks.TaskSection>) = buildJsonArray {
+            list.forEach { sec ->
+                add(buildJsonObject {
+                    put("list", sec.title)
+                    put("count", sec.rows.size)
+                    putJsonArray("tasks") { sec.rows.take(100).forEach { add(JsonPrimitive(it.task.title)) } }
+                })
+            }
+        }
+        return ToolResult(json(buildJsonObject {
+            put("from", from.toString()); put("to", to.toString())
+            put("done", s.done.sumOf { it.rows.size }); put("open", s.open.sumOf { it.rows.size })
+            put("done_by_list", sections(s.done)); put("open_by_list", sections(s.open))
+        }))
     }
 
     private fun updateTask(a: JsonObject, ctx: McpReplica.Context, zone: TimeZone): ToolResult {
@@ -657,6 +913,10 @@ object McpTools {
         val tags = (if (a.containsKey("tags")) a.strings("tags").map(::tagName) else t.tags + a.strings("add_tags").map(::tagName))
             .filterNot { it in remove }.distinct()
         val list = a.str("list")?.let { project(ctx, it) }
+        // Same for reminders / repeat / end (applied after the date, which they depend on).
+        a.str("repeat")?.takeIf { it.isNotBlank() }?.let(::repeatRule)
+        if (a.containsKey("reminders")) a.strings("reminders").forEach { triggerOf(it, if (dueGiven) due?.second ?: false else t.isAllDay) }
+        a.str("end")?.let { date(it, zone) }
 
         newTitle?.let { ctx.actions.rename(t.id, it) }
         newNotes?.let { ctx.actions.setContent(t.id, it) }
@@ -664,6 +924,7 @@ object McpTools {
         newPriority?.let { ctx.actions.setPriority(t.id, it) }
         if (tags != t.tags) ctx.actions.setTags(t.id, tags)
         list?.let { ctx.actions.move(t.id, it.id) }
+        applyTimeFields(a, ctx, zone, ctx.store.get(EntityTypes.task, t.id)!!)
         return ToolResult(json(brief(ctx.store.get(EntityTypes.task, t.id)!!, ctx, zone)), changed = listOf(t.id))
     }
 
@@ -788,6 +1049,7 @@ object McpTools {
                 val subs = ctx.index.subtasks(t.id)
                 if (subs.isNotEmpty()) putJsonArray("subtasks") { subs.forEach { add(brief(it, ctx, zone)) } }
                 t.completedAt?.let { put("completed_at", Instant.fromEpochMilliseconds(it).toString()) }
+                if (t.reminders.isNotEmpty()) putJsonArray("reminders") { t.reminders.forEach { add(JsonPrimitive(it)) } }
             },
         )
     }
@@ -834,6 +1096,13 @@ object McpTools {
     }
 
     private fun str(d: String) = buildJsonObject { put("type", "string"); put("description", d) }
+    private fun nullable(d: String) = buildJsonObject {
+        putJsonArray("type") { add(JsonPrimitive("string")); add(JsonPrimitive("null")) }
+        put("description", d)
+    }
+    private const val REMINDERS_HELP = "Reminders: on_time, 5m, 30m, 1h, 1d (before); all-day tasks: on_day (09:00), 1d, 2d, 7d before."
+    private const val REPEAT_HELP = "daily, weekdays, weekly, monthly, yearly, or an RRULE like FREQ=WEEKLY;BYDAY=MO,TH."
+    private const val COUNTDOWN_REMINDERS_HELP = "Reminders as <days before>@HH:mm, e.g. [\"7@09:00\", \"0@08:00\"]; [] = none."
     private fun int(d: String) = buildJsonObject { put("type", "integer"); put("description", d) }
     private fun bool(d: String) = buildJsonObject { put("type", "boolean"); put("description", d) }
     private fun strArray(d: String) = buildJsonObject { put("type", "array"); putJsonObject("items") { put("type", "string") }; put("description", d) }
