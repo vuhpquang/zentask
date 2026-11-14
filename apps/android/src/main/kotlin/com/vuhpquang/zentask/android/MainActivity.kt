@@ -116,12 +116,15 @@ private fun ZenTaskRoot(zen: ZenApp) {
         }
     }) { padding ->
         Box(Modifier.padding(bottom = padding.calculateBottomPadding()).fillMaxSize()) {
-            when (area) {
-                Area.Tasks -> TasksScreen(zen, openSettings = { page = "settings" }, openSearch = { page = "search" })
-                Area.Calendar -> CalendarScreen(zen)
-                Area.Habits -> HabitsScreen(zen)
-                Area.Countdown -> CountdownScreen(zen)
-                Area.Focus -> FocusScreen(zen)
+            // Areas cross-fade (Android's "Remove animations" setting turns it off).
+            androidx.compose.animation.Crossfade(area, animationSpec = androidx.compose.animation.core.tween(180), label = "area") { shown ->
+                when (shown) {
+                    Area.Tasks -> TasksScreen(zen, openSettings = { page = "settings" }, openSearch = { page = "search" })
+                    Area.Calendar -> CalendarScreen(zen)
+                    Area.Habits -> HabitsScreen(zen)
+                    Area.Countdown -> CountdownScreen(zen)
+                    Area.Focus -> FocusScreen(zen)
+                }
             }
         }
     }

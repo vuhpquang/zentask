@@ -87,6 +87,7 @@ struct TaskListView: View {
             .themedListBackground(themeColors)
             .environment(\.defaultMinListRowHeight, Theme.Size.minRow)
             .remeasuresRows(data: tasks.index.map(ObjectIdentifier.init), hasRows: !tasks.sections.isEmpty)
+            .opacity(tasks.listShown ? 1 : 0) // another list fades in (TasksModel.recompute)
             .overlay {
                 if tasks.sections.isEmpty { emptyState }
             }
@@ -190,10 +191,11 @@ struct TaskRowView: View {
         HStack(alignment: .firstTextBaseline, spacing: Theme.Space.m) {
             CheckButton(task: task) { tasks.toggleComplete(task) }
             VStack(alignment: .leading, spacing: Theme.Row.metaSpacing) {
+                let done = task.isDone || tasks.isCompleting(task.id)
                 Text(task.title.isEmpty ? "Untitled" : task.title)
                     .font(.body)
-                    .strikethrough(task.isDone)
-                    .foregroundStyle(task.isDone || task.status == -1 ? .secondary : .primary)
+                    .strikethrough(done)
+                    .foregroundStyle(done || task.status == -1 ? .secondary : .primary)
                     .lineLimit(2)
                 if details, let preview = TaskRowView.preview(task) {
                     Text(preview).font(.callout).foregroundStyle(.secondary).lineLimit(1)
@@ -247,14 +249,19 @@ struct TaskRowView: View {
 }
 
 struct CheckButton: View {
+    @Environment(TasksModel.self) private var tasks: TasksModel?
     let task: ZTask
     let action: () -> Void
+
+    private var done: Bool { task.isDone || tasks?.isCompleting(task.id) == true }
 
     var body: some View {
         Button(action: action) {
             Image(systemName: symbol)
                 .font(.system(size: Theme.Row.checkbox))
                 .foregroundStyle(task.isDone ? .secondary : Theme.PriorityColor.color(task.priority))
+                .contentTransition(.symbolEffect(.replace))
+                .symbolEffect(.bounce, value: done)
         }
         .buttonStyle(.plain)
         .help(task.isDone ? "Mark as not done" : "Complete")
@@ -262,7 +269,7 @@ struct CheckButton: View {
 
     private var symbol: String {
         if task.status == -1 { return "xmark.square" }
-        return task.isDone ? "checkmark.square.fill" : "square"
+        return done ? "checkmark.square.fill" : "square"
     }
 }
 

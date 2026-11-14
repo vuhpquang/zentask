@@ -444,13 +444,13 @@ private fun TaskList(app: ZenApp, index: TaskIndex?, pick: ListPick, snackbar: a
             val isFolded = section.key in folded
             if (section.title.isNotEmpty()) {
                 item(key = "h:" + section.key) {
-                    SectionHeader(section, isFolded) { if (isFolded) folded.remove(section.key) else folded.add(section.key) }
+                    Box(Modifier.animateItem()) { SectionHeader(section, isFolded) { if (isFolded) folded.remove(section.key) else folded.add(section.key) } }
                 }
             }
             if (!isFolded || section.title.isEmpty()) {
                 items(section.rows, key = { section.key + ":" + it.task.id }) { row ->
                     // Trash has its own Restore / Delete forever in the task's menu.
-                    Column {
+                    Column(Modifier.animateItem()) {
                         SwipeTaskRow(app, row.task, enabled = row.task.trashedAt == null, trashed = { offerUndoTrash(app, it, snackbar, scope) }) {
                             TaskRowItem(app, index, row, showList = pick !is ListPick.InProject, barColor = ZenColors.hex(section.color), showDetails = !viewOptions.hideDetails) { open(row.task.id) }
                         }
@@ -487,16 +487,28 @@ private fun SectionHeader(section: TaskSection, folded: Boolean, toggle: () -> U
 fun CheckCircleButton(task: Task, onToggle: () -> Unit) {
     val wontDo = task.status == TaskStatus.WONT_DO
     val color = if (wontDo) MaterialTheme.colorScheme.outline else ZenColors.priority(task.priority, MaterialTheme.colorScheme.outline)
-    val done = task.isDone || wontDo
+    // Ticking shows the check first, then completes (the row leaves the list a moment later).
+    var ticked by remember(task.id, task.isDone) { mutableStateOf(false) }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val done = task.isDone || wontDo || ticked
+    val fill by androidx.compose.animation.animateColorAsState(if (done) color.copy(alpha = 0.85f) else Color.Transparent, label = "check fill")
     Box(
         Modifier.size(24.dp).clip(RoundedCornerShape(6.dp))
-            .background(if (done) color.copy(alpha = 0.85f) else Color.Transparent)
+            .background(fill)
             .border(2.dp, color, RoundedCornerShape(6.dp))
-            .clickable(onClick = onToggle),
+            .clickable {
+                if (task.isDone || wontDo) onToggle()
+                else if (!ticked) {
+                    ticked = true
+                    scope.launch { kotlinx.coroutines.delay(350); onToggle() }
+                }
+            },
         contentAlignment = Alignment.Center,
     ) {
-        if (wontDo) Icon(Icons.Filled.Close, "Won't do", tint = Color.White, modifier = Modifier.size(16.dp))
-        else if (done) Icon(Icons.Filled.Check, "Done", tint = Color.White, modifier = Modifier.size(16.dp))
+        androidx.compose.animation.AnimatedVisibility(done, enter = androidx.compose.animation.scaleIn() + androidx.compose.animation.fadeIn(), exit = androidx.compose.animation.fadeOut()) {
+            if (wontDo) Icon(Icons.Filled.Close, "Won't do", tint = Color.White, modifier = Modifier.size(16.dp))
+            else Icon(Icons.Filled.Check, "Done", tint = Color.White, modifier = Modifier.size(16.dp))
+        }
     }
 }
 

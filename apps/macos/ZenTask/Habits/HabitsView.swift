@@ -143,6 +143,7 @@ private struct WeekRings: View {
                         }
                     }
                     .frame(width: Theme.Habits.weekRingSize, height: Theme.Habits.weekRingSize)
+                    .animation(Motion.pop, value: progress)
                 }
                 .frame(maxWidth: .infinity)
                 .help(day.due == 0 ? "No habits due" : "\(day.done) of \(day.due) done")
@@ -314,6 +315,8 @@ struct CheckCircle: View {
         }
         .frame(width: size, height: size)
         .contentShape(Circle())
+        .animation(Motion.pop, value: done)
+        .animation(Motion.pop, value: progress)
     }
 }
 

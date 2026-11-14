@@ -31,6 +31,7 @@ final class TasksModelTests: XCTestCase {
         await m.reload()
         let task = try XCTUnwrap(m.selectedTask)
         m.toggleComplete(task)
+        await m.finishCompleting()
         await m.reload()
         XCTAssertTrue(ids(m).isEmpty)
         m.sidebar = .smart(.completed)

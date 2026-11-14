@@ -10,6 +10,15 @@ enum Motion {
     /// Folds, panels and overlays.
     static var standard: Animation? { reduced ? nil : Theme.List.foldAnimation }
 
+    /// Rows inserted, removed or moved.
+    static var rows: Animation? { reduced ? nil : Theme.Anim.rows }
+
+    /// Content swapped in place.
+    static var fade: Animation? { reduced ? nil : Theme.Anim.fade }
+
+    /// Checks and rings filling.
+    static var pop: Animation? { reduced ? nil : Theme.Anim.pop }
+
     /// A panel sliding in from an edge, or just fading with Reduce Motion.
     static func slide(_ edge: Edge) -> AnyTransition {
         reduced ? .opacity : .move(edge: edge).combined(with: .opacity)

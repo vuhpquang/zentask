@@ -217,6 +217,11 @@ final class TasksModel {
     }
 
     private var recomputeTask: _Concurrency.Task<Void, Never>?
+    /// The list the shown `sections` belong to (row animations only within one list).
+    private var sectionsItem: SidebarItem?
+    /// False for the moment between switching lists and showing the new rows (they fade in).
+    private(set) var listShown = true
+    private static let animatedRowLimit = 300
 
     /// Waits for the pending recompute (tests, snapshots).
     func settle() async { await recomputeTask?.value }
@@ -248,7 +253,17 @@ final class TasksModel {
         recomputeTask = _Concurrency.Task {
             let result = await _Concurrency.Task.detached(priority: .userInitiated) { core.sections(index: index, filter: filter, options: opts) }.value
             guard !_Concurrency.Task.isCancelled, item == self.sidebar, index === self.index else { return }
-            self.sections = result
+            if item == self.sectionsItem {
+                // Same list: rows slide in / out. Huge lists skip it (diffing thousands of rows stutters).
+                let rows = result.reduce(0) { $0 + $1.rows.count }
+                withAnimation(rows <= Self.animatedRowLimit ? Motion.rows : nil) { self.sections = result }
+            } else {
+                // Another list: fade the new one in.
+                self.listShown = false
+                self.sections = result
+                self.sectionsItem = item
+                withAnimation(Motion.fade) { self.listShown = true }
+            }
         }
     }
 
@@ -317,10 +332,31 @@ final class TasksModel {
         NSSound(named: NSSound.Name(name))?.play()
     }
 
+    /// Tasks just ticked: shown checked for a moment before they are completed (and leave the list).
+    private(set) var completing: Set<String> = []
+
     func toggleComplete(_ task: ZTask) {
-        if !(task.isDone || task.status == -1) { Self.playCompletionSound() }
-        if task.isDone || task.status == -1 { core.actions.uncomplete(id: task.id) } else { core.actions.complete(id: task.id) }
+        if task.isDone || task.status == -1 { core.actions.uncomplete(id: task.id); return }
+        guard !completing.contains(task.id) else { return }
+        Self.playCompletionSound()
+        guard !Motion.reduced else { core.actions.complete(id: task.id); return }
+        withAnimation(Motion.pop) { _ = completing.insert(task.id) }
+        let id = task.id
+        let previous = completionTask
+        completionTask = _Concurrency.Task {
+            try? await _Concurrency.Task.sleep(for: Theme.Anim.completeDelay)
+            await previous?.value
+            core.actions.complete(id: id)
+            completing.remove(id)
+        }
     }
+
+    private var completionTask: _Concurrency.Task<Void, Never>?
+
+    /// Waits for ticked tasks to be completed (tests).
+    func finishCompleting() async { await completionTask?.value }
+
+    func isCompleting(_ id: String) -> Bool { completing.contains(id) }
 
     // MARK: Drag and drop
 

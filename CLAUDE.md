@@ -231,6 +231,11 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
   `RowBackground`. Never use `Color.accentColor` (the asset): use `.tint`, `themeColors.accent` or `Color.themeAccent`.
   There is no public API to change an app's accent at runtime. Cards fill with the `.background` shape style, which `Themed()` sets to
   `ThemeColors.card` (mixed from the theme background) via `.backgroundStyle`, so use `.background` for cards.
+- Motion: curves in `Theme.Anim`, always through `Motion.rows` / `.fade` / `.pop` (nil with Reduce Motion). A ticked
+  task shows its check for `completeDelay` before `complete` runs (`TasksModel.completing`; tests await
+  `finishCompleting()`). Rows animate only within one list and up to 300 rows; another list fades in (`listShown`).
+  Don't put `.id(…)` on the rail area or calendar-view switch: it re-runs their onAppear/reload and hung the snapshots.
+  Android: `animateItem()` on list rows, `Crossfade` between areas, the check fills before completing.
 - The macOS app links `-lsqlite3` (SQLDelight's native driver); keep it in `project.yml` `OTHER_LDFLAGS`.
 - This office network inspects TLS (Fortinet): the Android emulator doesn't trust it, so anything hitting
   GitHub/the server from the emulator fails with "Trust anchor not found". To test, build a throwaway APK with a

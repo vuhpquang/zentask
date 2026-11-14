@@ -21,11 +21,13 @@ struct TasksView: View {
                     if let task = tasks.selectedTask {
                         TaskDetailView(task: task)
                             .id(task.id)
+                            .transition(.opacity)
                     } else {
                         ContentUnavailableView("No task selected", systemImage: "checkmark.circle", description: Text("Select a task to see its details"))
                     }
                 }
                 .frame(maxWidth: .infinity)
+                .animation(Motion.fade, value: tasks.selectedTask?.id)
                 if tasks.showCalendarPanel {
                     Divider()
                     CalendarPanel()

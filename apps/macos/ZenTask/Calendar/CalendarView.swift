@@ -24,12 +24,15 @@ struct CalendarView: View {
             VStack(spacing: 0) {
                 toolbar
                 Divider()
-                switch cal.mode {
-                case .month, .multiWeek: MonthGrid()
-                case .year: YearGrid()
-                case .agenda: AgendaTimeline()
-                default: WeekGrid()
+                Group {
+                    switch cal.mode {
+                    case .month, .multiWeek: MonthGrid()
+                    case .year: YearGrid()
+                    case .agenda: AgendaTimeline()
+                    default: WeekGrid()
+                    }
                 }
+                .animation(Motion.fade, value: cal.mode)
             }
             if showPanel {
                 Divider()

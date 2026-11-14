@@ -164,6 +164,18 @@ enum Theme {
         static let foldAnimation: Animation = .snappy(duration: 0.28)
     }
 
+    /** Animation curves (always used through `Motion`, which turns them off with Reduce Motion). */
+    enum Anim {
+        /** Rows moving in, out or around a list. */
+        static let rows: Animation = .snappy(duration: 0.25)
+        /** Content swapped in place (another list, area, calendar view, task). */
+        static let fade: Animation = .easeInOut(duration: 0.18)
+        /** A check mark or ring filling. */
+        static let pop: Animation = .spring(response: 0.3, dampingFraction: 0.65)
+        /** How long a completed row stays checked before it leaves the list. */
+        static let completeDelay: Duration = .milliseconds(350)
+    }
+
     /** The new-task card. */
     enum Composer {
         static let width: CGFloat = 440

@@ -120,14 +120,17 @@ struct MainWindow: View {
             AppRail(tab: $tab, search: { withMotion { searching = true } })
                 .ignoresSafeArea(.container, edges: .top) // only the rail reaches under the traffic lights
             Divider().ignoresSafeArea(.container, edges: .top)
-            switch tab {
-            case .calendar: CalendarView()
-            case .habits: HabitsView()
-            case .countdown: CountdownsView()
-            case .matrix: MatrixView(openTask: { id in open(nil, id) })
-            case .focus: FocusView()
-            default: TasksView()
+            Group {
+                switch tab {
+                case .calendar: CalendarView()
+                case .habits: HabitsView()
+                case .countdown: CountdownsView()
+                case .matrix: MatrixView(openTask: { id in open(nil, id) })
+                case .focus: FocusView()
+                default: TasksView()
+                }
             }
+            .animation(Motion.fade, value: tab)
         }
         .environment(\.searchOpen, searching)
         .onAppear {
