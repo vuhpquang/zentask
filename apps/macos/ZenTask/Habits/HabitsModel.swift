@@ -186,6 +186,7 @@ final class HabitsModel {
             }
         case .weekdays(let set): due = Double(days.filter { set.contains(calendar.component(.weekday, from: $0)) }.count)
         case .timesAWeek(let n): due = (Double(days.count) / 7 * Double(n)).rounded(.up)
+        case .timesAMonth(let n): due = Double(n)
         }
         return (done, due > 0 ? min(1, Double(done) / due) : 0)
     }
@@ -214,10 +215,12 @@ final class HabitsModel {
             a.update(original: original, name: draft.name, icon: draft.storedIcon, color: draft.color, type: draft.type,
                      goal: draft.goal, step: draft.step, unit: draft.unit, repeatRule: draft.repeatRule)
             if draft.reminders != original.reminders { a.setReminders(id: original.id, times: draft.reminders) }
+            if draft.remindFrom != original.remindFrom?.intValue { a.setRemindFrom(id: original.id, day: draft.remindFrom.map { KotlinInt(value: Int32($0)) }) }
         } else {
             let h = a.create(name: draft.name, icon: draft.storedIcon, color: draft.color, type: draft.type,
                              goal: draft.goal, step: draft.step, unit: draft.unit, repeatRule: draft.repeatRule)
             if !draft.reminders.isEmpty { a.setReminders(id: h.id, times: draft.reminders) }
+            if let from = draft.remindFrom { a.setRemindFrom(id: h.id, day: KotlinInt(value: Int32(from))) }
             selection = h.id
         }
     }
@@ -239,6 +242,9 @@ struct HabitDraft: Equatable {
         /// Calendar weekdays (1 = Sunday … 7 = Saturday).
         case weekdays(Set<Int>)
         case timesAWeek(Int)
+        case timesAMonth(Int)
+
+        var isCounted: Bool { switch self { case .timesAWeek, .timesAMonth: true; default: false } }
     }
 
     var name = ""
@@ -251,6 +257,8 @@ struct HabitDraft: Equatable {
     var frequency: Frequency = .daily
     /// Reminder times, "HH:mm" (notifications on due days not done yet).
     var reminders: [String] = []
+    /// Counted habits: reminders start on this ISO weekday (1 = Monday) or day of the month; nil = every day.
+    var remindFrom: Int?
     /// "Every N days" (from INTERVAL); the editor keeps such rules as they are.
     private(set) var interval = 1
     /// What the habit had when the editor opened: kept unless the user changes that part
@@ -276,13 +284,14 @@ struct HabitDraft: Equatable {
         step = habit.step
         unit = habit.unit
         reminders = habit.reminders
+        remindFrom = habit.remindFrom?.intValue
         let parts = Dictionary((habit.repeatRule ?? "").replacingOccurrences(of: "RRULE:", with: "").split(separator: ";").compactMap { p -> (String, String)? in
             let kv = p.split(separator: "=", maxSplits: 1)
             return kv.count == 2 ? (kv[0].uppercased(), String(kv[1])) : nil
         }, uniquingKeysWith: { a, _ in a })
         interval = parts["INTERVAL"].flatMap(Int.init).map { max(1, $0) } ?? 1
         if let n = parts["TT_TIMES"].flatMap(Int.init), n > 0 {
-            frequency = .timesAWeek(n)
+            frequency = parts["FREQ"] == "MONTHLY" ? .timesAMonth(n) : .timesAWeek(n)
         } else if parts["FREQ"] == "WEEKLY", let days = parts["BYDAY"] {
             let set = Set(days.split(separator: ",").compactMap { code in Self.codes.first { $0.value == code.uppercased() }?.key })
             frequency = set.isEmpty || set.count == 7 ? .daily : .weekdays(set)
@@ -305,6 +314,7 @@ struct HabitDraft: Equatable {
         case .daily: "RRULE:FREQ=DAILY;INTERVAL=1"
         case .weekdays(let set): "RRULE:FREQ=WEEKLY;BYDAY=" + [2, 3, 4, 5, 6, 7, 1].filter(set.contains).compactMap { Self.codes[$0] }.joined(separator: ",")
         case .timesAWeek(let n): "RRULE:FREQ=WEEKLY;TT_TIMES=\(n)"
+        case .timesAMonth(let n): "RRULE:FREQ=MONTHLY;TT_TIMES=\(n)"
         }
     }
 

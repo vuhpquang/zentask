@@ -50,6 +50,36 @@ class NotificationPlannerTest {
     }
 
     @Test
+    fun weeklyHabitsRemindFromTheirStartDayUntilDone() {
+        // Once a week, reminders from Friday (5). Today is Sunday 8th; the next week starts Monday 9th.
+        val h = Habit(id = "h", name = "Free game", repeatRule = "RRULE:FREQ=WEEKLY;TT_TIMES=1", reminders = listOf("09:00"), remindFrom = 5)
+        val r = plan(NotificationPrefs(summary = false), habits = listOf(h))
+        assertEquals(listOf(ms("2026-11-13T09:00"), ms("2026-11-14T09:00")), r.map { it.fireAt })
+        // Done on Friday: nothing more that week.
+        val done = HabitCheckin(id = "c", habitId = "h", stamp = 20261113, status = 2, value = 1.0)
+        assertEquals(emptyList(), plan(NotificationPrefs(summary = false), habits = listOf(h), checkins = listOf(done)).map { it.fireAt })
+    }
+
+    @Test
+    fun monthlyHabitsRemindFromTheirStartDayOfTheMonth() {
+        // Twice a month from the 10th; done once on the 3rd, so it still needs one more.
+        val h = Habit(id = "h", name = "Backup", repeatRule = "RRULE:FREQ=MONTHLY;TT_TIMES=2", reminders = listOf("20:00"), remindFrom = 10)
+        val done = HabitCheckin(id = "c", habitId = "h", stamp = 20261103, status = 2, value = 1.0)
+        val r = plan(NotificationPrefs(summary = false), habits = listOf(h), checkins = listOf(done))
+        assertEquals((10..14).map { ms("2026-11-${it}T20:00") }, r.map { it.fireAt })
+    }
+
+    @Test
+    fun countdownsUseTheirOwnReminders() {
+        val c = Countdown(id = "c", name = "Exam", date = 20261125, reminders = listOf("14@08:00", "7@09:30", "0@07:00"))
+        val r = plan(NotificationPrefs(summary = false), countdowns = listOf(c))
+        // 14 days before (11th) at 08:00, 7 days before (18th) at 09:30, on the day at 07:00.
+        assertEquals(listOf(ms("2026-11-11T08:00"), ms("2026-11-18T09:30"), ms("2026-11-25T07:00")), r.map { it.fireAt })
+        // An empty list means no reminders.
+        assertEquals(emptyList(), plan(NotificationPrefs(summary = false), countdowns = listOf(c.copy(reminders = emptyList()))))
+    }
+
+    @Test
     fun habitsRemindOnDueDaysNotDoneYet() {
         // Weekly on Monday and Wednesday at 07:00; done already on Monday 9th.
         val h = Habit(id = "h", name = "Run", repeatRule = "RRULE:FREQ=WEEKLY;BYDAY=MO,WE", reminders = listOf("07:00"), encouragement = "Keep going")

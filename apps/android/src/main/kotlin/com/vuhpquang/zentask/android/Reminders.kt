@@ -184,7 +184,9 @@ class ReminderReceiver : BroadcastReceiver() {
                 if (habit == null || habit.archivedAt != null || zen.core.habitActions.checkins(habitId, day).any { it.status == 2 }) return
                 show(context, intent, habit.name.ifBlank { title }, body, prefs.sound, primary = "Check in" to Reminders.ACTION_CHECK_IN)
             }
-            PlannedReminder.KIND_COUNTDOWN, PlannedReminder.KIND_SUMMARY ->
+            PlannedReminder.KIND_COUNTDOWN ->
+                show(context, intent, title, body, prefs.sound, primary = null, snooze = true)
+            PlannedReminder.KIND_SUMMARY ->
                 show(context, intent, title, body, prefs.sound, primary = null, snooze = false)
             else -> {
                 val taskId = intent.getStringExtra(Reminders.EXTRA_TASK) ?: return

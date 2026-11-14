@@ -26,7 +26,8 @@ object Stamp {
 
 /**
  * When a habit is due, from TickTick's rule format: `FREQ=DAILY;INTERVAL=n`, `FREQ=WEEKLY;BYDAY=MO,WE`,
- * or `FREQ=WEEKLY;TT_TIMES=n` (n times a week, any days). Anything else counts as daily.
+ * `FREQ=WEEKLY;TT_TIMES=n` (n times a week, any days) or `FREQ=MONTHLY;TT_TIMES=n` (ZenTask's own: n times a
+ * month). Anything else counts as daily.
  */
 object HabitSchedule {
     private val DAYS = mapOf(
@@ -41,12 +42,39 @@ object HabitSchedule {
     private fun weekdays(h: Habit): Set<DayOfWeek> =
         parts(h)["BYDAY"]?.split(',')?.mapNotNull { DAYS[it.trim().uppercase()] }?.toSet().orEmpty()
 
-    /** N times a week, or null for day-based schedules. */
-    fun weekTarget(h: Habit): Int? = parts(h)["TT_TIMES"]?.toIntOrNull()?.takeIf { it > 0 }
+    /** N times a week, or null for other schedules. */
+    fun weekTarget(h: Habit): Int? = parts(h).takeIf { it["FREQ"] != "MONTHLY" }?.get("TT_TIMES")?.toIntOrNull()?.takeIf { it > 0 }
+
+    /** N times a month, or null for other schedules. */
+    fun monthTarget(h: Habit): Int? = parts(h).takeIf { it["FREQ"] == "MONTHLY" }?.get("TT_TIMES")?.toIntOrNull()?.takeIf { it > 0 }
+
+    /** First day of [date]'s period for a counted habit (Monday, or the 1st), null for day-based ones. */
+    fun periodStart(h: Habit, date: LocalDate): LocalDate? = when {
+        monthTarget(h) != null -> LocalDate(date.year, date.month, 1)
+        weekTarget(h) != null -> date.minus(date.dayOfWeek.isoDayNumber - 1, DateTimeUnit.DAY)
+        else -> null
+    }
+
+    /**
+     * Whether reminders may fire on [date] given [Habit.remindFrom]: counted habits remind from that day of the
+     * week / month on (a day past the month's end means its last day). Day-based habits ignore it.
+     */
+    fun remindsOn(h: Habit, date: LocalDate): Boolean {
+        val from = h.remindFrom ?: return true
+        return when {
+            monthTarget(h) != null -> {
+                val last = LocalDate(date.year, date.month, 1).plus(1, DateTimeUnit.MONTH).minus(1, DateTimeUnit.DAY).day
+                date.day >= minOf(from, last)
+            }
+            weekTarget(h) != null -> date.dayOfWeek.isoDayNumber >= from
+            else -> true
+        }
+    }
 
     /** Every-N-days habits count from their start date, or the day they were created ([zone]). */
     fun isDue(h: Habit, date: LocalDate, zone: TimeZone = TimeZone.currentSystemDefault()): Boolean {
         val p = parts(h)
+        if (p["FREQ"] == "MONTHLY" && monthTarget(h) != null) return true
         if (p["FREQ"] == "WEEKLY") {
             if (weekTarget(h) != null) return true
             val days = weekdays(h)
@@ -70,14 +98,15 @@ object HabitSchedule {
      */
     fun isScheduled(h: Habit, date: LocalDate, zone: TimeZone, done: Set<Int>): Boolean {
         startDay(h, zone)?.let { if (date < it) return false }
-        val target = weekTarget(h) ?: return isDue(h, date, zone)
+        val target = weekTarget(h) ?: monthTarget(h) ?: return isDue(h, date, zone)
         if (Stamp.of(date) in done) return true
-        val monday = date.minus(date.dayOfWeek.isoDayNumber - 1, DateTimeUnit.DAY)
-        return done.count { s -> Stamp.date(s)?.let { it >= monday && it < date } == true } < target
+        val start = periodStart(h, date)!!
+        return done.count { s -> Stamp.date(s)?.let { it >= start && it < date } == true } < target
     }
 
     fun describe(h: Habit): String {
         weekTarget(h)?.let { return "$it times a week" }
+        monthTarget(h)?.let { return "$it times a month" }
         val days = weekdays(h)
         if (parts(h)["FREQ"] == "WEEKLY" && days.isNotEmpty() && days.size < 7) {
             return days.sortedBy { it.isoDayNumber }.joinToString(", ") { SHORT[it.isoDayNumber - 1] }
@@ -87,7 +116,7 @@ object HabitSchedule {
     }
 }
 
-/** Streaks and totals; [unit] is "days", or "weeks" for N-times-a-week habits. */
+/** Streaks and totals; [unit] is "days", "weeks" for N-times-a-week habits or "months" for N-times-a-month ones. */
 data class HabitStats(val currentStreak: Int, val longestStreak: Int, val totalDays: Int, val unit: String) {
     companion object {
         /** Days walked back at most (bounds the work for a stray ancient check-in). */
@@ -95,7 +124,10 @@ data class HabitStats(val currentStreak: Int, val longestStreak: Int, val totalD
 
         fun of(h: Habit, done: Set<LocalDate>, today: LocalDate, zone: TimeZone = TimeZone.currentSystemDefault()): HabitStats {
             val target = HabitSchedule.weekTarget(h)
-            if (target != null) return weekly(target, done.filterTo(HashSet()) { it <= today }, today)
+            if (target != null) return periods(target, done.filterTo(HashSet()) { it <= today }, today, "weeks", { it.minus(it.dayOfWeek.isoDayNumber - 1, DateTimeUnit.DAY) }) { it.plus(7, DateTimeUnit.DAY) }
+            HabitSchedule.monthTarget(h)?.let { m ->
+                return periods(m, done.filterTo(HashSet()) { it <= today }, today, "months", { LocalDate(it.year, it.month, 1) }) { it.plus(1, DateTimeUnit.MONTH) }
+            }
             // Walk back over due days; today not done yet doesn't break the streak.
             var current = 0
             var d = today
@@ -121,22 +153,28 @@ data class HabitStats(val currentStreak: Int, val longestStreak: Int, val totalD
             return HabitStats(current, maxOf(longest, current), done.count { it <= today }, "days")
         }
 
-        private fun weekly(target: Int, done: Set<LocalDate>, today: LocalDate): HabitStats {
-            fun monday(d: LocalDate) = d.minus(d.dayOfWeek.isoDayNumber - 1, DateTimeUnit.DAY)
-            val counts = done.groupingBy { monday(it) }.eachCount()
-            val thisWeek = monday(today)
+        /** Streaks counted in periods (weeks or months) that met [target]; [start] maps a day to its period. */
+        private fun periods(
+            target: Int, done: Set<LocalDate>, today: LocalDate, unit: String,
+            start: (LocalDate) -> LocalDate, next: (LocalDate) -> LocalDate,
+        ): HabitStats {
+            val counts = done.groupingBy(start).eachCount()
+            val sorted: List<LocalDate> = (counts.keys + start(today)).sorted()
+            val now = start(today)
+            // Walk every period from the first one to now (gaps count as missed).
+            val all = mutableListOf<LocalDate>()
+            var x = sorted.first()
+            while (x <= now) { all += x; x = next(x) }
             var current = 0
-            var w = thisWeek
-            if ((counts[w] ?: 0) < target) w = w.minus(7, DateTimeUnit.DAY) // the current week may still be in progress
-            while ((counts[w] ?: 0) >= target) { current++; w = w.minus(7, DateTimeUnit.DAY) }
+            var i = all.lastIndex
+            if ((counts[all[i]] ?: 0) < target) i-- // the current period may still be in progress
+            while (i >= 0 && (counts[all[i]] ?: 0) >= target) { current++; i-- }
             var longest = 0
             var run = 0
-            var x = counts.keys.minOrNull() ?: thisWeek
-            while (x <= thisWeek) {
-                if ((counts[x] ?: 0) >= target) { run++; longest = maxOf(longest, run) } else if (x != thisWeek) run = 0
-                x = x.plus(7, DateTimeUnit.DAY)
+            for (p in all) {
+                if ((counts[p] ?: 0) >= target) { run++; longest = maxOf(longest, run) } else if (p != now) run = 0
             }
-            return HabitStats(current, maxOf(longest, current), done.count { it <= today }, "weeks")
+            return HabitStats(current, maxOf(longest, current), done.count { it <= today }, unit)
         }
     }
 }
@@ -171,6 +209,11 @@ class HabitActions(
             com.vuhpquang.zentask.notify.NotificationPlanner.clockMinutes(t)?.let { m -> "${(m / 60).toString().padStart(2, '0')}:${(m % 60).toString().padStart(2, '0')}" }
         }.distinct().sorted()
         store.update(EntityTypes.habit, id) { it.copy(reminders = clean) }
+    }
+
+    /** The day of the week (1–7) or month (1–31) reminders start on for counted habits; null = every day. */
+    fun setRemindFrom(id: String, day: Int?) {
+        store.update(EntityTypes.habit, id) { it.copy(remindFrom = day?.takeIf { d -> d in 1..31 }) }
     }
 
     fun archive(id: String) {
@@ -288,6 +331,15 @@ class CountdownActions(
     fun update(original: Countdown, name: String, date: Int, type: String, repeat: String, color: String?, icon: String?, note: String, showInCalendar: Boolean) {
         val edited = original.copy(name = name.trim(), date = date, type = type, repeat = repeat, color = color, icon = icon, note = note, showInCalendar = showInCalendar)
         if (store.get(EntityTypes.countdown, original.id)?.deleted == false) store.put(EntityTypes.countdown, edited, base = original)
+    }
+
+    /** Own reminders ("<days>@HH:mm"), cleaned and sorted furthest first; null = back to the defaults. */
+    fun setReminders(id: String, reminders: List<String>?) {
+        val clean = reminders?.mapNotNull { r ->
+            com.vuhpquang.zentask.notify.NotificationPlanner.parseCountdownReminder(r)
+        }?.distinct()?.sortedWith(compareByDescending<Pair<Int, Int>> { it.first }.thenBy { it.second })
+            ?.map { (d, m) -> com.vuhpquang.zentask.notify.NotificationPlanner.countdownReminder(d, m) }
+        store.update(EntityTypes.countdown, id) { it.copy(reminders = clean) }
     }
 
     fun archive(id: String) {

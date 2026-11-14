@@ -41,13 +41,15 @@ struct HabitEditor: View {
                     Text("Every day").tag(0)
                     Text("Some days").tag(1)
                     Text("Times a week").tag(2)
+                    Text("Times a month").tag(3)
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 .onChange(of: kind) { _, k in
                     switch k {
                     case 1: if case .weekdays = draft.frequency {} else { draft.frequency = .weekdays([2, 3, 4, 5, 6]) }
-                    case 2: if case .timesAWeek = draft.frequency {} else { draft.frequency = .timesAWeek(3) }
+                    case 2: if case .timesAWeek = draft.frequency {} else { draft.frequency = .timesAWeek(3); draft.remindFrom = nil }
+                    case 3: if case .timesAMonth = draft.frequency {} else { draft.frequency = .timesAMonth(1); draft.remindFrom = nil }
                     default: draft.frequency = .daily
                     }
                 }
@@ -73,6 +75,8 @@ struct HabitEditor: View {
                     }
                 case .timesAWeek(let n):
                     Stepper("\(n) times a week", value: Binding(get: { n }, set: { draft.frequency = .timesAWeek($0) }), in: 1...7)
+                case .timesAMonth(let n):
+                    Stepper("\(n) times a month", value: Binding(get: { n }, set: { draft.frequency = .timesAMonth($0) }), in: 1...31)
                 case .daily:
                     EmptyView()
                 }
@@ -120,7 +124,21 @@ struct HabitEditor: View {
                         if !draft.reminders.contains(time) { draft.reminders = (draft.reminders + [time]).sorted() }
                     }
                 }
-                Text("On days the habit is due and not done yet").font(.callout).foregroundStyle(.secondary)
+                if draft.frequency.isCounted {
+                    Picker("Start reminding", selection: $draft.remindFrom) {
+                        Text("Every day").tag(Int?.none)
+                        if case .timesAMonth = draft.frequency {
+                            ForEach(1...31, id: \.self) { d in Text("From day \(d)").tag(Int?.some(d)) }
+                        } else {
+                            // ISO weekdays 1 = Monday … 7 = Sunday; the symbols array starts on Sunday.
+                            ForEach(1...7, id: \.self) { d in Text("From " + habits.calendar.weekdaySymbols[d % 7]).tag(Int?.some(d)) }
+                        }
+                    }
+                    .fixedSize()
+                }
+                Text(draft.frequency.isCounted
+                     ? "From the start day, every day until the target is met"
+                     : "On days the habit is due and not done yet").font(.callout).foregroundStyle(.secondary)
             }
 
             HStack {
@@ -142,7 +160,7 @@ struct HabitEditor: View {
                 original = h
                 draft = HabitDraft(habit: h)
             }
-            kind = switch draft.frequency { case .daily: 0; case .weekdays: 1; case .timesAWeek: 2 }
+            kind = switch draft.frequency { case .daily: 0; case .weekdays: 1; case .timesAWeek: 2; case .timesAMonth: 3 }
         }
     }
 }

@@ -125,7 +125,13 @@ fun HabitEditorDialog(app: ZenApp, editing: Habit?, close: () -> Unit) {
     var daysTouched by remember { mutableStateOf(false) }
     val reminders = remember { mutableStateListOf<String>().apply { addAll(editing?.reminders.orEmpty()) } }
     val goalValue = goal.replace(',', '.').toDoubleOrNull()
-    val keepsOddRule = editing != null && initialDays.isEmpty() && !isPlainDaily(editing.repeatRule)
+    val weekTarget = editing?.let { com.vuhpquang.zentask.habits.HabitSchedule.weekTarget(it) }
+    val monthTarget = editing?.let { com.vuhpquang.zentask.habits.HabitSchedule.monthTarget(it) }
+    // 0 = on days, 1 = N times a week, 2 = N times a month.
+    var mode by remember { mutableStateOf(if (monthTarget != null) 2 else if (weekTarget != null) 1 else 0) }
+    var times by remember { mutableStateOf(monthTarget ?: weekTarget ?: 1) }
+    var remindFrom by remember { mutableStateOf(editing?.remindFrom) }
+    val keepsOddRule = editing != null && weekTarget == null && monthTarget == null && initialDays.isEmpty() && !isPlainDaily(editing.repeatRule)
     AlertDialog(
         onDismissRequest = close,
         title = { Text(if (editing == null) "New habit" else "Edit habit") },
@@ -144,12 +150,27 @@ fun HabitEditorDialog(app: ZenApp, editing: Habit?, close: () -> Unit) {
                         OutlinedTextField(unit, { unit = it }, label = { Text("Unit") }, singleLine = true, modifier = Modifier.weight(1f))
                     }
                 }
-                Text("Days", style = MaterialTheme.typography.labelLarge)
-                if (keepsOddRule && !daysTouched) {
+                Text("How often", style = MaterialTheme.typography.labelLarge)
+                SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                    listOf("Days", "A week", "A month").forEachIndexed { i, label ->
+                        SegmentedButton(selected = mode == i, onClick = {
+                            if (mode != i) { mode = i; remindFrom = null; times = times.coerceAtMost(if (i == 1) 7 else 31) }
+                        }, shape = SegmentedButtonDefaults.itemShape(i, 3)) { Text(label) }
+                    }
+                }
+                if (mode != 0) {
+                    val max = if (mode == 1) 7 else 31
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("$times time${if (times == 1) "" else "s"} ${if (mode == 1) "a week" else "a month"}", Modifier.weight(1f))
+                        TextButton(onClick = { if (times > 1) times-- }) { Text("−") }
+                        TextButton(onClick = { if (times < max) times++ }) { Text("+") }
+                    }
+                }
+                if (mode == 0 && keepsOddRule && !daysTouched) {
                     Text(editing?.let { app.core.habitRows().firstOrNull { r -> r.habit.id == it.id }?.schedule }.orEmpty() + " (pick days to change it)",
                         color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                 }
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (mode == 0) FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     for (code in DAY_CODES) {
                         val label = DayOfWeek.entries[DAY_CODES.indexOf(code)].getDisplayName(TextStyle.SHORT, Locale.getDefault())
                         FilterChip(selected = code in days && (!keepsOddRule || daysTouched), onClick = {
@@ -172,11 +193,14 @@ fun HabitEditorDialog(app: ZenApp, editing: Habit?, close: () -> Unit) {
                         }, 9, 0, true).show()
                     }, label = { Text("Add time") }, leadingIcon = { Icon(Icons.Filled.Notifications, null) })
                 }
+                if (mode != 0) RemindFromPicker(mode == 2, remindFrom) { remindFrom = it }
             }
         },
         confirmButton = {
             TextButton(enabled = name.isNotBlank() && (!amount || (goalValue != null && goalValue > 0)), onClick = {
                 val rule = when {
+                    mode == 1 -> "RRULE:FREQ=WEEKLY;TT_TIMES=$times"
+                    mode == 2 -> "RRULE:FREQ=MONTHLY;TT_TIMES=$times"
                     keepsOddRule && !daysTouched -> editing!!.repeatRule!!
                     days.size == 7 -> "RRULE:FREQ=DAILY;INTERVAL=1"
                     else -> "RRULE:FREQ=WEEKLY;BYDAY=" + DAY_CODES.filter { it in days }.joinToString(",")
@@ -192,11 +216,38 @@ fun HabitEditorDialog(app: ZenApp, editing: Habit?, close: () -> Unit) {
                     editing.id
                 }
                 if (reminders.sorted() != editing?.reminders.orEmpty()) a.setReminders(id, reminders.toList())
+                val from = remindFrom.takeIf { mode != 0 }
+                if (from != editing?.remindFrom) a.setRemindFrom(id, from)
                 close()
             }) { Text(if (editing == null) "Create" else "Save") }
         },
         dismissButton = { TextButton(onClick = close) { Text("Cancel") } },
     )
+}
+
+/** "Start reminding": every day, or from a weekday (ISO 1–7) / day of the month; then daily until the target is met. */
+@Composable
+private fun RemindFromPicker(monthly: Boolean, value: Int?, change: (Int?) -> Unit) {
+    var open by remember { mutableStateOf(false) }
+    fun label(d: Int?): String = when {
+        d == null -> "Every day"
+        monthly -> "From day $d"
+        else -> "From " + DayOfWeek.of(d).getDisplayName(TextStyle.FULL, Locale.getDefault())
+    }
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("Start reminding")
+            Text("Then every day until the target is met", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Box {
+            TextButton(onClick = { open = true }) { Text(label(value)) }
+            androidx.compose.material3.DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                for (d in listOf<Int?>(null) + (1..(if (monthly) 31 else 7))) {
+                    androidx.compose.material3.DropdownMenuItem(text = { Text(label(d)) }, onClick = { change(d); open = false })
+                }
+            }
+        }
+    }
 }
 
 fun fmtNumber(v: Double) = if (v % 1.0 == 0.0) v.toLong().toString() else "%.1f".format(v)
@@ -304,12 +355,16 @@ fun CountdownEditorDialog(app: ZenApp, editing: Countdown?, close: () -> Unit) {
         mutableStateOf(editing?.date?.takeIf { it > 0 }?.let { LocalDate.of(it / 10_000, it / 100 % 100, it % 100) } ?: LocalDate.now().plusDays(7))
     }
     var pickingDate by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val defaults = remember { com.vuhpquang.zentask.notify.NotificationPlanner.defaultCountdownReminders(app.core.notificationPrefs()) }
+    var reminders by remember { mutableStateOf(editing?.reminders) }
+    var addDays by remember { mutableStateOf(1) }
     val types = listOf("COUNTDOWN" to "Countdown", "BIRTHDAY" to "Birthday", "ANNIVERSARY" to "Anniversary", "HOLIDAY" to "Holiday")
     AlertDialog(
         onDismissRequest = close,
         title = { Text(if (editing == null) "New countdown" else "Edit countdown") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(name, { name = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     for ((t, label) in types) FilterChip(selected = type == t, onClick = { type = t }, label = { Text(label) })
@@ -322,6 +377,31 @@ fun CountdownEditorDialog(app: ZenApp, editing: Countdown?, close: () -> Unit) {
                     Text("Show in calendar", Modifier.weight(1f))
                     Switch(checked = showInCalendar, onCheckedChange = { showInCalendar = it })
                 }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Reminders", style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+                    if (reminders != null) TextButton(onClick = { reminders = null }) { Text("Use defaults") }
+                }
+                val shown = reminders ?: defaults
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    for (r in shown) {
+                        InputChip(selected = false, onClick = { reminders = shown - r },
+                            label = { Text(com.vuhpquang.zentask.notify.NotificationPlanner.countdownReminderTitle(r)) },
+                            trailingIcon = { Icon(Icons.Filled.Close, "Remove", Modifier.size(18.dp)) })
+                    }
+                }
+                if (shown.isEmpty()) Text("No reminders", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(if (addDays == 0) "On the day" else "$addDays day${if (addDays == 1) "" else "s"} before", Modifier.weight(1f))
+                    TextButton(onClick = { if (addDays > 0) addDays-- }) { Text("−") }
+                    TextButton(onClick = { if (addDays < 365) addDays++ }) { Text("+") }
+                    AssistChip(onClick = {
+                        TimePickerDialog(context, { _, h, m ->
+                            val r = com.vuhpquang.zentask.notify.NotificationPlanner.countdownReminder(addDays, h * 60 + m)
+                            if (r !in shown) reminders = shown + r
+                        }, 9, 0, true).show()
+                    }, label = { Text("Add") }, leadingIcon = { Icon(Icons.Filled.Notifications, null) })
+                }
+                if (reminders == null) Text("Using the defaults from Settings → Notifications", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
         confirmButton = {
@@ -330,9 +410,11 @@ fun CountdownEditorDialog(app: ZenApp, editing: Countdown?, close: () -> Unit) {
                 val repeat = if (type == "COUNTDOWN") editing?.repeat?.takeIf { editing.type == "COUNTDOWN" } ?: "none" else "yearly"
                 val a = app.core.countdownActions
                 if (editing == null) {
-                    a.create(name = name, date = stamp, type = type, repeat = repeat, color = color, icon = null, note = "", showInCalendar = showInCalendar)
+                    val c = a.create(name = name, date = stamp, type = type, repeat = repeat, color = color, icon = null, note = "", showInCalendar = showInCalendar)
+                    reminders?.let { a.setReminders(c.id, it) }
                 } else {
                     a.update(editing, name = name, date = stamp, type = type, repeat = repeat, color = color, icon = editing.icon, note = editing.note, showInCalendar = showInCalendar)
+                    if (reminders != editing.reminders) a.setReminders(editing.id, reminders)
                 }
                 close()
             }) { Text(if (editing == null) "Create" else "Save") }

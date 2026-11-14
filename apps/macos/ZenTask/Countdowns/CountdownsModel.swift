@@ -72,6 +72,9 @@ final class CountdownsModel {
     var active: [CountdownCard] { shown.filter { $0.countdown.archivedAt == nil } }
     var archived: [CountdownCard] { shown.filter { $0.countdown.archivedAt != nil } }
 
+    /// Reminders a countdown gets when it has none of its own (Settings → Notifications).
+    var defaultReminders: [String] { NotificationPlanner.shared.defaultCountdownReminders(prefs: core.notificationPrefs()) }
+
     /// [original] = the countdown as the editor opened it (nil = new): only what the editor changed is written.
     func save(_ draft: CountdownDraft, original: Countdown?) {
         let a = core.countdownActions
@@ -79,9 +82,11 @@ final class CountdownsModel {
         if let original {
             a.update(original: original, name: draft.name, date: stamp, type: draft.type, repeat: draft.yearly ? "yearly" : "none",
                      color: draft.color, icon: draft.storedIcon, note: draft.note, showInCalendar: draft.showInCalendar)
+            if draft.reminders != original.reminders { a.setReminders(id: original.id, reminders: draft.reminders) }
         } else {
-            _ = a.create(name: draft.name, date: stamp, type: draft.type, repeat: draft.yearly ? "yearly" : "none",
-                         color: draft.color, icon: draft.storedIcon, note: draft.note, showInCalendar: draft.showInCalendar)
+            let c = a.create(name: draft.name, date: stamp, type: draft.type, repeat: draft.yearly ? "yearly" : "none",
+                             color: draft.color, icon: draft.storedIcon, note: draft.note, showInCalendar: draft.showInCalendar)
+            if let r = draft.reminders { a.setReminders(id: c.id, reminders: r) }
         }
     }
 
@@ -109,6 +114,8 @@ struct CountdownDraft: Equatable {
     var icon = ""
     var note = ""
     var showInCalendar = true
+    /// Own reminders ("<days>@HH:mm"); nil = the defaults from Settings → Notifications.
+    var reminders: [String]?
     private var originalIcon: String?
     private var originalIconText: String?
 
@@ -126,6 +133,7 @@ struct CountdownDraft: Equatable {
         originalIconText = icon
         note = c.note
         showInCalendar = c.showInCalendar
+        reminders = c.reminders
     }
 
     func stamp(_ calendar: Calendar) -> Int32 {

@@ -13,6 +13,7 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
         static let task = "zentask.task"
         static let habit = "zentask.habit"
         static let plain = "zentask.plain"
+        static let countdown = "zentask.countdown"
     }
     private static let complete = "complete"
     private static let checkIn = "checkin"
@@ -30,6 +31,7 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
             UNNotificationCategory(identifier: Category.task, actions: [UNNotificationAction(identifier: Self.complete, title: "Complete")] + snoozes, intentIdentifiers: []),
             UNNotificationCategory(identifier: Category.habit, actions: [UNNotificationAction(identifier: Self.checkIn, title: "Check in")] + snoozes, intentIdentifiers: []),
             UNNotificationCategory(identifier: Category.plain, actions: [], intentIdentifiers: []),
+            UNNotificationCategory(identifier: Category.countdown, actions: snoozes, intentIdentifiers: []),
         ])
     }
 
@@ -72,6 +74,10 @@ final class Reminders: NSObject, UNUserNotificationCenterDelegate {
             content.title = r.title
             content.body = r.body
             content.categoryIdentifier = Category.habit
+        case PlannedReminder.companion.KIND_COUNTDOWN:
+            content.title = r.title
+            content.body = r.body
+            content.categoryIdentifier = Category.countdown
         default:
             content.title = r.title
             content.body = r.body

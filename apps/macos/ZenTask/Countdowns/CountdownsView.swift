@@ -187,6 +187,7 @@ struct CountdownEditor: View {
             DatePicker("Date", selection: $draft.date, displayedComponents: .date)
             Toggle("Repeat every year", isOn: $draft.yearly)
             Toggle("Show in calendar", isOn: $draft.showInCalendar)
+            CountdownReminderEditor(reminders: $draft.reminders, defaults: countdowns.defaultReminders)
             HStack(spacing: Theme.Space.s) {
                 ForEach(Palette.colors, id: \.self) { hex in
                     Button { draft.color = hex } label: {
@@ -251,5 +252,95 @@ enum CountdownLook {
         case "ANNIVERSARY": return "\(card.years.formatted(.number)) years"
         default: return nil
         }
+    }
+}
+
+/// A countdown's reminders: chips (click to remove), days before + time to add, or the defaults from Settings.
+struct CountdownReminderEditor: View {
+    @Binding var reminders: [String]?
+    let defaults: [String]
+    @State private var daysBefore = 1
+    @State private var time = Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: .now) ?? .now
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
+            HStack {
+                Text("Reminders").font(.headline)
+                Spacer()
+                if reminders != nil {
+                    Button("Use defaults") { withMotion { reminders = nil } }.buttonStyle(.link)
+                }
+            }
+            let shown = reminders ?? defaults
+            FlowChips(items: shown) { r in
+                Button {
+                    withMotion { reminders = (reminders ?? defaults).filter { $0 != r } }
+                } label: {
+                    Label(NotificationPlanner.shared.countdownReminderTitle(text: r), systemImage: "xmark.circle.fill")
+                        .labelStyle(.titleAndIcon)
+                }
+                .help("Remove this reminder")
+            }
+            if shown.isEmpty { Text("No reminders").font(.callout).foregroundStyle(.secondary) }
+            HStack(spacing: Theme.Space.s) {
+                Stepper(daysBefore == 0 ? "On the day" : "\(daysBefore) day\(daysBefore == 1 ? "" : "s") before", value: $daysBefore, in: 0...365)
+                DatePicker("Time", selection: $time, displayedComponents: .hourAndMinute).labelsHidden()
+                Button("Add", systemImage: "bell.badge") {
+                    let c = Calendar.current.dateComponents([.hour, .minute], from: time)
+                    let r = NotificationPlanner.shared.countdownReminder(daysBefore: Int32(daysBefore), minutes: Int32((c.hour ?? 0) * 60 + (c.minute ?? 0)))
+                    var next = reminders ?? defaults
+                    if !next.contains(r) { next.append(r) }
+                    withMotion { reminders = next }
+                }
+            }
+            if reminders == nil {
+                Text("Using the defaults from Settings → Notifications").font(.callout).foregroundStyle(.secondary)
+            }
+        }
+    }
+}
+
+/// Wrapping row of chips.
+private struct FlowChips<Item: Hashable, Content: View>: View {
+    let items: [Item]
+    @ViewBuilder let content: (Item) -> Content
+    var body: some View {
+        FlowLayout(spacing: Theme.Space.s) { ForEach(items, id: \.self) { content($0) } }
+    }
+}
+
+private struct FlowLayout: Layout {
+    var spacing: CGFloat
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let rows = arrange(proposal.width ?? .infinity, subviews)
+        return CGSize(width: proposal.width ?? rows.map(\.width).max() ?? 0, height: rows.reduce(0) { $0 + $1.height } + spacing * CGFloat(max(0, rows.count - 1)))
+    }
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var y = bounds.minY
+        for row in arrange(bounds.width, subviews) {
+            var x = bounds.minX
+            for i in row.indices {
+                let size = subviews[i].sizeThatFits(.unspecified)
+                subviews[i].place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+                x += size.width + spacing
+            }
+            y += row.height + spacing
+        }
+    }
+    private func arrange(_ width: CGFloat, _ subviews: Subviews) -> [(indices: [Int], width: CGFloat, height: CGFloat)] {
+        var rows: [(indices: [Int], width: CGFloat, height: CGFloat)] = []
+        var current: (indices: [Int], width: CGFloat, height: CGFloat) = ([], 0, 0)
+        for i in subviews.indices {
+            let size = subviews[i].sizeThatFits(.unspecified)
+            let needed = current.indices.isEmpty ? size.width : current.width + spacing + size.width
+            if needed > width, !current.indices.isEmpty {
+                rows.append(current)
+                current = ([i], size.width, size.height)
+            } else {
+                current = (current.indices + [i], needed, max(current.height, size.height))
+            }
+        }
+        if !current.indices.isEmpty { rows.append(current) }
+        return rows
     }
 }

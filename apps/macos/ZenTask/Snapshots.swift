@@ -168,8 +168,8 @@ enum Snapshots {
         habits.selection = water.id
         both(env(AnyView(HabitsView())), size: windowSize, name: "habits-number", dir: dir)
         both(env(AnyView(CountdownsView())), size: windowSize, name: "countdowns", dir: dir)
-        both(env(AnyView(HabitEditor(editing: .new))), size: CGSize(width: 480, height: 560), name: "sheet-habit", dir: dir)
-        both(env(AnyView(CountdownEditor(editing: .new))), size: CGSize(width: 500, height: 520), name: "sheet-countdown", dir: dir)
+        both(env(AnyView(HabitEditor(editing: .new))), size: CGSize(width: 480, height: 640), name: "sheet-habit", dir: dir)
+        both(env(AnyView(CountdownEditor(editing: .new))), size: CGSize(width: 500, height: 700), name: "sheet-countdown", dir: dir)
     }
 
     private static let windowSize = CGSize(width: 1100, height: 720)

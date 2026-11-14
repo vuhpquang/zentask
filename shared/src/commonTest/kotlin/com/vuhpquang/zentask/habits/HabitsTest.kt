@@ -181,4 +181,31 @@ class HabitsTest {
         cds.update(c, "Japan trip", 20270120, "COUNTDOWN", "none", null, null, "", true)
         assertEquals("book hotel", store.get(EntityTypes.countdown, c.id)!!.note)
     }
+
+    @Test
+    fun monthlyHabitsCountPerMonth() {
+        val h = Habit(id = "h", repeatRule = "RRULE:FREQ=MONTHLY;TT_TIMES=2")
+        assertEquals(2, HabitSchedule.monthTarget(h))
+        assertEquals(null, HabitSchedule.weekTarget(h))
+        assertEquals("2 times a month", HabitSchedule.describe(h))
+        val zone = TimeZone.of("Asia/Ho_Chi_Minh")
+        // Done twice in November: the rest of November isn't scheduled, December is.
+        val done = setOf(20261102, 20261105)
+        assertTrue(!HabitSchedule.isScheduled(h, LocalDate(2026, 11, 20), zone, done))
+        assertTrue(HabitSchedule.isScheduled(h, LocalDate(2026, 12, 1), zone, done))
+        // Streaks in months: Sep and Oct met, Nov met too.
+        val days = setOf(LocalDate(2026, 9, 1), LocalDate(2026, 9, 2), LocalDate(2026, 10, 3), LocalDate(2026, 10, 4), LocalDate(2026, 11, 2), LocalDate(2026, 11, 5))
+        val stats = HabitStats.of(h, days, LocalDate(2026, 11, 14), zone)
+        assertEquals(3, stats.currentStreak)
+        assertEquals("months", stats.unit)
+    }
+
+    @Test
+    fun remindFromPastTheMonthEndMeansTheLastDay() {
+        val h = Habit(id = "h", repeatRule = "RRULE:FREQ=MONTHLY;TT_TIMES=1", remindFrom = 31)
+        assertTrue(!HabitSchedule.remindsOn(h, LocalDate(2027, 2, 27)))
+        assertTrue(HabitSchedule.remindsOn(h, LocalDate(2027, 2, 28)))
+        // Day-based habits ignore it.
+        assertTrue(HabitSchedule.remindsOn(Habit(id = "d", remindFrom = 5), LocalDate(2026, 11, 2)))
+    }
 }

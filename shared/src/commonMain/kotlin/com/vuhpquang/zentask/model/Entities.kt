@@ -214,6 +214,11 @@ data class Habit(
     /** yyyyMMdd. */
     val targetStartDate: Int? = null,
     val encouragement: String = "",
+    /**
+     * For N-times-a-week / -month habits: reminders start on this day of the period (ISO weekday 1–7, or day
+     * of month 1–31) and repeat daily until the period's target is met. Null = every day of the period.
+     */
+    val remindFrom: Int? = null,
 ) : Entity {
     companion object {
         const val TYPE_BOOLEAN = "BOOLEAN"
@@ -269,6 +274,11 @@ data class Countdown(
     val sortOrder: Long = 0,
     val archivedAt: Long? = null,
     val showInCalendar: Boolean = true,
+    /**
+     * Reminders as "<days before>@HH:mm" (e.g. "7@09:00", "0@08:30"). Null = the defaults in
+     * NotificationPrefs (on the day + countdownDaysBefore, at countdownMinutes); empty = none.
+     */
+    val reminders: List<String>? = null,
 ) : Entity
 
 /** A finished focus session (Pomodoro or stopwatch), optionally on a task. */

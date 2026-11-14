@@ -160,6 +160,11 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
 - Android: `Reminders.kt` (one channel "reminders"; Done / Check in + snooze 15 min / 1 hour; snoozes are
   alarms with `zs.` ids that `sync` leaves alone), Settings → Notifications (`ui/NotificationSettings.kt`).
 - New dated tasks get the default reminder via `TaskActions.defaultReminders` (set by the core from the prefs).
+- Habits: `FREQ=WEEKLY;TT_TIMES=n` (n a week) and ZenTask's own `FREQ=MONTHLY;TT_TIMES=n` (n a month, streaks in
+  months). `Habit.remindFrom` (ISO weekday 1–7 or day of month 1–31, past the month's end = its last day): reminders
+  start that day and repeat daily until the period's target is met (`HabitSchedule.remindsOn`).
+- Countdowns: `Countdown.reminders` = "<days before>@HH:mm" ("7@09:00"); null = the prefs defaults, empty = none
+  (`CountdownActions.setReminders`, `NotificationPlanner.countdownReminders`). Countdown notifications have Snooze.
 - All-day triggers at 09:00 (every preset, TickTick's default) and "on time" fire at the prefs' all-day time;
   other explicit times stay. Habit reminder times: `HabitActions.setReminders` (Mac habit editor → Reminders).
 
