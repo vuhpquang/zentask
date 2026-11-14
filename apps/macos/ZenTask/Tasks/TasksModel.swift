@@ -47,7 +47,7 @@ enum SidebarItem: Hashable {
 
 /// Sheets the Tasks screen can show (create/edit lists, folders, sections, smart lists).
 enum ListSheet: Identifiable {
-    case newList, editList(String), newFolder, renameFolder(String), newSection(String), renameSection(String, String), newFilter, editFilter(String), planDay
+    case newList, editList(String), newFolder, renameFolder(String), newSection(String), renameSection(String, String), newFilter, editFilter(String), planDay, saveTemplate(String), templates
 
     var id: String {
         switch self {
@@ -60,6 +60,8 @@ enum ListSheet: Identifiable {
         case .newFilter: "newFilter"
         case .editFilter(let id): "editFilter." + id
         case .planDay: "planDay"
+        case .saveTemplate(let id): "saveTemplate." + id
+        case .templates: "templates"
         }
     }
 }
@@ -210,6 +212,7 @@ final class TasksModel {
         projects = idx.projects.filter { $0.trashedAt == nil && !$0.deleted }
         tags = idx.tags.filter { !$0.deleted }
         groups = core.projectGroups()
+        templates = core.templateActions.list()
         counts = core.sidebarCounts(index: idx)
         smartModes = Dictionary(uniqueKeysWithValues: TasksModel.allSmart.map { ($0, core.smartListMode(list: $0)) })
         recompute()
@@ -359,6 +362,16 @@ final class TasksModel {
     func finishCompleting() async { await completionTask?.value }
 
     func isCompleting(_ id: String) -> Bool { completing.contains(id) }
+
+    // MARK: Templates
+
+    private(set) var templates: [TaskTemplate] = []
+
+    /** A new task from a template, in the list being viewed; selects it. */
+    func use(template: TaskTemplate) {
+        guard let t = core.templateActions.use(id: template.id, filter: sidebar.filter, projectId: currentProject?.id) else { return }
+        selection = t.id
+    }
 
     // MARK: Plan my day
 

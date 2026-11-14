@@ -281,6 +281,24 @@ data class Countdown(
     val reminders: List<String>? = null,
 ) : Entity
 
+/** A reusable task: title, notes, priority, tags, checklist and subtasks to stamp out as a new task. */
+@Serializable
+data class TaskTemplate(
+    override val id: String,
+    override val createdAt: Long = 0,
+    override val updatedAt: Long = 0,
+    override val deleted: Boolean = false,
+    override val ticktickId: String? = null,
+    val name: String = "",
+    val title: String = "",
+    val content: String = "",
+    val priority: Int = 0,
+    val tags: List<String> = emptyList(),
+    val checklist: List<String> = emptyList(),
+    val subtasks: List<String> = emptyList(),
+    val sortOrder: Long = 0,
+) : Entity
+
 /** A finished focus session (Pomodoro or stopwatch), optionally on a task. */
 @Serializable
 data class FocusRecord(

@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.NoteAdd
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -170,6 +171,7 @@ private fun TagDialog(index: TaskIndex?, current: List<String>, close: () -> Uni
 fun TaskMenu(app: ZenApp, task: Task, close: () -> Unit) {
     var open by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
+    var savingTemplate by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { open = true }) { Icon(Icons.Filled.MoreVert, "More") }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
@@ -189,6 +191,8 @@ fun TaskMenu(app: ZenApp, task: Task, close: () -> Unit) {
                 }
                 DropdownMenuItem(text = { Text("Duplicate") }, leadingIcon = { Icon(Icons.Filled.ContentCopy, null) },
                     onClick = { app.core.actions.duplicate(task.id); open = false })
+                DropdownMenuItem(text = { Text("Save as template…") }, leadingIcon = { Icon(Icons.Filled.NoteAdd, null) },
+                    onClick = { savingTemplate = true; open = false })
                 val wontDo = task.status == TaskStatus.WONT_DO
                 DropdownMenuItem(text = { Text(if (wontDo) "Reopen" else "Won't do") }, leadingIcon = { Icon(Icons.Filled.Block, null) }, onClick = {
                     if (wontDo || task.isDone) app.core.actions.uncomplete(task.id) else app.core.actions.wontDo(task.id)
@@ -198,6 +202,21 @@ fun TaskMenu(app: ZenApp, task: Task, close: () -> Unit) {
                     onClick = { app.core.actions.trash(task.id); open = false; close() })
             }
         }
+    }
+    if (savingTemplate) {
+        var name by remember { mutableStateOf(task.title) }
+        AlertDialog(
+            onDismissRequest = { savingTemplate = false },
+            title = { Text("Save as template") },
+            text = {
+                Column {
+                    Text("Notes, priority, tags, checklist and subtasks come along.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    androidx.compose.material3.OutlinedTextField(name, { name = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                }
+            },
+            confirmButton = { TextButton(enabled = name.isNotBlank(), onClick = { app.core.templateActions.saveFrom(task.id, name); savingTemplate = false }) { Text("Save") } },
+            dismissButton = { TextButton(onClick = { savingTemplate = false }) { Text("Cancel") } },
+        )
     }
     if (confirmDelete) {
         Confirm(

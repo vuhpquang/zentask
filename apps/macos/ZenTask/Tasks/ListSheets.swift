@@ -27,6 +27,11 @@ struct ListSheetView: View {
         case .newFilter: FilterEditor(filter: nil)
         case .editFilter(let id): FilterEditor(filter: tasks.filters.first { $0.id == id })
         case .planDay: PlanDayView()
+        case .saveTemplate(let taskId):
+            NameSheet(title: "Save as template", initial: tasks.index?.task(id: taskId)?.title ?? "", action: "Save") {
+                _ = tasks.core.templateActions.saveFrom(taskId: taskId, name: $0)
+            }
+        case .templates: TemplatesSheet()
         }
     }
 }

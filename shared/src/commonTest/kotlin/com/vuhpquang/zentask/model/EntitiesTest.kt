@@ -45,7 +45,7 @@ class EntitiesTest {
         assertEquals(
             listOf(
                 "projectGroup", "project", "column", "task", "checklistItem", "tag", "filter",
-                "habit", "habitSection", "habitCheckin", "countdown", "preference", "focusRecord",
+                "habit", "habitSection", "habitCheckin", "countdown", "preference", "focusRecord", "taskTemplate",
                 "calendarAccount", "calendarSource", "calendarEvent",
             ),
             EntityTypes.all.map { it.name },

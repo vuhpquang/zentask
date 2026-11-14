@@ -197,6 +197,10 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
 - Lists (P9f): group / sort sheet per list (synced `ViewOptions`), subtasks under their parent, custom smart lists
   (`ui/FilterEditor.kt`: "+" next to Smart lists in the drawer, "…" on a smart list to edit / delete), quick date
   picks (Today / Tomorrow / Next week) in the date dialog.
+- Task templates: synced entity `taskTemplate` (`TaskTemplate`: title, notes, priority, tags, checklist and subtask
+  titles); `tasks/Templates.kt` `TemplateActions` (`saveFrom(taskId, name)`, `use(id, filter, projectId)`). Mac: task
+  context menu "Save as template…", list "…" → New from template / Manage templates (`Tasks/TemplatesSheet.swift`).
+  Android: task "…" → Save as template; template chips in the quick-add sheet (long-press deletes).
 - Plan my day / overdue (both platforms): `TaskIndex.dayPlan` (Overdue, Coming up = next 7 days, Important = high
   priority undated) and `TaskIndex.overdue`; `core.planToday(ids)` / `core.moveOverdueToToday` move tasks with
   `moveToDay` (times kept). Mac: `Tasks/PlanDayView.swift` (sheet `.planDay`, Today's "…" menu, offered once a day on

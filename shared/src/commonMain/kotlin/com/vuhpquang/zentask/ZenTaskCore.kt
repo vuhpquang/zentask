@@ -110,6 +110,7 @@ class ZenTaskCore(
     val tagActions: TagActions = TagActions(store)
     val listActions: ListActions = ListActions(store)
     val habitActions: HabitActions = HabitActions(store)
+    val templateActions: com.vuhpquang.zentask.tasks.TemplateActions = com.vuhpquang.zentask.tasks.TemplateActions(store, actions)
     val countdownActions: CountdownActions = CountdownActions(store)
 
     // ---- Habits & countdowns (Swift-friendly; days are yyyyMMdd stamps in the Mac's zone) ----

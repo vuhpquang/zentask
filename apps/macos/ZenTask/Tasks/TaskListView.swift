@@ -29,6 +29,14 @@ struct TaskListView: View {
                     Button("Add section…", systemImage: "rectangle.split.1x2") { tasks.sheet = .newSection(project.id) }
                 }
                 Divider()
+                Menu("New from template", systemImage: "doc.on.doc") {
+                    ForEach(tasks.templates, id: \.id) { tpl in
+                        Button(tpl.name.isEmpty ? tpl.title : tpl.name) { tasks.use(template: tpl) }
+                    }
+                    if tasks.templates.isEmpty { Text("No templates yet: right-click a task → Save as template") }
+                    Divider()
+                    Button("Manage templates…") { tasks.sheet = .templates }
+                }
                 Button("Plan my day…", systemImage: "sun.horizon") { tasks.sheet = .planDay }
                 if tasks.overdueCount > 0 {
                     Button("Move \(tasks.overdueCount) overdue to today", systemImage: "arrow.uturn.forward") { tasks.moveOverdueToToday() }
@@ -362,6 +370,7 @@ struct TaskMenu: View {
             } label: { Label("Tags", systemImage: "tag") }
             Divider()
             Button { tasks.selection = actions.duplicate(id: task.id).id } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
+            Button { tasks.sheet = .saveTemplate(task.id) } label: { Label("Save as template…", systemImage: "doc.badge.plus") }
             Button {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString("zentask://task/\(task.id)", forType: .string)

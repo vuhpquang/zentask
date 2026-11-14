@@ -23,12 +23,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.NoteAdd
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
@@ -638,6 +641,7 @@ fun preview(task: Task): String? {
 }
 
 /** The quick-add bottom sheet: quick-add syntax (dates, #tag, !priority, ~list), chips for what it found. */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 private fun QuickAddSheet(app: ZenApp, index: TaskIndex?, pick: ListPick, close: () -> Unit) {
     val sheet = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -664,6 +668,33 @@ private fun QuickAddSheet(app: ZenApp, index: TaskIndex?, pick: ListPick, close:
             Text("Try: tomorrow 9am #work !high ~list", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 16.dp))
             Row(Modifier.padding(vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 for (t in parsed.tokens) AssistChip(onClick = {}, label = { Text(t.label) })
+            }
+            val templates = remember(index) { app.core.templateActions.list() }
+            if (templates.isNotEmpty()) {
+                Text("From a template (long-press to delete)", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(start = 16.dp))
+                var deleting by remember { mutableStateOf<com.vuhpquang.zentask.model.TaskTemplate?>(null) }
+                Row(Modifier.padding(vertical = 8.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    for (tpl in templates) {
+                        Row(
+                            Modifier.clip(RoundedCornerShape(8.dp))
+                                .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp))
+                                .combinedClickable(onClick = {
+                                    app.core.templateActions.use(tpl.id, pick.filter, (pick as? ListPick.InProject)?.id)
+                                    close()
+                                }, onLongClick = { deleting = tpl })
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(Icons.Filled.NoteAdd, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                            Spacer(Modifier.width(6.dp))
+                            Text(tpl.name.ifBlank { tpl.title }, style = MaterialTheme.typography.labelLarge)
+                        }
+                    }
+                }
+                deleting?.let { tpl ->
+                    Confirm("Delete template \"${tpl.name}\"?", "Tasks already made from it stay.", "Delete",
+                        onConfirm = { app.core.templateActions.delete(tpl.id); deleting = null; close() }, onDismiss = { deleting = null })
+                }
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 TextButton(onClick = close) { Text("Close") }
