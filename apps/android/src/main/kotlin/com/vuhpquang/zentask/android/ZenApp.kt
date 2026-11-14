@@ -30,6 +30,8 @@ class ZenApp(private val context: Context) {
 
     /** A task to open, set when a reminder notification is tapped. */
     val openTask = MutableStateFlow<String?>(null)
+    /** Something asked for Settings → Places. */
+    val showPlaces = MutableStateFlow(false)
     /** A widget's "+" asked for the quick-add sheet (TasksScreen opens it and clears this). */
     val quickAdd = MutableStateFlow(false)
     /** Set to show the Focus area (from a task's "Start focus"). */
@@ -157,6 +159,7 @@ class ZenApp(private val context: Context) {
                         reminders.sync(core.plannedReminders(index))
                         TodayWidget.refresh(context)
                         files.syncSoon()
+                        LocationReminders.sync(context)
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {

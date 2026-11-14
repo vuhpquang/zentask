@@ -80,6 +80,13 @@ object LocationPlanner {
         return title to body
     }
 
+    /**
+     * Arrivals and departures between two "inside" sets of place ids (from geofences or Wi‑Fi): every source updates
+     * one set, so a place reached by both GPS and Wi‑Fi still reminds once.
+     */
+    fun changes(before: Set<String>, after: Set<String>): List<Pair<String, String>> =
+        (after - before).map { it to Place.ARRIVE } + (before - after).map { it to Place.LEAVE }
+
     /** The place whose Wi‑Fi list has [ssid], if any (Wi‑Fi = "here" without GPS). */
     fun placeForWifi(places: List<Place>, ssid: String?): Place? =
         ssid?.trim()?.takeIf { it.isNotEmpty() }?.let { s -> places.firstOrNull { p -> !p.deleted && p.wifi.any { it.equals(s, ignoreCase = false) } } }

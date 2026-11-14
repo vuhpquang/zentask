@@ -351,6 +351,7 @@ fun SettingsScreen(app: ZenApp, close: () -> Unit) {
                 }
             }
             NotificationsSection(app)
+            OutlinedButton(onClick = { app.showPlaces.value = true }) { Text("Places for location reminders…") }
             CalendarSettingsSection()
             UpdatesSection(app.updater)
             AboutSection(app.updater.currentVersion)

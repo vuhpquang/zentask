@@ -50,5 +50,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.glance.appwidget)
     implementation(libs.glance.material3)
+    implementation(libs.play.services.location)
+    implementation(libs.osmdroid)
     debugImplementation(libs.compose.ui.tooling)
 }

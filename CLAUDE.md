@@ -201,6 +201,21 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
   titles); `tasks/Templates.kt` `TemplateActions` (`saveFrom(taskId, name)`, `use(id, filter, projectId)`). Mac: task
   context menu "Save as template…", list "…" → New from template / Manage templates (`Tasks/TemplatesSheet.swift`).
   Android: task "…" → Save as template; template chips in the quick-add sheet (long-press deletes).
+- Attachments: synced `attachment` records (`AttachmentActions`; bytes by SHA-256 `fileId`). Server `/v1/files`
+  (`server/files/`: PUT id = sha256, GET, POST missing; 10 MB each, 4 GB total, keeps 1 GB free; daily sweep of files no
+  live attachment uses, 7-day grace) on vps1's disk (`DiskFileStore`; an R2 store can implement `FileStore`). Each
+  device caches every attachment (offline): Mac `Services/AttachmentFiles.swift` (`Application Support/…/files`,
+  images → JPEG 2560 px) + `Tasks/AttachmentsSection.swift` (Add…, drop, open, Save As…); Android `AttachmentFiles.kt`
+  (`files/attachments`, FileProvider `${applicationId}.files` to open) + `ui/AttachmentsSection.kt`.
+- Location reminders: synced `place` records (`PlaceActions`: home/work/custom, point, radius 50–5000 m, Wi‑Fi names) and
+  `Task.placeId` + `placeTrigger` (arrive/leave). `LocationPlanner` (shared): which places to watch, what to say,
+  `changes(before, after)` of the "inside" set. Android `LocationReminders.kt`: geofences (Play Services, initial trigger
+  off) + Wi‑Fi (PendingIntent network watch + an in-process callback reading the SSID from `NetworkCapabilities` with
+  `FLAG_INCLUDE_LOCATION_INFO`); both update one inside-set in prefs `zentask.location`, only changes notify; a geofence
+  exit also clears that place from the Wi‑Fi set. Needs location "Allow all the time". UI: Settings → Places
+  (`ui/Places.kt`, osmdroid map: tap to pin, radius, current Wi‑Fi), task chip "Location". Emulator: geofences fire only
+  while something requests location (open a place editor and use "Use where I am"); toggled emulator Wi‑Fi often stays
+  "connecting" (no IP), so Wi‑Fi arrivals can't be tested there.
 - Markdown notes: notes stay plain text; shared `tasks/MarkdownLite.kt` splits them into blocks (headings, bullets,
   numbered, `- [ ]` to-dos, quotes, code, rules) + `toggleTodo` + `plain` (list previews). Shown formatted when not
   being edited and the text has Markdown: Mac `Tasks/MarkdownNotes.swift` (click edits, inline marks via

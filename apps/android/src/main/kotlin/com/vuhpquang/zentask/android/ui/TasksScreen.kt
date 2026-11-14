@@ -790,6 +790,7 @@ fun TaskDetailScreen(app: ZenApp, taskId: String, close: () -> Unit) {
                 }
                 if (day != null) ReminderChip(app, task, expanded = picking == "reminder", open = { picking = "reminder" }, close = { picking = null })
                 if (day != null) RepeatChip(app, task, day, expanded = picking == "repeat", open = { picking = "repeat" }, close = { picking = null })
+                LocationChip(app, task, expanded = picking == "location", open = { picking = "location" }, close = { picking = null }, managePlaces = { app.showPlaces.value = true })
                 TagChips(app, index, task)
             }
             var editingNotes by remember(taskId) { mutableStateOf(false) }

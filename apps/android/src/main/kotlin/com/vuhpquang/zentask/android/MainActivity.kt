@@ -106,6 +106,8 @@ private fun ZenTaskRoot(zen: ZenApp) {
     androidx.compose.runtime.LaunchedEffect(openTask) {
         openTask?.let { page = "task:$it"; zen.openTask.value = null }
     }
+    val showPlaces by zen.showPlaces.collectAsState()
+    androidx.compose.runtime.LaunchedEffect(showPlaces) { if (showPlaces) { page = "places"; zen.showPlaces.value = false } }
     val quickAdd by zen.quickAdd.collectAsState()
     androidx.compose.runtime.LaunchedEffect(quickAdd) { if (quickAdd) { page = null; area = Area.Tasks } }
     val showFocus by zen.showFocus.collectAsState()
@@ -114,6 +116,7 @@ private fun ZenTaskRoot(zen: ZenApp) {
     }
     when {
         page == "settings" -> { SettingsScreen(zen) { page = null }; return }
+        page == "places" -> { com.vuhpquang.zentask.android.ui.PlacesScreen(zen) { page = null }; return }
         page == "stats" -> { com.vuhpquang.zentask.android.ui.StatsScreen(zen) { page = null }; return }
         page == "search" -> { SearchScreen(zen, open = { page = "task:$it" }) { page = null }; return }
         page?.startsWith("task:") == true -> { TaskDetailScreen(zen, page!!.removePrefix("task:")) { page = null }; return }

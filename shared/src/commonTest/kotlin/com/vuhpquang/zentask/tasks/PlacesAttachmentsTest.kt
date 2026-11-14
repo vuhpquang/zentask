@@ -46,6 +46,12 @@ class PlacesAttachmentsTest {
     }
 
     @Test
+    fun insideSetChangesBecomeArrivalsAndDepartures() {
+        assertEquals(listOf("work" to Place.ARRIVE, "home" to Place.LEAVE), LocationPlanner.changes(setOf("home"), setOf("work")))
+        assertEquals(emptyList(), LocationPlanner.changes(setOf("home"), setOf("home")))
+    }
+
+    @Test
     fun attachmentsAndDownloads() {
         val t = actions.create("Receipt", filter = null)
         val a = files.add(t.id, sha, "receipt.jpg", "image/jpeg", 1234, 800, 600)
