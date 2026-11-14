@@ -387,7 +387,7 @@ class McpToolsTest {
         server()
         val token = client.loginToken()
         client.tool(token, "list_tags") // start the app (creates the replica)
-        val (made, err) = client.tool(token, "create_countdown", """{"name":"Trip","date":"2027-01-20"}""")
+        val (made, err) = client.tool(token, "create_countdown", """{"name":"Trip","date":"2099-01-20"}""")
         assertFalse(err, made)
         val (bday, err2) = client.tool(token, "create_countdown", """{"name":"Mom","date":"1960-11-10","type":"birthday"}""")
         assertFalse(err2, bday)
