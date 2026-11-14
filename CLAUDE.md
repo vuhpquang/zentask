@@ -236,7 +236,8 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
   `RowBackground`. Never use `Color.accentColor` (the asset): use `.tint`, `themeColors.accent` or `Color.themeAccent`.
   There is no public API to change an app's accent at runtime. Cards fill with the `.background` shape style, which `Themed()` sets to
   `ThemeColors.card` (mixed from the theme background) via `.backgroundStyle`, so use `.background` for cards.
-- Menu bar: `MenuBar/MenuBarPanel.swift` (`MenuBarExtra`, window style): Today's open tasks (tick, click opens the
+- Menu bar: `MenuBar/MenuBarController.swift` (`NSStatusItem` + popover, started in `ZenTaskApp.init` outside tests;
+  a `MenuBarExtra` scene made the XCTest runner hang before connecting) showing `MenuBar/MenuBarPanel.swift`: Today's open tasks (tick, click opens the
   task in the main window) + a field adding to Today; Settings → General "Show Today in the menu bar"
   (UserDefaults `menubar.show`).
 - Motion: curves in `Theme.Anim`, always through `Motion.rows` / `.fade` / `.pop` (nil with Reduce Motion). A ticked
