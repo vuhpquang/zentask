@@ -3,7 +3,7 @@
 ZenTask is the owner's personal task manager, a TickTick replacement with its own name and look
 (blue→violet ensō logo, accent #5B5FE9 light / #8B8CFF dark — never TickTick's branding). Kotlin Multiplatform core + SwiftUI macOS app + Ktor
 server. Repo `vuhpquang/zentask`, branch `main` (also the release branch — commit and push straight
-to it, no need to ask). Bundle id `com.vuhpquang.zentask` (`.dev` for Debug), macOS 26+, arm64.
+to it, no need to ask). Bundle id `com.vuhpquang.zentask` (`.dev` for Debug, shown as "ZenTask Dev" so its widgets don't look like a second ZenTask; `pluginkit -r <Debug app>/Contents/PlugIns/ZenTaskWidget.appex` drops them), macOS 26+, arm64.
 Server: `zentask-api.vuhpquang.com` on vps1 (Docker, Cloudflare Tunnel → `127.0.0.1:3100`).
 
 Read first: `docs/superpowers/specs/2026-11-08-zentask-design.md` (the spec), the current phase plan
@@ -104,7 +104,7 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
   List views (`Tasks/BoardViews.swift`): `KanbanBoard` (groups as columns; drops set section/priority/list via
   `TasksModel.drop(_:into:)`), `TimelineBoard` (dated tasks as bars, a week back to four weeks ahead),
   `SummaryView` (sidebar "Summary": done/open by list for a period, Copy as text). The view is picked in the list
-  "…" menu (`TasksModel.viewMode`). The date popover has Date | Duration tabs (start–end, all day or timed).
+  "…" menu (`TasksModel.viewMode`). The date popover has Date | Duration tabs (start–end, all day or timed); its month grid is `DesignSystem/MonthPicker.swift` (fills the width; the graphical `DatePicker` has a fixed small size).
   Appearance (`DesignSystem/Appearance.swift`, Settings → Appearance): System/Light/Dark plus themes (Default,
   Catppuccin, Dracula, Nord, Solarized, Rosé Pine) stored in UserDefaults `appearance.mode`/`appearance.theme`;
   `Themed()` on each window sets the scheme, accent (`.tint`), background and `themeColors` (rail/sidebar surface);

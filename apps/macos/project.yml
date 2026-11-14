@@ -52,6 +52,8 @@ targets:
       configs:
         Debug:
           PRODUCT_BUNDLE_IDENTIFIER: com.vuhpquang.zentask.dev
+          # Tell the debug build apart from the installed app (widget gallery, notifications, Dock).
+          INFOPLIST_KEY_CFBundleDisplayName: ZenTask Dev
     info:
       path: ZenTask/Info.plist
       properties:
@@ -74,13 +76,15 @@ targets:
         CODE_SIGN_ENTITLEMENTS: ZenTaskWidget/ZenTaskWidget.entitlements
         SKIP_INSTALL: YES
         LD_RUNPATH_SEARCH_PATHS: ["$(inherited)", "@executable_path/../Frameworks", "@executable_path/../../../../Frameworks"]
+        WIDGET_DISPLAY_NAME: ZenTask
       configs:
         Debug:
           PRODUCT_BUNDLE_IDENTIFIER: com.vuhpquang.zentask.dev.widget
+          WIDGET_DISPLAY_NAME: ZenTask Dev
     info:
       path: ZenTaskWidget/Info.plist
       properties:
-        CFBundleDisplayName: ZenTask
+        CFBundleDisplayName: $(WIDGET_DISPLAY_NAME)
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
