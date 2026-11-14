@@ -63,7 +63,7 @@ fun AttachmentsSection(app: ZenApp, taskId: String, revision: Int) {
             TextButton(onClick = { picker.launch(arrayOf("*/*")) }) { Icon(Icons.Filled.AttachFile, null); Text(" Add") }
         }
         if (items.isEmpty()) {
-            Text("Photos and files up to 10 MB; photos are shrunk.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Photos and files up to 10 MB (bigger photos are shrunk to fit).", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         } else {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(items, key = { it.id }) { a ->

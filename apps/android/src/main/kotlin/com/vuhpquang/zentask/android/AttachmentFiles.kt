@@ -50,10 +50,20 @@ class AttachmentFiles(private val context: Context, private val core: ZenTaskCor
         var bytes = resolver.openInputStream(uri)?.use { it.readBytes() } ?: error("Couldn't read $name")
         var w = 0
         var h = 0
-        if (mime.startsWith("image/") && mime != "image/gif") {
-            shrink(bytes)?.let { (b, size) ->
-                bytes = b; w = size.first; h = size.second; mime = "image/jpeg"
-                if (!name.endsWith(".jpg", true) && !name.endsWith(".jpeg", true)) name = name.substringBeforeLast('.') + ".jpg"
+        if (mime.startsWith("image/")) {
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+            w = maxOf(bounds.outWidth, 0); h = maxOf(bounds.outHeight, 0)
+            // Kept as is when it fits; only a photo over 10 MB is shrunk, in steps until it fits.
+            if (bytes.size > MAX && mime != "image/gif") {
+                for (side in listOf(maxOf(w, h), 6000, 4096, 3072, 2560, 2048).filter { it in 1..maxOf(w, h) }) {
+                    val (b, size) = shrink(bytes, side) ?: break
+                    if (b.size <= MAX) {
+                        bytes = b; w = size.first; h = size.second; mime = "image/jpeg"
+                        if (!name.endsWith(".jpg", true) && !name.endsWith(".jpeg", true)) name = name.substringBeforeLast('.') + ".jpg"
+                        break
+                    }
+                }
             }
         }
         if (bytes.size > MAX) throw TooLarge(name)
@@ -64,17 +74,17 @@ class AttachmentFiles(private val context: Context, private val core: ZenTaskCor
         syncSoon()
     }
 
-    private fun shrink(bytes: ByteArray): Pair<ByteArray, Pair<Int, Int>>? {
+    private fun shrink(bytes: ByteArray, side: Int): Pair<ByteArray, Pair<Int, Int>>? {
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
         if (bounds.outWidth <= 0) return null
         var sample = 1
-        while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= SIDE) sample *= 2
+        while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= side) sample *= 2
         val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample }) ?: return null
-        val scale = minOf(1f, SIDE.toFloat() / maxOf(decoded.width, decoded.height))
+        val scale = minOf(1f, side.toFloat() / maxOf(decoded.width, decoded.height))
         val bmp = if (scale < 1f) Bitmap.createScaledBitmap(decoded, (decoded.width * scale).toInt(), (decoded.height * scale).toInt(), true) else decoded
         val out = ByteArrayOutputStream()
-        bmp.compress(Bitmap.CompressFormat.JPEG, 80, out)
+        bmp.compress(Bitmap.CompressFormat.JPEG, 85, out)
         return out.toByteArray() to (bmp.width to bmp.height)
     }
 
@@ -138,7 +148,6 @@ class AttachmentFiles(private val context: Context, private val core: ZenTaskCor
 
     companion object {
         const val MAX = 10 * 1024 * 1024
-        private const val SIDE = 2560
         fun sha256(b: ByteArray) = MessageDigest.getInstance("SHA-256").digest(b).joinToString("") { "%02x".format(it) }
     }
 }

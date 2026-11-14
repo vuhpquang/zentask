@@ -25,7 +25,7 @@ struct AttachmentsSection: View {
             }
             let list = items
             if list.isEmpty {
-                Text("Drop files here, or Add…. Up to 10 MB each; images are shrunk.")
+                Text("Drop files here, or Add…. Up to 10 MB each (bigger photos are shrunk to fit).")
                     .font(.callout).foregroundStyle(.secondary)
             } else {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: Theme.Attach.tile), spacing: Theme.Space.s)], alignment: .leading, spacing: Theme.Space.s) {

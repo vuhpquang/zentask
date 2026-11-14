@@ -205,7 +205,7 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
   (`server/files/`: PUT id = sha256, GET, POST missing; 10 MB each, 4 GB total, keeps 1 GB free; daily sweep of files no
   live attachment uses, 7-day grace) on vps1's disk (`DiskFileStore`; an R2 store can implement `FileStore`). Each
   device caches every attachment (offline): Mac `Services/AttachmentFiles.swift` (`Application Support/…/files`,
-  images → JPEG 2560 px) + `Tasks/AttachmentsSection.swift` (Add…, drop, open, Save As…); Android `AttachmentFiles.kt`
+  kept as is up to 10 MB; only bigger images are re-encoded as JPEG in steps until they fit) + `Tasks/AttachmentsSection.swift` (Add…, drop, open, Save As…); Android `AttachmentFiles.kt`
   (`files/attachments`, FileProvider `${applicationId}.files` to open) + `ui/AttachmentsSection.kt`.
 - Location reminders: synced `place` records (`PlaceActions`: home/work/custom, point, radius 50–5000 m, Wi‑Fi names) and
   `Task.placeId` + `placeTrigger` (arrive/leave). `LocationPlanner` (shared): which places to watch, what to say,

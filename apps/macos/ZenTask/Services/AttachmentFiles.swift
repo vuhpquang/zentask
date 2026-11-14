@@ -42,16 +42,20 @@ final class AttachmentFiles {
 
     func url(_ fileId: String) -> URL? { cached.contains(fileId) ? folder.appendingPathComponent(fileId) : nil }
 
-    /// Adds [url] to the task: images are shrunk (longest side 2560 px, JPEG), everything else is kept as is.
+    /// Adds [url] to the task as is when it fits in 10 MB; only a larger image is shrunk (JPEG, smaller steps until it fits).
     func add(_ url: URL, to taskId: String) throws {
         let name = url.lastPathComponent
         guard var data = try? Data(contentsOf: url) else { throw AddError.unreadable(name) }
         var mime = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? "application/octet-stream"
         var fileName = name
         var size = CGSize.zero
-        if let type = UTType(filenameExtension: url.pathExtension), type.conforms(to: .image), let shrunk = Self.shrink(data) {
-            data = shrunk.data; size = shrunk.size; mime = "image/jpeg"
-            if type != .jpeg { fileName = (name as NSString).deletingPathExtension + ".jpg" }
+        let type = UTType(filenameExtension: url.pathExtension)
+        if type?.conforms(to: .image) == true {
+            size = Self.pixelSize(data) ?? .zero
+            if data.count > Self.maxBytes, let shrunk = Self.shrinkToFit(data) {
+                data = shrunk.data; size = shrunk.size; mime = "image/jpeg"
+                if type != .jpeg { fileName = (name as NSString).deletingPathExtension + ".jpg" }
+            }
         }
         guard data.count <= Self.maxBytes else { throw AddError.tooLarge(name) }
         let sha = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
@@ -62,17 +66,33 @@ final class AttachmentFiles {
         syncSoon()
     }
 
-    /// JPEG at quality 0.8, longest side at most 2560 px; nil if it isn't a readable image.
-    static func shrink(_ data: Data) -> (data: Data, size: CGSize)? {
+    static func pixelSize(_ data: Data) -> CGSize? {
+        guard let src = CGImageSourceCreateWithData(data as CFData, nil),
+              let p = CGImageSourceCopyPropertiesAtIndex(src, 0, nil) as? [CFString: Any],
+              let w = p[kCGImagePropertyPixelWidth] as? Int, let h = p[kCGImagePropertyPixelHeight] as? Int else { return nil }
+        return CGSize(width: w, height: h)
+    }
+
+    /// An image over 10 MB made to fit: JPEG at the original size first, then smaller sides until it's under 10 MB.
+    static func shrinkToFit(_ data: Data) -> (data: Data, size: CGSize)? {
+        let full = pixelSize(data).map { max($0.width, $0.height) } ?? 8000
+        for side in [full, 6000, 4096, 3072, 2560, 2048] where side <= full {
+            if let out = shrink(data, maxSide: side), out.data.count <= maxBytes { return out }
+        }
+        return nil
+    }
+
+    /// JPEG at quality 0.85, longest side at most [maxSide] px; nil if it isn't a readable image.
+    static func shrink(_ data: Data, maxSide: CGFloat = maxImageSide) -> (data: Data, size: CGSize)? {
         guard let src = CGImageSourceCreateWithData(data as CFData, nil) else { return nil }
         let opts: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxImageSide,
+            kCGImageSourceThumbnailMaxPixelSize: maxSide,
         ]
         guard let image = CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary) else { return nil }
         let out = NSMutableData()
         guard let dest = CGImageDestinationCreateWithData(out, UTType.jpeg.identifier as CFString, 1, nil) else { return nil }
-        CGImageDestinationAddImage(dest, image, [kCGImageDestinationLossyCompressionQuality: 0.8] as CFDictionary)
+        CGImageDestinationAddImage(dest, image, [kCGImageDestinationLossyCompressionQuality: 0.85] as CFDictionary)
         guard CGImageDestinationFinalize(dest) else { return nil }
         return (out as Data, CGSize(width: image.width, height: image.height))
     }
