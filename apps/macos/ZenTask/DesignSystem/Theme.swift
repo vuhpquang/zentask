@@ -48,7 +48,9 @@ enum Theme {
         static let cardRadius: CGFloat = 12
         static let cardPadding: CGFloat = 14
         static let maxWidth: CGFloat = 640
-        static let datePopoverWidth: CGFloat = 300
+        static let datePopoverWidth: CGFloat = 320
+        /** Day cell in the date popover's month grid. */
+        static let pickerDay: CGFloat = 32
     }
 
     enum Calendar {

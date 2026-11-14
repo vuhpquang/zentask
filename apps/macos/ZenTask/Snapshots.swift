@@ -68,6 +68,9 @@ enum Snapshots {
             if let sample = tasks.index?.allTasks.first(where: { !$0.content.isEmpty && $0.isOpen }) {
                 both(AnyView(TaskQuickEditor(taskId: sample.id)).environment(tasks), size: CGSize(width: 440, height: 320), name: "calendar-task-card", dir: dir)
             }
+            if let dated = tasks.index?.allTasks.first(where: { $0.dueDate != nil && $0.isOpen }) {
+                both(AnyView(DueEditor(task: dated)).environment(tasks), size: CGSize(width: Theme.Detail.datePopoverWidth, height: 560), name: "date-popover", dir: dir)
+            }
             both(AnyView(HotkeySettings().frame(width: Theme.Size.settingsWidth)), size: CGSize(width: 540, height: 560), name: "settings-hotkeys", dir: dir)
             both(AnyView(SearchOverlay(open: { _, _ in }, close: {})).environment(tasks), size: CGSize(width: 600, height: 340), name: "search", dir: dir)
             both(AnyView(AppearanceSettings().frame(width: Theme.Size.settingsWidth)), size: CGSize(width: 540, height: 420), name: "settings-appearance", dir: dir)

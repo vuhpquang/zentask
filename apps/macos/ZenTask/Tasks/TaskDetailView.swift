@@ -425,9 +425,7 @@ struct DueEditor: View {
                 quick("calendar.badge.plus", "Next Monday") { set(day: daysToNextMonday) }
                 quick("moon.stars", "Tonight at 20:00") { set(day: 0, hour: 20) }
             }
-            DatePicker("Date", selection: $date, displayedComponents: [.date])
-                .datePickerStyle(.graphical)
-                .labelsHidden()
+            MonthPicker(selection: $date)
             Divider()
             HStack {
                 Label("Time", systemImage: "clock")
