@@ -12,7 +12,7 @@ struct TasksView: View {
                 .toolbar(removing: .sidebarToggle)
         } content: {
             Group {
-                if tasks.showingSummary { SummaryView() } else { TaskListView() }
+                if tasks.showingSummary { SummaryView() } else if tasks.showingStats { StatsView() } else { TaskListView() }
             }
                 .navigationSplitViewColumnWidth(min: Theme.Size.listMin, ideal: 440)
         } detail: {

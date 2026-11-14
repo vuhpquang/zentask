@@ -114,6 +114,7 @@ private fun ZenTaskRoot(zen: ZenApp) {
     }
     when {
         page == "settings" -> { SettingsScreen(zen) { page = null }; return }
+        page == "stats" -> { com.vuhpquang.zentask.android.ui.StatsScreen(zen) { page = null }; return }
         page == "search" -> { SearchScreen(zen, open = { page = "task:$it" }) { page = null }; return }
         page?.startsWith("task:") == true -> { TaskDetailScreen(zen, page!!.removePrefix("task:")) { page = null }; return }
     }
@@ -128,7 +129,7 @@ private fun ZenTaskRoot(zen: ZenApp) {
             // Areas cross-fade (Android's "Remove animations" setting turns it off).
             androidx.compose.animation.Crossfade(area, animationSpec = androidx.compose.animation.core.tween(180), label = "area") { shown ->
                 when (shown) {
-                    Area.Tasks -> TasksScreen(zen, openSettings = { page = "settings" }, openSearch = { page = "search" })
+                    Area.Tasks -> TasksScreen(zen, openSettings = { page = "settings" }, openSearch = { page = "search" }, openStats = { page = "stats" })
                     Area.Calendar -> CalendarScreen(zen)
                     Area.Habits -> HabitsScreen(zen)
                     Area.Countdown -> CountdownScreen(zen)

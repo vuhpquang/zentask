@@ -109,6 +109,9 @@ enum Snapshots {
                 tasks.showingSummary = true
                 both(AnyView(MainWindow()).environment(model).environment(tasks).environment(panel).environment(focus), size: windowSize, name: "summary", dir: dir)
                 tasks.showingSummary = false
+                if let index = tasks.index {
+                    both(AnyView(StatsView(preloaded: model.core.productivity(index: index)).modifier(Themed())).environment(model).environment(tasks), size: CGSize(width: 520, height: 720), name: "stats", dir: dir)
+                }
                 if let second = tasks.sections.dropFirst().first { tasks.toggleCollapsed(second, in: tasks.sidebar.storageKey) }
                 tasks.setOptions(tasks.options.with(sort: "", group: ""))
             }

@@ -20,6 +20,8 @@ struct SidebarView: View {
                 }
                 Label { Text("Summary") } icon: { icon("doc.text.magnifyingglass") }
                     .modifier(SidebarSelect(selected: tasks.showingSummary, count: 0) { tasks.showingSummary = true })
+                Label { Text("Statistics") } icon: { icon("chart.bar.xaxis") }
+                    .modifier(SidebarSelect(selected: tasks.showingStats, count: 0) { tasks.showingStats = true })
             }
             Section {
                 ForEach(ungroupedProjects, id: \.id) { project in
@@ -107,7 +109,7 @@ struct SidebarView: View {
     }
 
     private func select(_ item: SidebarItem, counted: Bool = true) -> SidebarSelect {
-        SidebarSelect(selected: !tasks.showingSummary && tasks.sidebar == item, count: counted ? tasks.count(item) : 0) { tasks.sidebar = item }
+        SidebarSelect(selected: !tasks.showingSummary && !tasks.showingStats && tasks.sidebar == item, count: counted ? tasks.count(item) : 0) { tasks.sidebar = item }
     }
 
     private func row(_ title: String, symbol: String, item: SidebarItem) -> some View {

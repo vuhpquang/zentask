@@ -15,6 +15,7 @@ enum Theme {
 
     enum Radius {
         static let card: CGFloat = 16
+        static let chartBar: CGFloat = 3
         static let tile: CGFloat = 10
         static let sidebarRow: CGFloat = 8
     }
@@ -162,6 +163,13 @@ enum Theme {
         static let pickerIcon: CGFloat = 20
         static let barWidth: CGFloat = 3
         static let foldAnimation: Animation = .snappy(duration: 0.28)
+    }
+
+    /** Sidebar → Statistics. */
+    enum Stats {
+        static let chartHeight: CGFloat = 180
+        static let listName: CGFloat = 120
+        static let listBar: CGFloat = 14
     }
 
     /** The menu bar window. */

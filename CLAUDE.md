@@ -201,6 +201,9 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
   titles); `tasks/Templates.kt` `TemplateActions` (`saveFrom(taskId, name)`, `use(id, filter, projectId)`). Mac: task
   context menu "Save as template…", list "…" → New from template / Manage templates (`Tasks/TemplatesSheet.swift`).
   Android: task "…" → Save as template; template chips in the quick-add sheet (long-press deletes).
+- Statistics: shared `tasks/Stats.kt` `ProductivityStats` (30 days per day, this vs last week, streak / best streak,
+  best day, top lists, focus minutes this week; `core.productivity(index)`). Mac: sidebar "Statistics" under Summary
+  (`Tasks/StatsView.swift`, Swift Charts, `TasksModel.showingStats`). Android: drawer → Statistics (`ui/StatsScreen.kt`).
 - Plan my day / overdue (both platforms): `TaskIndex.dayPlan` (Overdue, Coming up = next 7 days, Important = high
   priority undated) and `TaskIndex.overdue`; `core.planToday(ids)` / `core.moveOverdueToToday` move tasks with
   `moveToDay` (times kept). Mac: `Tasks/PlanDayView.swift` (sheet `.planDay`, Today's "…" menu, offered once a day on

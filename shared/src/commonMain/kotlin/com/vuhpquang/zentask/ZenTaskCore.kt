@@ -142,6 +142,10 @@ class ZenTaskCore(
 
     fun matrix(index: TaskIndex): List<Quadrant> = index.matrix(now(), zone())
 
+    /** Productivity over the last 30 days (completed tasks, streaks, lists, focus). */
+    fun productivity(index: TaskIndex): com.vuhpquang.zentask.tasks.ProductivityStats =
+        com.vuhpquang.zentask.tasks.ProductivityStats.of(store.list(EntityTypes.task), index.projects, store.list(EntityTypes.focusRecord), now(), zone())
+
     /** Number of open tasks dated before today. */
     fun overdueCount(index: TaskIndex): Int = index.overdue(now(), zone()).size
 

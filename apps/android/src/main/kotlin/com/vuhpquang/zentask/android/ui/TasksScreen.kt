@@ -211,7 +211,7 @@ fun liveLists(index: TaskIndex?): List<Project> =
     index?.projects.orEmpty().filter { !it.isInbox && !it.closed && it.trashedAt == null && !it.deleted }.sortedBy { it.sortOrder }
 
 @Composable
-fun TasksScreen(app: ZenApp, openSettings: () -> Unit, openSearch: () -> Unit) {
+fun TasksScreen(app: ZenApp, openSettings: () -> Unit, openSearch: () -> Unit, openStats: () -> Unit = {}) {
     val index by app.index.collectAsState()
     var pickKey by rememberSaveable { mutableStateOf("smart:TODAY") }
     val pick = ListPick.parse(pickKey)
@@ -237,6 +237,9 @@ fun TasksScreen(app: ZenApp, openSettings: () -> Unit, openSearch: () -> Unit) {
             ListDrawer(app, index, pick, onPick = { pickKey = it.key; scope.launch { drawer.close() } }, openSettings = {
                 scope.launch { drawer.close() }
                 openSettings()
+            }, openStats = {
+                scope.launch { drawer.close() }
+                openStats()
             })
         },
     ) {
@@ -352,7 +355,7 @@ private fun title(index: TaskIndex?, pick: ListPick): String = when (pick) {
 }
 
 @Composable
-private fun ListDrawer(app: ZenApp, index: TaskIndex?, current: ListPick, onPick: (ListPick) -> Unit, openSettings: () -> Unit) {
+private fun ListDrawer(app: ZenApp, index: TaskIndex?, current: ListPick, onPick: (ListPick) -> Unit, openSettings: () -> Unit, openStats: () -> Unit) {
     val counts = remember(index) { index?.let { app.core.sidebarCounts(it) }.orEmpty() }
     fun count(p: ListPick) = counts[app.core.filterKey(p.filter)] ?: 0
     ModalDrawerSheet {
@@ -409,6 +412,7 @@ private fun ListDrawer(app: ZenApp, index: TaskIndex?, current: ListPick, onPick
                     selected = false, onClick = openSettings, modifier = Modifier.padding(horizontal = 12.dp),
                 )
             }
+            NavigationDrawerItem(label = { Text("Statistics") }, selected = false, onClick = openStats, modifier = Modifier.padding(horizontal = 12.dp))
             NavigationDrawerItem(label = { Text("Settings") }, selected = false, onClick = openSettings, modifier = Modifier.padding(horizontal = 12.dp))
         }
     }

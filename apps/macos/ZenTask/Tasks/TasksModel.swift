@@ -73,7 +73,7 @@ enum ListSheet: Identifiable {
 final class TasksModel {
     let core: ZenTaskCore
 
-    var sidebar: SidebarItem = .smart(.today) { didSet { showingSummary = false; recompute(); if oldValue != sidebar { selection = nil; offerDayPlan() } } }
+    var sidebar: SidebarItem = .smart(.today) { didSet { showingSummary = false; showingStats = false; recompute(); if oldValue != sidebar { selection = nil; offerDayPlan() } } }
     var selection: String?
     var showCompleted = false
     /// The task a "Delete permanently" confirmation is open for.
@@ -124,7 +124,8 @@ final class TasksModel {
     private(set) var options = ViewOptions(sort: "", group: "", showCompleted: false, order: "", hideCompleted: false, hideDetails: false, view: "")
 
     /// The Summary page is shown in the list column instead of a list.
-    var showingSummary = false
+    var showingSummary = false { didSet { if showingSummary { showingStats = false } } }
+    var showingStats = false { didSet { if showingStats { showingSummary = false } } }
 
     /// "list", "kanban" or "timeline" for the list being viewed (a project keeps its own, synced with TickTick).
     var viewMode: String {
