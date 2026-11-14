@@ -353,6 +353,7 @@ fun SettingsScreen(app: ZenApp, close: () -> Unit) {
             NotificationsSection(app)
             CalendarSettingsSection()
             UpdatesSection(app.updater)
+            AboutSection(app.updater.currentVersion)
         }
     }
 }
