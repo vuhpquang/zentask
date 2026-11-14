@@ -51,7 +51,7 @@ private data class WidgetRow(val id: String, val title: String, val detail: Stri
  * Home-screen widget: today's open tasks (the Today smart list, overdue included), tick to complete,
  * tap to open the app. Refreshed by [ZenApp] after every data change.
  */
-class TodayWidget : GlanceAppWidget() {
+open class TodayWidget(private val list: SmartList = SmartList.TODAY, private val heading: String = "Today") : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
         val zen = (context.applicationContext as ZenTaskApplication).zen
         val first = load(context)
@@ -66,7 +66,7 @@ class TodayWidget : GlanceAppWidget() {
     private suspend fun load(context: Context): List<WidgetRow> {
         val core = (context.applicationContext as ZenTaskApplication).zen.core
         val index = core.loadIndex()
-        val filter = TaskFilter.Smart(SmartList.TODAY)
+        val filter = TaskFilter.Smart(list)
         val now = System.currentTimeMillis()
         return core.sections(index, filter, core.viewOptions(filter))
             .filter { !it.isCompleted }
@@ -85,14 +85,17 @@ class TodayWidget : GlanceAppWidget() {
         Column(
             GlanceModifier.fillMaxSize().background(GlanceTheme.colors.surface).cornerRadius(20.dp).padding(12.dp),
         ) {
-            Row(GlanceModifier.fillMaxWidth().clickable(actionStartActivity<MainActivity>()), verticalAlignment = Alignment.CenterVertically) {
-                Text("Today", style = TextStyle(color = GlanceTheme.colors.primary, fontWeight = FontWeight.Bold, fontSize = 16.sp))
+            Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(heading, style = TextStyle(color = GlanceTheme.colors.primary, fontWeight = FontWeight.Bold, fontSize = 16.sp))
+                Spacer(GlanceModifier.defaultWeight())
+                Text("+", style = TextStyle(color = GlanceTheme.colors.primary, fontWeight = FontWeight.Bold, fontSize = 20.sp),
+                    modifier = GlanceModifier.padding(horizontal = 8.dp).clickable(actionStartActivity<MainActivity>(actionParametersOf(QUICK_ADD_KEY to "1"))))
                 Spacer(GlanceModifier.width(6.dp))
                 Text(rows.size.toString(), style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 13.sp))
             }
             if (rows.isEmpty()) {
                 Text(
-                    "Nothing left for today",
+                    if (list == SmartList.TODAY) "Nothing left for today" else "Nothing coming up",
                     style = TextStyle(color = GlanceTheme.colors.onSurfaceVariant, fontSize = 14.sp),
                     modifier = GlanceModifier.padding(top = 12.dp).clickable(actionStartActivity<MainActivity>()),
                 )
@@ -123,7 +126,15 @@ class TodayWidget : GlanceAppWidget() {
         /** Same name as [MainActivity.EXTRA_OPEN_TASK]: Glance passes start-activity parameters as extras. */
         val OPEN_KEY = ActionParameters.Key<String>(MainActivity.EXTRA_OPEN_TASK)
 
-        suspend fun refresh(context: Context) = TodayWidget().updateAll(context)
+        val QUICK_ADD_KEY = ActionParameters.Key<String>(MainActivity.EXTRA_QUICK_ADD)
+
+        /** Redraws every ZenTask widget (after a data change). */
+        suspend fun refresh(context: Context) {
+            TodayWidget().updateAll(context)
+            UpcomingWidget().updateAll(context)
+            HabitsWidget().updateAll(context)
+            CountdownWidget().updateAll(context)
+        }
     }
 }
 
@@ -132,8 +143,15 @@ class CompleteTaskAction : ActionCallback {
         val id = parameters[TodayWidget.TASK_KEY] ?: return
         val zen = (context.applicationContext as ZenTaskApplication).zen
         zen.core.task(id)?.takeIf { it.isOpen && !it.deleted && it.trashedAt == null }?.let { zen.core.actions.complete(id) }
-        TodayWidget().update(context, glanceId)
+        TodayWidget.refresh(context)
     }
+}
+
+/** The next seven days (Next 7 days smart list). */
+class UpcomingWidget : TodayWidget(SmartList.NEXT_7_DAYS, "Next 7 days")
+
+class UpcomingWidgetReceiver : GlanceAppWidgetReceiver() {
+    override val glanceAppWidget: GlanceAppWidget = UpcomingWidget()
 }
 
 class TodayWidgetReceiver : GlanceAppWidgetReceiver() {

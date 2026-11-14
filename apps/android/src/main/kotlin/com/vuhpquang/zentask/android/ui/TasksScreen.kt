@@ -214,6 +214,8 @@ fun TasksScreen(app: ZenApp, openSettings: () -> Unit, openSearch: () -> Unit) {
     val pick = ListPick.parse(pickKey)
     var openTaskId by rememberSaveable { mutableStateOf<String?>(null) }
     var adding by remember { mutableStateOf(false) }
+    val quickAddAsked by app.quickAdd.collectAsState()
+    androidx.compose.runtime.LaunchedEffect(quickAddAsked) { if (quickAddAsked) { adding = true; app.quickAdd.value = false } }
     val drawer = rememberDrawerState(androidx.compose.material3.DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val snackbar = remember { androidx.compose.material3.SnackbarHostState() }

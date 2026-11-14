@@ -73,6 +73,11 @@ class MainActivity : ComponentActivity() {
 
     /** A tapped reminder opens its task. */
     private fun handle(intent: Intent?) {
+        if (intent?.getStringExtra(EXTRA_QUICK_ADD) != null) {
+            intent.removeExtra(EXTRA_QUICK_ADD)
+            (application as ZenTaskApplication).zen.quickAdd.value = true
+            return
+        }
         val id = intent?.getStringExtra(EXTRA_OPEN_TASK) ?: return
         intent.removeExtra(EXTRA_OPEN_TASK)
         (application as ZenTaskApplication).zen.openTask.value = id
@@ -80,6 +85,8 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_OPEN_TASK = "openTask"
+        /** Set by the widgets' "+": open Tasks with the quick-add sheet. */
+        const val EXTRA_QUICK_ADD = "quickAdd"
     }
 }
 
@@ -99,6 +106,8 @@ private fun ZenTaskRoot(zen: ZenApp) {
     androidx.compose.runtime.LaunchedEffect(openTask) {
         openTask?.let { page = "task:$it"; zen.openTask.value = null }
     }
+    val quickAdd by zen.quickAdd.collectAsState()
+    androidx.compose.runtime.LaunchedEffect(quickAdd) { if (quickAdd) { page = null; area = Area.Tasks } }
     val showFocus by zen.showFocus.collectAsState()
     androidx.compose.runtime.LaunchedEffect(showFocus) {
         if (showFocus) { page = null; area = Area.Focus; zen.showFocus.value = false }

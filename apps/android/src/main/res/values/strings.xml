@@ -3,4 +3,10 @@
     <string name="app_name">ZenTask</string>
     <string name="widget_today">Today</string>
     <string name="widget_today_description">Today\'s tasks; tick to complete</string>
+    <string name="widget_upcoming">Next 7 days</string>
+    <string name="widget_upcoming_description">Tasks for the coming week; tick to complete</string>
+    <string name="widget_habits">Habits</string>
+    <string name="widget_habits_description">Today\'s habits; tick to check in</string>
+    <string name="widget_countdown">Countdown</string>
+    <string name="widget_countdown_description">Days left to your next countdowns</string>
 </resources>

@@ -30,6 +30,8 @@ class ZenApp(private val context: Context) {
 
     /** A task to open, set when a reminder notification is tapped. */
     val openTask = MutableStateFlow<String?>(null)
+    /** A widget's "+" asked for the quick-add sheet (TasksScreen opens it and clears this). */
+    val quickAdd = MutableStateFlow(false)
     /** Set to show the Focus area (from a task's "Start focus"). */
     val showFocus = MutableStateFlow(false)
     private val prefs = context.getSharedPreferences("zentask", Context.MODE_PRIVATE)

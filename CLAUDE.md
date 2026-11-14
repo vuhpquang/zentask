@@ -128,7 +128,9 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
   `Reminders.kt`: exact alarms from `core.plannedReminders` (armed id=fireAt kept in prefs, only changes re-armed,
   a 12 h re-plan alarm, `BootReceiver` re-arms after reboot/update), notification with a Done action; also the
   pomo end alarm. The Focus timer lives in `ZenApp` (prefs `focus.*`), not in the screen. `TodayWidget.kt`: Glance
-  home-screen widget (Today list, tick to complete), reloads on `ZenApp.revision`. Screens read data off the main
+  home-screen widgets (Today and `UpcomingWidget` = Next 7 days, tick to complete, "+" opens quick add via
+  `MainActivity.EXTRA_QUICK_ADD` → `ZenApp.quickAdd`); `MoreWidgets.kt`: `HabitsWidget` (tick = check in) and
+  `CountdownWidget`. All reload on `ZenApp.revision`; `TodayWidget.refresh` redraws every kind. Screens read data off the main
   thread with `loaded(keys) { … }`. Release APK is signed with the Mac's debug key (`~/.android/debug.keystore`:
   in-app updates only install over a copy signed with the same key, so keep that file).
   `AppUpdater.kt`: in-app update (GitHub latest release → `ZenTask-X.Y.Z-android.apk` → PackageInstaller,
