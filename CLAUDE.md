@@ -201,6 +201,11 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
   titles); `tasks/Templates.kt` `TemplateActions` (`saveFrom(taskId, name)`, `use(id, filter, projectId)`). Mac: task
   context menu "Save as template…", list "…" → New from template / Manage templates (`Tasks/TemplatesSheet.swift`).
   Android: task "…" → Save as template; template chips in the quick-add sheet (long-press deletes).
+- Markdown notes: notes stay plain text; shared `tasks/MarkdownLite.kt` splits them into blocks (headings, bullets,
+  numbered, `- [ ]` to-dos, quotes, code, rules) + `toggleTodo` + `plain` (list previews). Shown formatted when not
+  being edited and the text has Markdown: Mac `Tasks/MarkdownNotes.swift` (click edits, inline marks via
+  `AttributedString`), Android `ui/MarkdownNotes.kt` (tap edits; edit mode starts on the field's first focus and ends
+  only when focus really leaves, since `onFocusChanged` first reports "unfocused").
 - Statistics: shared `tasks/Stats.kt` `ProductivityStats` (30 days per day, this vs last week, streak / best streak,
   best day, top lists, focus minutes this week; `core.productivity(index)`). Mac: sidebar "Statistics" under Summary
   (`Tasks/StatsView.swift`, Swift Charts, `TasksModel.showingStats`). Android: drawer → Statistics (`ui/StatsScreen.kt`).

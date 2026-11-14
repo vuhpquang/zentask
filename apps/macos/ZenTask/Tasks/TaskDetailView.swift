@@ -177,10 +177,21 @@ struct TaskDetailView: View {
     private var notesEditor: some View {
         VStack(alignment: .leading, spacing: Theme.Space.s) {
             Label("Notes", systemImage: "text.alignleft").font(.headline).foregroundStyle(.secondary)
-            TextField("Write notes…", text: $draft.notes, axis: .vertical)
-                .textFieldStyle(.plain)
-                .lineLimit(3...)
-                .focused($focus, equals: .notes)
+            if focus != .notes && MarkdownLite.shared.hasMarkdown(text: draft.notes) {
+                // Markdown shown formatted; a click edits the text, a to-do box ticks in place.
+                MarkdownNotes(text: draft.notes, toggle: { i in
+                    draft.notes = MarkdownLite.shared.toggleTodo(text: draft.notes, index: Int32(i))
+                    commit(.notes)
+                })
+                .contentShape(Rectangle())
+                .onTapGesture { focus = .notes }
+                .help("Click to edit")
+            } else {
+                TextField("Write notes… (Markdown works: **bold**, - lists, - [ ] to-dos)", text: $draft.notes, axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .lineLimit(3...)
+                    .focused($focus, equals: .notes)
+            }
         }
     }
 

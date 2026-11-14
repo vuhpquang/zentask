@@ -46,6 +46,8 @@ enum Snapshots {
             for (name, view) in [("sheet-list", AnyView(ListEditor(project: nil))), ("sheet-filter", AnyView(FilterEditor(filter: nil)))] {
                 both(view.environment(model).environment(tasks), size: CGSize(width: 480, height: 620), name: name, dir: dir)
             }
+            let md = "# Trip to Đà Lạt\nPack **light**, check the _weather_ and `booking.pdf`.\n- Passport\n  - Copy in [Drive](https://drive.google.com)\n- [x] Visa\n- [ ] Tickets\n1. Book hotel\n2. Taxi\n> Leave by 6am\n```\nflight VN123\n```"
+            both(AnyView(MarkdownNotes(text: md, toggle: { _ in }).padding(Theme.Space.l)), size: CGSize(width: 420, height: 420), name: "markdown-notes", dir: dir)
             both(AnyView(MenuBarPanel()).environment(model).environment(tasks), size: CGSize(width: Theme.MenuBar.width, height: 560), name: "menubar", dir: dir)
             both(AnyView(PlanDayView()).environment(model).environment(tasks), size: CGSize(width: Theme.PlanDay.width, height: Theme.PlanDay.height), name: "sheet-planday", dir: dir)
             both(AnyView(MatrixView(openTask: { _ in })).environment(model).environment(tasks), size: windowSize, name: "matrix", dir: dir)

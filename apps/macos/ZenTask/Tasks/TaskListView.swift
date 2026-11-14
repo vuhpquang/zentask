@@ -231,7 +231,7 @@ struct TaskRowView: View {
     static func preview(_ task: ZTask) -> String? {
         let text = task.kind == "CHECKLIST" && !task.desc.isEmpty ? task.desc : task.content
         let line = text.split(whereSeparator: \.isNewline).lazy
-            .map { $0.trimmingCharacters(in: .whitespaces).trimmingCharacters(in: CharacterSet(charactersIn: "#>*-• ")) }
+            .map { MarkdownLite.shared.plain(line: String($0)).trimmingCharacters(in: .whitespaces).trimmingCharacters(in: CharacterSet(charactersIn: "#>*-• ")) }
             .first { !$0.isEmpty }
         return line.map { String($0.prefix(200)) }
     }

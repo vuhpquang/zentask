@@ -102,6 +102,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -641,7 +642,7 @@ fun toggleComplete(app: ZenApp, task: Task) {
 /** First non-empty line of the notes, without Markdown marks. */
 fun preview(task: Task): String? {
     val text = if (task.kind == Task.KIND_CHECKLIST && task.desc.isNotEmpty()) task.desc else task.content
-    return text.lineSequence().map { it.trim().trimStart('#', '>', '*', '-', '•', ' ') }.firstOrNull { it.isNotEmpty() }?.take(200)
+    return text.lineSequence().map { com.vuhpquang.zentask.tasks.MarkdownLite.plain(it.trim()).trimStart('#', '>', '*', '-', '•', ' ') }.firstOrNull { it.isNotEmpty() }?.take(200)
 }
 
 /** The quick-add bottom sheet: quick-add syntax (dates, #tag, !priority, ~list), chips for what it found. */
@@ -791,10 +792,31 @@ fun TaskDetailScreen(app: ZenApp, taskId: String, close: () -> Unit) {
                 if (day != null) RepeatChip(app, task, day, expanded = picking == "repeat", open = { picking = "repeat" }, close = { picking = null })
                 TagChips(app, index, task)
             }
-            OutlinedTextField(
-                value = notes, onValueChange = { notes = it }, label = { Text("Notes") },
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp), minLines = 3,
-            )
+            var editingNotes by remember(taskId) { mutableStateOf(false) }
+            if (!editingNotes && com.vuhpquang.zentask.tasks.MarkdownLite.hasMarkdown(notes)) {
+                // Markdown shown formatted; tap to edit, tap a to-do box to tick it.
+                Column(
+                    Modifier.fillMaxWidth().padding(vertical = 8.dp).clip(RoundedCornerShape(8.dp))
+                        .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(8.dp))
+                        .clickable { editingNotes = true }.padding(12.dp),
+                ) {
+                    MarkdownNotes(notes) { i -> notes = com.vuhpquang.zentask.tasks.MarkdownLite.toggleTodo(notes, i); commit() }
+                }
+            } else {
+                val focusNotes = remember { FocusRequester() }
+                var notesHadFocus by remember { mutableStateOf(false) }
+                OutlinedTextField(
+                    value = notes, onValueChange = { notes = it }, label = { Text("Notes (Markdown)") },
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp).focusRequester(focusNotes)
+                        .onFocusChanged { f ->
+                            // Edit mode from the first focus until focus really leaves (the first callback is "unfocused"),
+                            // so typing Markdown never swaps the field out.
+                            if (f.isFocused) { editingNotes = true; notesHadFocus = true } else if (notesHadFocus) { editingNotes = false; notesHadFocus = false }
+                        },
+                    minLines = 3,
+                )
+                LaunchedEffect(editingNotes) { if (editingNotes) runCatching { focusNotes.requestFocus() } }
+            }
             val items = index?.items(task.id).orEmpty()
             if (items.isNotEmpty() || task.kind == Task.KIND_CHECKLIST) {
                 Text("Checklist", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 12.dp, bottom = 4.dp))
