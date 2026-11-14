@@ -70,7 +70,9 @@ if [[ "${SKIP_TESTS:-0}" != "1" ]]; then
 fi
 
 step "Building"
-SIGN_IDENTITY="$SIGN_IDENTITY" scripts/build-mac.sh Release
+# Build ad-hoc ("-"): with a named identity Xcode also tries to sign the AppShell SwiftPM resource bundles and
+# fails ("requires a development team"). The real signature is applied right below.
+SIGN_IDENTITY="-" scripts/build-mac.sh Release
 # The widget extension must keep its sandbox entitlements (--deep would drop them): sign it first, then the app.
 for ext in "$APP"/Contents/PlugIns/*.appex; do
     [[ -e "$ext" ]] || continue
