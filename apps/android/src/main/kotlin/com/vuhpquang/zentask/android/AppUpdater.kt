@@ -20,6 +20,11 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 
+/** App Depot (the release build) owns updates for every app of the family once it is installed. */
+const val APP_DEPOT_PACKAGE = "com.vuhpquang.appdepot"
+
+fun updatesManagedByDepot(installed: Set<String>): Boolean = APP_DEPOT_PACKAGE in installed
+
 /**
  * In-app update: reads the latest GitHub release, downloads `ZenTask-X.Y.Z-android.apk` and installs it
  * with [PackageInstaller]. Android asks the owner to confirm the install (and, the first time, to allow
@@ -45,17 +50,28 @@ class AppUpdater(private val context: Context) {
     val currentVersion: String =
         context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "0.0.0"
 
+    /** True when App Depot is installed: it checks and installs ZenTask updates, so this class stays idle. */
+    val managedByDepot: Boolean
+        get() = updatesManagedByDepot(
+            if (runCatching { context.packageManager.getPackageInfo(APP_DEPOT_PACKAGE, 0) }.isSuccess) setOf(APP_DEPOT_PACKAGE) else emptySet(),
+        )
+
+    /** Launch intent for App Depot, or null when it can't be opened. */
+    fun depotLaunchIntent(): Intent? = context.packageManager.getLaunchIntentForPackage(APP_DEPOT_PACKAGE)
+
     /** Debug builds (`.dev`) are a different app: the release APK would install next to them. */
     private val isRelease = context.packageName == RELEASE_PACKAGE
 
     /** Checks at most every 6 hours (on app start/resume). */
     suspend fun checkIfDue() {
+        if (managedByDepot) return
         if (System.currentTimeMillis() - prefs.getLong(KEY_LAST_CHECK, 0) < CHECK_EVERY) return
         if (_state.value !is State.Idle && _state.value !is State.UpToDate && _state.value !is State.Failed) return
         check()
     }
 
     suspend fun check() {
+        if (managedByDepot) return
         val s = _state.value
         if (s is State.Checking || s is State.Downloading || s is State.Installing) return
         _state.value = State.Checking
@@ -73,6 +89,7 @@ class AppUpdater(private val context: Context) {
 
     /** Downloads and hands the APK to the system installer. */
     suspend fun install() {
+        if (managedByDepot) return
         val update = (_state.value as? State.Available)?.update
             ?: pending.takeIf { _state.value is State.NeedsPermission } ?: return
         pending = update

@@ -14,6 +14,11 @@
     <!-- In-app update: installs the newer APK from the GitHub release. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
+    <!-- Lets ZenTask see whether App Depot is installed (it then owns the updates). -->
+    <queries>
+        <package android:name="com.vuhpquang.appdepot" />
+    </queries>
+
     <application
         android:name=".ZenTaskApplication"
         android:label="@string/app_name"

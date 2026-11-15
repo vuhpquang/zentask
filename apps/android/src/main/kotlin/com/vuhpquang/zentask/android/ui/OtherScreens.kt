@@ -366,6 +366,14 @@ private fun UpdatesSection(updater: com.vuhpquang.zentask.android.AppUpdater) {
     val scope = rememberCoroutineScope()
     Text("Updates", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 12.dp))
     Text("ZenTask ${updater.currentVersion}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+    if (updater.managedByDepot) {
+        Text("Updates are managed by App Depot", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        val ctx = androidx.compose.ui.platform.LocalContext.current
+        updater.depotLaunchIntent()?.let { launch ->
+            Button(onClick = { ctx.startActivity(launch.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }) { Text("Open App Depot") }
+        }
+        return
+    }
     when (val s = state) {
         is com.vuhpquang.zentask.android.AppUpdater.State.Available -> {
             Text("Version ${s.update.version} is available", color = MaterialTheme.colorScheme.primary)

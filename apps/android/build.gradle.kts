@@ -53,4 +53,5 @@ dependencies {
     implementation(libs.play.services.location)
     implementation(libs.osmdroid)
     debugImplementation(libs.compose.ui.tooling)
+    testImplementation(kotlin("test-junit"))
 }
