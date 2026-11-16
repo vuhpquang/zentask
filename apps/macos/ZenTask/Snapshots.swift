@@ -192,7 +192,15 @@ enum Snapshots {
         habits.selection = water.id
         both(env(AnyView(HabitsView())), size: windowSize, name: "habits-number", dir: dir)
         both(env(AnyView(CountdownsView())), size: windowSize, name: "countdowns", dir: dir)
-        both(env(AnyView(HabitEditor(editing: .new))), size: CGSize(width: 480, height: 640), name: "sheet-habit", dir: dir)
+        both(env(AnyView(HabitEditor(editing: .new, tasks: tasks))), size: CGSize(width: 560, height: 700), name: "sheet-habit", dir: dir)
+        // A counted habit with several reminder times and a place: the editor that once overflowed its sheet.
+        let gym = core.placeActions.create(name: "Gym", kind: Place.companion.KIND_CUSTOM, latitude: 10.77, longitude: 106.70, radius: 150, wifi: ["GymWifi"])
+        let weekly = core.habitActions.create(name: "Vào PMP mỗi tuần", icon: nil, color: nil, type: Habit.companion.TYPE_BOOLEAN, goal: 1, step: 1, unit: "", repeatRule: "RRULE:FREQ=MONTHLY;TT_TIMES=2")
+        core.habitActions.setReminders(id: weekly.id, times: ["09:00", "10:00", "12:30", "18:00", "21:15"])
+        core.habitActions.setRemindFrom(id: weekly.id, day: KotlinInt(value: 101))
+        core.habitActions.setPlace(id: weekly.id, placeId: gym.id, trigger: Place.companion.LEAVE)
+        wait { await habits.reload() }
+        both(env(AnyView(HabitEditor(editing: .edit(weekly.id), tasks: tasks))), size: CGSize(width: 560, height: 760), name: "sheet-habit-edit", dir: dir)
         both(env(AnyView(CountdownEditor(editing: .new))), size: CGSize(width: 500, height: 700), name: "sheet-countdown", dir: dir)
     }
 

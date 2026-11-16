@@ -216,11 +216,15 @@ final class HabitsModel {
                      goal: draft.goal, step: draft.step, unit: draft.unit, repeatRule: draft.repeatRule)
             if draft.reminders != original.reminders { a.setReminders(id: original.id, times: draft.reminders) }
             if draft.remindFrom != original.remindFrom?.intValue { a.setRemindFrom(id: original.id, day: draft.remindFrom.map { KotlinInt(value: Int32($0)) }) }
+            if draft.placeId != original.placeId || (draft.placeId != nil && draft.placeTrigger != original.placeTrigger) {
+                a.setPlace(id: original.id, placeId: draft.placeId, trigger: draft.placeTrigger)
+            }
         } else {
             let h = a.create(name: draft.name, icon: draft.storedIcon, color: draft.color, type: draft.type,
                              goal: draft.goal, step: draft.step, unit: draft.unit, repeatRule: draft.repeatRule)
             if !draft.reminders.isEmpty { a.setReminders(id: h.id, times: draft.reminders) }
             if let from = draft.remindFrom { a.setRemindFrom(id: h.id, day: KotlinInt(value: Int32(from))) }
+            if let place = draft.placeId { a.setPlace(id: h.id, placeId: place, trigger: draft.placeTrigger) }
             selection = h.id
         }
     }
@@ -259,6 +263,9 @@ struct HabitDraft: Equatable {
     var reminders: [String] = []
     /// Counted habits: reminders start on this ISO weekday (1 = Monday) or day of the month; nil = every day.
     var remindFrom: Int?
+    /// Location reminder: a Place id and Place.ARRIVE / Place.LEAVE.
+    var placeId: String?
+    var placeTrigger = Place.companion.ARRIVE
     /// "Every N days" (from INTERVAL); the editor keeps such rules as they are.
     private(set) var interval = 1
     /// What the habit had when the editor opened: kept unless the user changes that part
@@ -285,6 +292,8 @@ struct HabitDraft: Equatable {
         unit = habit.unit
         reminders = habit.reminders
         remindFrom = habit.remindFrom?.intValue
+        placeId = habit.placeId
+        placeTrigger = habit.placeTrigger ?? Place.companion.ARRIVE
         let parts = Dictionary((habit.repeatRule ?? "").replacingOccurrences(of: "RRULE:", with: "").split(separator: ";").compactMap { p -> (String, String)? in
             let kv = p.split(separator: "=", maxSplits: 1)
             return kv.count == 2 ? (kv[0].uppercased(), String(kv[1])) : nil

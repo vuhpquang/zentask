@@ -168,7 +168,8 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
   alarms with `zs.` ids that `sync` leaves alone), Settings → Notifications (`ui/NotificationSettings.kt`).
 - New dated tasks get the default reminder via `TaskActions.defaultReminders` (set by the core from the prefs).
 - Habits: `FREQ=WEEKLY;TT_TIMES=n` (n a week) and ZenTask's own `FREQ=MONTHLY;TT_TIMES=n` (n a month, streaks in
-  months). `Habit.remindFrom` (ISO weekday 1–7 or day of month 1–31, past the month's end = its last day): reminders
+  months). `Habit.remindFrom` (ISO weekday 1–7, day of month 1–31 — past the month's end = its last day — or for monthly
+  habits 101–107 = the month's first Monday … Sunday, `Habit.REMIND_FIRST_WEEKDAY + ISO weekday`): reminders
   start that day and repeat daily until the period's target is met (`HabitSchedule.remindsOn`).
 - Countdowns: `Countdown.reminders` = "<days before>@HH:mm" ("7@09:00"); null = the prefs defaults, empty = none
   (`CountdownActions.setReminders`, `NotificationPlanner.countdownReminders`). Countdown notifications have Snooze.
@@ -216,6 +217,11 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
   (`ui/Places.kt`, osmdroid map: tap to pin, radius, current Wi‑Fi), task chip "Location". Emulator: geofences fire only
   while something requests location (open a place editor and use "Use where I am"); toggled emulator Wi‑Fi often stays
   "connecting" (no IP), so Wi‑Fi arrivals can't be tested there.
+- Habits remind at places too: `Habit.placeId` + `placeTrigger` (`HabitActions.setPlace`). Their places are watched
+  while the habit is live (not archived); on arrive/leave `LocationPlanner.dueHabits` keeps those due today, not done
+  and past `remindFrom`, and `core.locationReminder` names them with the tasks in one notification. Deleting a place
+  clears it from habits too. Editors: Mac `HabitEditor` (Location picker + Arrive/Leave + Manage places…), Android
+  `HabitPlacePicker` in `ui/HabitEditors.kt`.
 - Mac location reminders are Wi‑Fi only (owner's choice): `Services/WifiPlaces.swift` (CoreWLAN `ssidDidChange`; reading
   the SSID needs Location Services, `NSLocationUsageDescription` in project.yml; inside-set in UserDefaults
   `location.insideWifi`, first check silent), `Tasks/PlacesSheet.swift` (places list + MapKit editor, click to pin) and

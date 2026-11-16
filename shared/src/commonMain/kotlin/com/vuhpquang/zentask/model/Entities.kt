@@ -218,14 +218,24 @@ data class Habit(
     val targetStartDate: Int? = null,
     val encouragement: String = "",
     /**
-     * For N-times-a-week / -month habits: reminders start on this day of the period (ISO weekday 1–7, or day
-     * of month 1–31) and repeat daily until the period's target is met. Null = every day of the period.
+     * For N-times-a-week / -month habits: reminders start on this day of the period (ISO weekday 1–7, day of
+     * month 1–31, or for monthly ones 101–107 = the month's first Monday … Sunday, see [REMIND_FIRST_WEEKDAY]) and
+     * repeat daily until the period's target is met. Null = every day of the period.
      */
     val remindFrom: Int? = null,
+    /** Location reminder: a [Place] id and [Place.ARRIVE] or [Place.LEAVE]; fires on days the habit is due and not done. */
+    val placeId: String? = null,
+    val placeTrigger: String? = null,
 ) : Entity {
     companion object {
         const val TYPE_BOOLEAN = "BOOLEAN"
         const val TYPE_REAL = "REAL"
+
+        /**
+         * [remindFrom] values 101–107 (N-times-a-month habits): from the first Monday … Sunday of the month
+         * (100 + ISO weekday).
+         */
+        const val REMIND_FIRST_WEEKDAY = 100
     }
 }
 

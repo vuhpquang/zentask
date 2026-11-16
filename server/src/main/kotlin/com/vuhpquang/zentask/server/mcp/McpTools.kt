@@ -365,7 +365,7 @@ object McpTools {
                     "unit" to str("Unit of the amount, e.g. cups"), "step" to int("Amount one check-in adds (default 1)"),
                     "days" to strArray("Weekdays: MO TU WE TH FR SA SU"), "times_a_week" to int("N times a week on any days"),
                     "times_a_month" to int("N times a month on any days"),
-                    "remind_from" to int("With times_a_week: weekday reminders start (1 = Monday … 7 = Sunday); with times_a_month: day of the month. Then daily until done"),
+                    "remind_from" to int("With times_a_week: weekday reminders start (1 = Monday … 7 = Sunday); with times_a_month: day of the month 1–31, or 101–107 = the month's first Monday … Sunday. Then daily until done"),
                     "reminders" to strArray("Reminder times, HH:mm"),
                     "icon" to str("An emoji"), "color" to str("#RRGGBB"),
                     required = listOf("name"),
@@ -870,7 +870,7 @@ object McpTools {
         val weekly = rule.contains("TT_TIMES") && !monthly
         if (!monthly && !weekly) throw ToolError("remind_from only works with times_a_week or times_a_month")
         if (weekly && d !in 1..7) throw ToolError("remind_from must be 1 (Monday) to 7 (Sunday)")
-        if (monthly && d !in 1..31) throw ToolError("remind_from must be a day of the month, 1 to 31")
+        if (monthly && d !in 1..31 && d !in 101..107) throw ToolError("remind_from must be a day of the month (1 to 31) or 101 to 107 for the first Monday to Sunday")
         return d
     }
 

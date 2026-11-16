@@ -284,7 +284,7 @@ enum Theme {
         static let monthCell: CGFloat = 44
         static let monthDot: CGFloat = 36
         static let weekdayChip: CGFloat = 38
-        static let sheetWidth: CGFloat = 440
+        static let sheetWidth: CGFloat = 520
         static let dotSpacing: CGFloat = 3
         static let detailWidth: CGFloat = 460
         static let cardMin: CGFloat = 250

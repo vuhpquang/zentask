@@ -5,6 +5,7 @@ import SwiftUI
 /// selected habit's check-in, stats and month map on the right.
 struct HabitsView: View {
     @Environment(HabitsModel.self) private var habits
+    @Environment(TasksModel.self) private var tasks
 
     var body: some View {
         HStack(spacing: 0) {
@@ -29,7 +30,7 @@ struct HabitsView: View {
         .onAppear { habits.start(); habits.setVisible(true) }
         .onDisappear { habits.setVisible(false) }
         .sheet(item: Binding(get: { habits.sheet }, set: { habits.sheet = $0 })) { sheet in
-            HabitEditor(editing: sheet).environment(habits)
+            HabitEditor(editing: sheet, tasks: tasks).environment(habits)
         }
         .confirmationDialog(
             "Delete the habit \"\(habits.confirmDelete?.name ?? "")\"?",

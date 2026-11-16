@@ -208,4 +208,18 @@ class HabitsTest {
         // Day-based habits ignore it.
         assertTrue(HabitSchedule.remindsOn(Habit(id = "d", remindFrom = 5), LocalDate(2026, 11, 2)))
     }
+
+    @Test
+    fun remindFromTheMonthsFirstWeekday() {
+        // Nov 2026 starts on a Sunday: first Monday = 2nd, first Sunday = 1st.
+        val mon = Habit(id = "m", repeatRule = "RRULE:FREQ=MONTHLY;TT_TIMES=2", remindFrom = Habit.REMIND_FIRST_WEEKDAY + 1)
+        assertTrue(!HabitSchedule.remindsOn(mon, LocalDate(2026, 11, 1)))
+        assertTrue(HabitSchedule.remindsOn(mon, LocalDate(2026, 11, 2)))
+        assertTrue(HabitSchedule.remindsOn(mon, LocalDate(2026, 11, 30)))
+        val sun = mon.copy(remindFrom = Habit.REMIND_FIRST_WEEKDAY + 7)
+        assertTrue(HabitSchedule.remindsOn(sun, LocalDate(2026, 11, 1)))
+        // Dec 2026 starts on a Tuesday: first Monday = 7th.
+        assertTrue(!HabitSchedule.remindsOn(mon, LocalDate(2026, 12, 6)))
+        assertTrue(HabitSchedule.remindsOn(mon, LocalDate(2026, 12, 7)))
+    }
 }

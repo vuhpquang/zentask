@@ -46,6 +46,27 @@ class PlacesAttachmentsTest {
     }
 
     @Test
+    fun habitLocationReminders() {
+        val zone = TimeZone.of("Asia/Ho_Chi_Minh")
+        val habits = com.vuhpquang.zentask.habits.HabitActions(store, wall = { wall })
+        val gym = places.create("Gym", Place.KIND_CUSTOM, 10.77, 106.70, wifi = listOf("GymWifi"))
+        val h = habits.create("Stretch", null, null, com.vuhpquang.zentask.model.Habit.TYPE_BOOLEAN, 1.0, 1.0, "", "RRULE:FREQ=DAILY;INTERVAL=1")
+        habits.setPlace(h.id, gym.id, Place.ARRIVE)
+        val w = LocationPlanner.watches(store.list(EntityTypes.task), places.list(), habits = store.list(EntityTypes.habit)).single()
+        assertEquals(gym.id, w.place.id); assertTrue(w.arrive && !w.leave)
+        val today = kotlinx.datetime.LocalDate(2027, 1, 15)
+        fun due() = LocationPlanner.dueHabits(store.list(EntityTypes.habit), store.list(EntityTypes.habitCheckin), gym.id, Place.ARRIVE, today, zone).map { it.name }
+        assertEquals(listOf("Stretch"), due())
+        assertEquals("At Gym" to "Stretch", LocationPlanner.messageFor(gym, Place.ARRIVE, due()))
+        // Done today = no reminder; archived = not watched; deleting the place clears it.
+        habits.checkIn(h.id, today, null)
+        assertEquals(emptyList(), due())
+        places.delete(gym.id)
+        assertNull(store.get(EntityTypes.habit, h.id)!!.placeId)
+        assertNull(store.get(EntityTypes.habit, h.id)!!.placeTrigger)
+    }
+
+    @Test
     fun insideSetChangesBecomeArrivalsAndDepartures() {
         assertEquals(listOf("work" to Place.ARRIVE, "home" to Place.LEAVE), LocationPlanner.changes(setOf("home"), setOf("work")))
         assertEquals(emptyList(), LocationPlanner.changes(setOf("home"), setOf("home")))

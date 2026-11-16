@@ -63,10 +63,16 @@ object HabitSchedule {
         val from = h.remindFrom ?: return true
         return when {
             monthTarget(h) != null -> {
-                val last = LocalDate(date.year, date.month, 1).plus(1, DateTimeUnit.MONTH).minus(1, DateTimeUnit.DAY).day
-                date.day >= minOf(from, last)
+                val first = LocalDate(date.year, date.month, 1)
+                if (from > Habit.REMIND_FIRST_WEEKDAY) {
+                    val weekday = (from - Habit.REMIND_FIRST_WEEKDAY).coerceIn(1, 7)
+                    date.day >= 1 + (weekday - first.dayOfWeek.isoDayNumber).mod(7)
+                } else {
+                    val last = first.plus(1, DateTimeUnit.MONTH).minus(1, DateTimeUnit.DAY).day
+                    date.day >= minOf(from, last)
+                }
             }
-            weekTarget(h) != null -> date.dayOfWeek.isoDayNumber >= from
+            weekTarget(h) != null -> from > 7 || date.dayOfWeek.isoDayNumber >= from
             else -> true
         }
     }
@@ -211,9 +217,18 @@ class HabitActions(
         store.update(EntityTypes.habit, id) { it.copy(reminders = clean) }
     }
 
-    /** The day of the week (1–7) or month (1–31) reminders start on for counted habits; null = every day. */
+    /**
+     * The day of the week (1–7) or month (1–31, or 101–107 = the month's first Monday … Sunday) reminders start on
+     * for counted habits; null = every day.
+     */
     fun setRemindFrom(id: String, day: Int?) {
-        store.update(EntityTypes.habit, id) { it.copy(remindFrom = day?.takeIf { d -> d in 1..31 }) }
+        store.update(EntityTypes.habit, id) { it.copy(remindFrom = day?.takeIf { d -> d in 1..31 || d in 101..107 }) }
+    }
+
+    /** Location reminder: remind on arriving at / leaving [placeId] while the habit is due and not done; null clears. */
+    fun setPlace(id: String, placeId: String?, trigger: String?) {
+        val t = if (placeId == null) null else if (trigger == com.vuhpquang.zentask.model.Place.LEAVE) trigger else com.vuhpquang.zentask.model.Place.ARRIVE
+        store.update(EntityTypes.habit, id) { it.copy(placeId = placeId, placeTrigger = t) }
     }
 
     fun archive(id: String) {

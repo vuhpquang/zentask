@@ -1,9 +1,15 @@
 package com.vuhpquang.zentask.tasks
 
+import com.vuhpquang.zentask.habits.HabitSchedule
+import com.vuhpquang.zentask.habits.Stamp
 import com.vuhpquang.zentask.model.EntityTypes
+import com.vuhpquang.zentask.model.Habit
+import com.vuhpquang.zentask.model.HabitCheckin
 import com.vuhpquang.zentask.model.Place
 import com.vuhpquang.zentask.model.Task
 import com.vuhpquang.zentask.store.ZenStore
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
 import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
@@ -37,10 +43,11 @@ class PlaceActions(
         if (store.get(EntityTypes.place, original.id)?.deleted == false) store.put(EntityTypes.place, edited, base = original)
     }
 
-    /** Deletes the place and clears it from the tasks that reminded there. */
+    /** Deletes the place and clears it from the tasks and habits that reminded there. */
     fun delete(id: String) {
         store.inTransaction {
             store.idsWhere(EntityTypes.task, "placeId", id).forEach { tid -> store.update(EntityTypes.task, tid) { it.copy(placeId = null, placeTrigger = null) } }
+            store.idsWhere(EntityTypes.habit, "placeId", id).forEach { hid -> store.update(EntityTypes.habit, hid) { it.copy(placeId = null, placeTrigger = null) } }
             store.delete(EntityTypes.place, id)
         }
     }
@@ -59,12 +66,19 @@ object LocationPlanner {
 
     private fun waiting(t: Task) = !t.deleted && t.trashedAt == null && t.status == com.vuhpquang.zentask.model.TaskStatus.OPEN && t.placeId != null
 
-    /** Places with open tasks reminding on arrival and/or on leaving (Android watches at most 100 regions). */
-    fun watches(tasks: List<Task>, places: List<Place>, max: Int = 100): List<Watch> {
-        val byPlace = tasks.filter(::waiting).groupBy { it.placeId!! }
+    private fun watching(h: Habit) = !h.deleted && h.archivedAt == null && h.placeId != null
+
+    /**
+     * Places with open tasks or live habits reminding on arrival and/or on leaving (Android watches at most 100
+     * regions). A habit's place is watched every day; whether it is due is decided when the place is reached.
+     */
+    fun watches(tasks: List<Task>, places: List<Place>, max: Int = 100, habits: List<Habit> = emptyList()): List<Watch> {
+        val triggers = tasks.filter(::waiting).map { it.placeId!! to it.placeTrigger } +
+            habits.filter(::watching).map { it.placeId!! to it.placeTrigger }
+        val byPlace = triggers.groupBy({ it.first }, { it.second })
         return places.filter { !it.deleted && it.id in byPlace }.map { p ->
             val ts = byPlace.getValue(p.id)
-            Watch(p, ts.any { it.placeTrigger == Place.ARRIVE }, ts.any { it.placeTrigger == Place.LEAVE })
+            Watch(p, ts.any { it == Place.ARRIVE }, ts.any { it == Place.LEAVE })
         }.take(max)
     }
 
@@ -72,10 +86,25 @@ object LocationPlanner {
     fun due(tasks: List<Task>, placeId: String, trigger: String): List<Task> =
         tasks.filter { waiting(it) && it.placeId == placeId && it.placeTrigger == trigger }
 
+    /**
+     * Habits reminding on [trigger] at [placeId] that are due on [today] and not done yet (same rules as their timed
+     * reminders: scheduled that day and past [Habit.remindFrom]).
+     */
+    fun dueHabits(habits: List<Habit>, checkins: List<HabitCheckin>, placeId: String, trigger: String, today: LocalDate, zone: TimeZone): List<Habit> {
+        val stamp = Stamp.of(today)
+        return habits.filter { watching(it) && it.placeId == placeId && it.placeTrigger == trigger }.filter { h ->
+            val done = checkins.filter { !it.deleted && it.status == 2 && it.habitId == h.id }.mapTo(HashSet()) { it.stamp }
+            stamp !in done && HabitSchedule.isScheduled(h, today, zone, done) && HabitSchedule.remindsOn(h, today)
+        }
+    }
+
     /** Notification text for those tasks at [place]. */
-    fun message(place: Place, trigger: String, tasks: List<Task>): Pair<String, String> {
+    fun message(place: Place, trigger: String, tasks: List<Task>): Pair<String, String> =
+        messageFor(place, trigger, tasks.map { it.title.ifBlank { "Untitled" } })
+
+    /** Notification text for these task and habit names at [place]. */
+    fun messageFor(place: Place, trigger: String, names: List<String>): Pair<String, String> {
         val title = (if (trigger == Place.ARRIVE) "At " else "Leaving ") + place.name
-        val names = tasks.map { it.title.ifBlank { "Untitled" } }
         val body = if (names.size <= 3) names.joinToString(", ") else names.take(3).joinToString(", ") + " and ${names.size - 3} more"
         return title to body
     }

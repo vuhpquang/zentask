@@ -131,6 +131,8 @@ fun HabitEditorDialog(app: ZenApp, editing: Habit?, close: () -> Unit) {
     var mode by remember { mutableStateOf(if (monthTarget != null) 2 else if (weekTarget != null) 1 else 0) }
     var times by remember { mutableStateOf(monthTarget ?: weekTarget ?: 1) }
     var remindFrom by remember { mutableStateOf(editing?.remindFrom) }
+    var placeId by remember { mutableStateOf(editing?.placeId) }
+    var placeTrigger by remember { mutableStateOf(editing?.placeTrigger ?: com.vuhpquang.zentask.model.Place.ARRIVE) }
     val keepsOddRule = editing != null && weekTarget == null && monthTarget == null && initialDays.isEmpty() && !isPlainDaily(editing.repeatRule)
     AlertDialog(
         onDismissRequest = close,
@@ -194,6 +196,7 @@ fun HabitEditorDialog(app: ZenApp, editing: Habit?, close: () -> Unit) {
                     }, label = { Text("Add time") }, leadingIcon = { Icon(Icons.Filled.Notifications, null) })
                 }
                 if (mode != 0) RemindFromPicker(mode == 2, remindFrom) { remindFrom = it }
+                HabitPlacePicker(app, placeId, placeTrigger, { placeId = it }, { placeTrigger = it })
             }
         },
         confirmButton = {
@@ -218,6 +221,7 @@ fun HabitEditorDialog(app: ZenApp, editing: Habit?, close: () -> Unit) {
                 if (reminders.sorted() != editing?.reminders.orEmpty()) a.setReminders(id, reminders.toList())
                 val from = remindFrom.takeIf { mode != 0 }
                 if (from != editing?.remindFrom) a.setRemindFrom(id, from)
+                if (placeId != editing?.placeId || (placeId != null && placeTrigger != editing?.placeTrigger)) a.setPlace(id, placeId, placeTrigger)
                 close()
             }) { Text(if (editing == null) "Create" else "Save") }
         },
@@ -231,6 +235,7 @@ private fun RemindFromPicker(monthly: Boolean, value: Int?, change: (Int?) -> Un
     var open by remember { mutableStateOf(false) }
     fun label(d: Int?): String = when {
         d == null -> "Every day"
+        monthly && d > Habit.REMIND_FIRST_WEEKDAY -> "From the first " + DayOfWeek.of(d - Habit.REMIND_FIRST_WEEKDAY).getDisplayName(TextStyle.FULL, Locale.getDefault())
         monthly -> "From day $d"
         else -> "From " + DayOfWeek.of(d).getDisplayName(TextStyle.FULL, Locale.getDefault())
     }
@@ -242,9 +247,40 @@ private fun RemindFromPicker(monthly: Boolean, value: Int?, change: (Int?) -> Un
         Box {
             TextButton(onClick = { open = true }) { Text(label(value)) }
             androidx.compose.material3.DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-                for (d in listOf<Int?>(null) + (1..(if (monthly) 31 else 7))) {
+                // Monthly: the month's first Monday … Sunday (101–107), then days 1–31.
+                val firsts = if (monthly) (1..7).map { Habit.REMIND_FIRST_WEEKDAY + it } else emptyList()
+                for (d in listOf<Int?>(null) + firsts + (1..(if (monthly) 31 else 7))) {
                     androidx.compose.material3.DropdownMenuItem(text = { Text(label(d)) }, onClick = { change(d); open = false })
                 }
+            }
+        }
+    }
+}
+
+/** Location reminder for a habit: a saved place (Settings → Places) and arrive / leave; fires on days it's due and not done. */
+@Composable
+private fun HabitPlacePicker(app: ZenApp, placeId: String?, trigger: String, changePlace: (String?) -> Unit, changeTrigger: (String) -> Unit) {
+    val places = remember { app.core.placeActions.list() }
+    val current = places.firstOrNull { it.id == placeId }
+    var open by remember { mutableStateOf(false) }
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("Location")
+            Text(if (places.isEmpty()) "Add places in Settings → Places" else "When you arrive or leave, if not done today",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Box {
+            TextButton(onClick = { open = true }, enabled = places.isNotEmpty() || current != null) { Text(current?.name ?: "None") }
+            androidx.compose.material3.DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+                androidx.compose.material3.DropdownMenuItem(text = { Text("None") }, onClick = { changePlace(null); open = false })
+                for (p in places) androidx.compose.material3.DropdownMenuItem(text = { Text(p.name) }, onClick = { changePlace(p.id); open = false })
+            }
+        }
+    }
+    if (current != null) {
+        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+            listOf(com.vuhpquang.zentask.model.Place.ARRIVE to "When I arrive", com.vuhpquang.zentask.model.Place.LEAVE to "When I leave").forEachIndexed { i, (value, label) ->
+                SegmentedButton(selected = trigger == value, onClick = { changeTrigger(value) }, shape = SegmentedButtonDefaults.itemShape(i, 2)) { Text(label) }
             }
         }
     }

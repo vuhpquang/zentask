@@ -10,6 +10,10 @@ struct HabitEditor: View {
     @State private var kind = 0
     @State private var original: Habit?
     @State private var newReminder = Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: .now) ?? .now
+    @State private var places: [Place] = []
+    @State private var managingPlaces = false
+    /// Passed in by the habits area so the editor can open Manage places (the sheet lives on TasksModel's core).
+    var tasks: TasksModel?
 
     private var editingId: String? { if case .edit(let id) = editing { id } else { nil } }
 
@@ -107,8 +111,8 @@ struct HabitEditor: View {
 
             VStack(alignment: .leading, spacing: Theme.Space.s) {
                 Text("Reminders").font(.headline)
-                HStack(spacing: Theme.Space.s) {
-                    ForEach(draft.reminders, id: \.self) { time in
+                if !draft.reminders.isEmpty {
+                    FlowChips(items: draft.reminders) { time in
                         Button {
                             draft.reminders.removeAll { $0 == time }
                         } label: {
@@ -116,29 +120,52 @@ struct HabitEditor: View {
                         }
                         .help("Remove this reminder")
                     }
+                }
+                HStack(spacing: Theme.Space.s) {
                     DatePicker("New reminder", selection: $newReminder, displayedComponents: .hourAndMinute)
                         .labelsHidden()
-                    Button("Add", systemImage: "bell.badge") {
+                    Button("Add time", systemImage: "bell.badge") {
                         let c = Calendar.current.dateComponents([.hour, .minute], from: newReminder)
                         let time = String(format: "%02d:%02d", c.hour ?? 0, c.minute ?? 0)
                         if !draft.reminders.contains(time) { draft.reminders = (draft.reminders + [time]).sorted() }
                     }
                 }
                 if draft.frequency.isCounted {
-                    Picker("Start reminding", selection: $draft.remindFrom) {
-                        Text("Every day").tag(Int?.none)
-                        if case .timesAMonth = draft.frequency {
-                            ForEach(1...31, id: \.self) { d in Text("From day \(d)").tag(Int?.some(d)) }
-                        } else {
-                            // ISO weekdays 1 = Monday … 7 = Sunday; the symbols array starts on Sunday.
-                            ForEach(1...7, id: \.self) { d in Text("From " + habits.calendar.weekdaySymbols[d % 7]).tag(Int?.some(d)) }
-                        }
+                    HStack(spacing: Theme.Space.s) {
+                        Text("Start reminding").foregroundStyle(.secondary)
+                        Picker("Start reminding", selection: $draft.remindFrom) { remindFromOptions }
+                            .labelsHidden()
+                            .fixedSize()
                     }
-                    .fixedSize()
                 }
-                Text(draft.frequency.isCounted
-                     ? "From the start day, every day until the target is met"
-                     : "On days the habit is due and not done yet").font(.callout).foregroundStyle(.secondary)
+                HStack(spacing: Theme.Space.s) {
+                    Text("Location").foregroundStyle(.secondary)
+                    Picker("Location", selection: $draft.placeId) {
+                        Text("None").tag(String?.none)
+                        if !places.isEmpty { Divider() }
+                        ForEach(places, id: \.id) { p in Text(p.name).tag(String?.some(p.id)) }
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                    if draft.placeId != nil {
+                        Picker("When", selection: $draft.placeTrigger) {
+                            Text("Arrive").tag(Place.companion.ARRIVE)
+                            Text("Leave").tag(Place.companion.LEAVE)
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .fixedSize()
+                    }
+                    Spacer(minLength: 0)
+                    if let tasks {
+                        Button("Manage places…") { managingPlaces = true }
+                            .buttonStyle(.link)
+                            .fixedSize()
+                            .sheet(isPresented: $managingPlaces, onDismiss: reloadPlaces) { PlacesSheet().environment(tasks) }
+                    }
+                }
+                Text(reminderHint).font(.callout).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             HStack {
@@ -156,11 +183,46 @@ struct HabitEditor: View {
         .padding(Theme.Space.xl)
         .frame(width: Theme.Habits.sheetWidth)
         .onAppear {
+            reloadPlaces()
             if let id = editingId, let h = habits.rows.first(where: { $0.habit.id == id })?.habit {
                 original = h
                 draft = HabitDraft(habit: h)
             }
             kind = switch draft.frequency { case .daily: 0; case .weekdays: 1; case .timesAWeek: 2; case .timesAMonth: 3 }
         }
+    }
+
+    /// Full names, Monday first (the habits calendar has no locale, so its symbols come out short).
+    private static let weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+    private func reloadPlaces() {
+        places = habits.core.placeActions.list()
+        if let id = draft.placeId, !places.contains(where: { $0.id == id }) { draft.placeId = nil }
+    }
+
+    /// Weekly: Every day or from Monday … Sunday. Monthly: Every day, from day 1–31, or from the month's first Monday … Sunday.
+    @ViewBuilder private var remindFromOptions: some View {
+        Text("Every day").tag(Int?.none)
+        Divider()
+        // ISO weekdays 1 = Monday … 7 = Sunday.
+        if case .timesAMonth = draft.frequency {
+            ForEach(1...7, id: \.self) { d in
+                Text("From the first " + Self.weekdays[d - 1]).tag(Int?.some(Int(Habit.companion.REMIND_FIRST_WEEKDAY) + d))
+            }
+            Divider()
+            ForEach(1...31, id: \.self) { d in Text("From day \(d)").tag(Int?.some(d)) }
+        } else {
+            ForEach(1...7, id: \.self) { d in Text("From " + Self.weekdays[d - 1]).tag(Int?.some(d)) }
+        }
+    }
+
+    private var reminderHint: String {
+        var parts: [String] = []
+        parts.append(draft.frequency.isCounted
+                     ? "Times remind from the start day, every day until the target is met"
+                     : "Times remind on days the habit is due and not done yet")
+        if draft.placeId != nil { parts.append("the place reminds on Wi‑Fi at that place (Mac) or by GPS and Wi‑Fi (phone)") }
+        else if places.isEmpty { parts.append("add a place to be reminded when you arrive or leave") }
+        return parts.joined(separator: "; ")
     }
 }
