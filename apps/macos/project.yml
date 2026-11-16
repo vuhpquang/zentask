@@ -42,6 +42,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.vuhpquang.zentask
         PRODUCT_NAME: ZenTask
+        # Location Services under the hardened runtime (Wi-Fi name for place reminders).
+        CODE_SIGN_ENTITLEMENTS: ZenTask/ZenTask.entitlements
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: ZenTask
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.productivity

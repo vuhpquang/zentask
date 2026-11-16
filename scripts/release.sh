@@ -79,7 +79,9 @@ for ext in "$APP"/Contents/PlugIns/*.appex; do
     codesign --force --options runtime --timestamp=none --sign "$SIGN_IDENTITY" \
         --entitlements apps/macos/ZenTaskWidget/ZenTaskWidget.entitlements "$ext"
 done
-codesign --force --options runtime --timestamp=none --sign "$SIGN_IDENTITY" "$APP"
+# The app's own entitlements (Location Services under the hardened runtime) must be passed again when re-signing.
+codesign --force --options runtime --timestamp=none --sign "$SIGN_IDENTITY" \
+    --entitlements apps/macos/ZenTask/ZenTask.entitlements "$APP"
 
 step "Verifying the release"
 codesign --verify --deep --strict "$APP"
@@ -87,6 +89,8 @@ for ext in "$APP"/Contents/PlugIns/*.appex; do
     [[ -e "$ext" ]] || continue
     codesign -d --entitlements - "$ext" 2>&1 | grep -q "com.apple.security.app-sandbox" || die "$(basename "$ext") lost its sandbox entitlement"
 done
+codesign -d --entitlements - "$APP" 2>&1 | grep -q "com.apple.security.personal-information.location" \
+    || die "ZenTask.app lost its location entitlement (place reminders can't ask for Location Services)"
 built="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")"
 [[ "$built" == "$VERSION" ]] || die "bundle says $built, expected $VERSION"
 codesign -d -r- "$APP" 2>&1 | grep -qiE "certificate leaf = H\"$RELEASE_CERT\"" \

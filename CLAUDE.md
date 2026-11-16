@@ -223,7 +223,9 @@ swift scripts/make-icon.swift apps/macos/ZenTask/Assets.xcassets/AppIcon.appicon
   clears it from habits too. Editors: Mac `HabitEditor` (Location picker + Arrive/Leave + Manage places…), Android
   `HabitPlacePicker` in `ui/HabitEditors.kt`.
 - Mac location reminders are Wi‑Fi only (owner's choice): `Services/WifiPlaces.swift` (CoreWLAN `ssidDidChange`; reading
-  the SSID needs Location Services, `NSLocationUsageDescription` in project.yml; inside-set in UserDefaults
+  the SSID needs Location Services, `NSLocationUsageDescription` in project.yml, and under the hardened runtime the
+  entitlement `com.apple.security.personal-information.location` (`ZenTask/ZenTask.entitlements`, re-applied and checked by
+  `release.sh`; without it locationd silently drops the prompt); "Allow…" opens System Settings once access was denied; inside-set in UserDefaults
   `location.insideWifi`, first check silent), `Tasks/PlacesSheet.swift` (places list + MapKit editor, click to pin) and
   `LocationChip` in task detail. Started from `TasksModel.start` outside tests/snapshots.
 - Markdown notes: notes stay plain text; shared `tasks/MarkdownLite.kt` splits them into blocks (headings, bullets,

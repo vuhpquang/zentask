@@ -1,3 +1,4 @@
+import AppKit
 import CoreLocation
 import CoreWLAN
 import UserNotifications
@@ -27,8 +28,16 @@ final class WifiPlaces: NSObject, CWEventDelegate, CLLocationManagerDelegate {
         check(notify: false)
     }
 
-    /// Asks macOS for Location Services (needed to read the Wi‑Fi name).
-    func requestPermission() { location.requestWhenInUseAuthorization() }
+    /// Asks macOS for Location Services (needed to read the Wi‑Fi name). Once refused, macOS won't ask again, so
+    /// open Privacy & Security → Location Services instead.
+    func requestPermission() {
+        switch location.authorizationStatus {
+        case .denied, .restricted:
+            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices") { NSWorkspace.shared.open(url) }
+        default:
+            location.requestWhenInUseAuthorization()
+        }
+    }
 
     nonisolated private static func isAuthorized(_ s: CLAuthorizationStatus) -> Bool { s == .authorizedAlways || s == .authorized }
 
